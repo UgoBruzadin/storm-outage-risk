@@ -1,0 +1,104 @@
+"""Shared helpers for the dashboard: data loading and chart styling.
+
+Data: the app only reads the small Parquet files written by
+`pixi run export-app`. Locally they're in data/app/; deployed, set
+APP_DATA to the Hugging Face dataset, e.g.
+    APP_DATA=hf://datasets/<user>/storm-outage-risk-data
+DuckDB reads either path with the same SQL.
+
+Style: colors come from one validated palette (sequential blue for "how
+much", a second sequential hue — orange — when two magnitudes sit side by
+side, fixed categorical order for series). Light and dark each get their own
+steps; the dark ones are chosen for the dark surface, not inverted.
+"""
+import json
+import os
+from pathlib import Path
+
+import duckdb
+import streamlit as st
+
+ROOT = Path(__file__).resolve().parent.parent
+APP_DATA = os.environ.get("APP_DATA", str(ROOT / "data" / "app"))
+
+LIGHT = {
+    "surface": "#fcfcfb", "ink": "#0b0b0b", "ink2": "#52514e", "muted": "#898781",
+    "grid": "#e1e0d9", "axis": "#c3c2b7", "map_style": "carto-positron",
+    "series": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"],
+}
+DARK = {
+    "surface": "#1a1a19", "ink": "#f0efec", "ink2": "#c3c2b7", "muted": "#898781",
+    "grid": "#2c2c2a", "axis": "#383835", "map_style": "carto-darkmatter",
+    "series": ["#3987e5", "#d95926", "#199e70", "#c98500"],
+}
+# sequential ramps, light -> dark ("near zero" recedes toward the surface)
+BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+ORANGE = ["#fde0d2", "#f8b998", "#f2925f", "#eb6834", "#c84f1f", "#9c3c16", "#6e2a0f"]
+
+
+def theme():
+    """The palette matching Streamlit's current light/dark theme."""
+    kind = getattr(getattr(st.context, "theme", None), "type", "light")
+    return DARK if kind == "dark" else LIGHT
+
+
+def ramp(colors):
+    """A Plotly continuous colorscale from a list of ramp steps."""
+    return [[i / (len(colors) - 1), c] for i, c in enumerate(colors)]
+
+
+def style(fig, height=None):
+    """Recessive chrome: hairline grid, muted axes, system sans, no chart junk."""
+    t = theme()
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family='system-ui, -apple-system, "Segoe UI", sans-serif', color=t["ink2"], size=13),
+        margin=dict(l=8, r=8, t=36, b=8), hoverlabel=dict(font_size=13),
+        # legend under the plot, so it never collides with the chart title
+        legend=dict(orientation="h", yanchor="top", y=-0.15, x=0, title_text=""),
+        **({"height": height} if height else {}),
+    )
+    fig.update_xaxes(gridcolor=t["grid"], linecolor=t["axis"], tickfont_color=t["muted"], zeroline=False)
+    fig.update_yaxes(gridcolor=t["grid"], linecolor=t["axis"], tickfont_color=t["muted"], zeroline=False)
+    return fig
+
+
+@st.cache_data(show_spinner=False)
+def table(name):
+    """One exported table as a DataFrame (local path or hf://)."""
+    return duckdb.sql(f"SELECT * FROM '{APP_DATA}/{name}.parquet'").df()
+
+
+@st.cache_data(show_spinner=False)
+def meta():
+    path = f"{APP_DATA}/meta.json"
+    if path.startswith("hf://"):
+        return json.loads(duckdb.sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0])
+    return json.loads(Path(path).read_text())
+
+
+@st.cache_data(show_spinner=False)
+def geojson():
+    """FeatureCollection of region shapes, keyed by region_fips (for choropleths)."""
+    regions = table("regions")
+    return {
+        "type": "FeatureCollection",
+        "features": [{"type": "Feature", "id": r.region_fips, "geometry": json.loads(r.geojson)}
+                     for r in regions.itertuples()],
+    }
+
+
+def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520):
+    """A county map of one magnitude, single-hue ramp."""
+    import plotly.express as px
+
+    fig = px.choropleth_map(
+        df, geojson=geojson(), locations="region_fips", color=value,
+        color_continuous_scale=ramp(colors), range_color=range_color,
+        map_style=theme()["map_style"], center={"lat": 38.9, "lon": -90.6}, zoom=4.8, opacity=0.85,
+        hover_name="region", hover_data=hover or {value: ":.2f", "region_fips": False},
+        labels={value: label},
+    )
+    fig.update_traces(marker_line_width=0.5, marker_line_color=theme()["surface"])
+    fig.update_layout(coloraxis_colorbar=dict(title=label, thickness=10, len=0.6))
+    return style(fig, height=height)
