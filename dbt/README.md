@@ -1,46 +1,51 @@
 # dbt/
 
-The SQL pipeline as dbt models. Run everything from the repo root:
+The data pipeline as dbt models: raw files in, a tested modeling table out. Run from the repo root:
 
 ```bash
-pixi run dbt build                         # seeds + models + tests, in dependency order
-pixi run dbt build --select stg_eaglei__customers   # just one model (+ its tests)
-pixi run dbt build --select +mart_stl__hourly        # a model and everything upstream of it
+pixi run build                                          # dbt deps + dbt build: every model, then its tests
+pixi run dbt build --select mart_mo_il__region_6h+      # one model and everything downstream
+pixi run dbt build --select +mart_mo_il__region_6h      # one model and everything upstream
 pixi run dbt docs generate && pixi run dbt docs serve   # browsable docs + lineage graph
 ```
 
-Writes to `data/warehouse.duckdb` (schemas `seeds`, `staging`, `intermediate`, `marts`).
+Writes to `data/warehouse.duckdb` in schemas `seeds`, `staging`, `intermediate`, `marts`.
 
 ## How a model works
 
-- One `.sql` file = one table or view, named after the file. Just the `SELECT` — no `CREATE TABLE`.
-- Read raw files with `{{ source('eaglei', 'outages') }}` (declared in `models/staging/_sources.yml`).
-- Read other models with `{{ ref('stg_eaglei__customers') }}` — this is how dbt learns the order to build things.
-- Tests live in the `_*.yml` file next to the models (`unique`, `not_null`, …) or as SQL in `tests/` that returns the *bad* rows.
+- One `.sql` file = one table or view, named after the file. Just the `SELECT` — dbt writes the `CREATE`.
+- Raw files: `{{ source('eaglei', 'outages') }}` (declared in `models/staging/_sources.yml`).
+- Other models: `{{ ref('stg_eaglei__customers') }}` — this is how dbt knows the build order.
+- Reusable SQL snippets: `macros/` — `{{ region_fips('fips_code') }}` (the St. Louis merge), `{{ block_6h('ts') }}`.
+- Tests: in the `_*.yml` next to the models, or a SQL file in `tests/` that returns the *bad* rows.
 
-## Naming
+## Layers
 
 | Layer | Prefix | Materialized | Purpose |
 |---|---|---|---|
-| `seeds/` | — | table | small CSVs kept in git (`stl_metro_counties`) |
-| `models/staging/` | `stg_<source>__<thing>` | view | one per raw source: rename, fix types/codes, nothing else |
-| `models/intermediate/` | `int_<area>__<thing>` | table | reshape and join: hourly tables, regions, grid, heartbeat |
+| `seeds/` | — | table | small CSVs kept in git |
+| `models/staging/` | `stg_<source>__<thing>` | view | one per raw source: rename, cast, decode — nothing else |
+| `models/intermediate/` | `int_<area>__<thing>` | table | reshape and join |
 | `models/marts/` | `mart_<area>__<thing>` | table | what the model and the app read |
 
-## Model plan (milestone 1)
+## Models
 
-Where each piece of the old `sql/merge_all.sql` goes, and its check number.
+| Model | What it is |
+|---|---|
+| `stg_eaglei__outages` | national 15-min snapshots; 2023 `sum` merged; `snapshot_time` on the 15-min grid |
+| `stg_eaglei__customers` | customers per county (MCC.csv), FIPS zero-padded |
+| `stg_hrrr__hourly` | HRRR ingredients per region per hour, with u/v wind components |
+| `stg_noaa__storm_events` | MO + IL storm reports, times converted to UTC |
+| `stg_noaa__zone_county` | NWS forecast zone → county |
+| `stg_acs__housing` | housing age, units, population per county |
+| `stg_geo__regions` | 216 regions with land area, weather point, tree canopy |
+| `stg_noaa__kstl_hourly` | KSTL airport hourly weather (used by the legacy St. Louis notebook) |
+| `int_mo_il__regions` | one row per region with every place feature |
+| `int_eaglei__blocks_6h` | every 6-hour block + national snapshot count (the heartbeat) |
+| `int_mo_il__outages_6h` | peak / mean customers out per region per block |
+| `int_mo_il__weather_6h` | storm ingredients per region per block |
+| `int_mo_il__storm_events_6h` | storm report counts per region per block |
+| `mart_mo_il__region_6h` | **the modeling table**: region x block, label + features + context (3.5M rows) |
+| `mart_mo_il__region_resilience` | **the scorecard**: 2020–2023 outage burden, events/yr, storm hit rate, repeats |
 
-| # | Model | From old section | Check |
-|---|---|---|---|
-| ✅ | `stg_noaa__kstl_hourly` | 2 + 3 | 102,035 rows, `hour` unique |
-| 1 | `stg_eaglei__customers` | 5 (MCC part) | 3,233 rows, `fips_code` unique |
-| 2 | `stg_eaglei__outages` | 1 (no county filter: national) | `not_null` on keys |
-| 3 | `int_eaglei__heartbeat` | 5 (snapshots) | 97,536 rows, `hour` unique |
-| 4 | `int_stl__county_regions` | 4 (`stg.regions`) | 8 rows |
-| 5 | `int_stl__regions` | 5 (`stg.counties`) | 7 rows, Monroe = 15,588 customers |
-| 6 | `int_stl__outage_hourly` | 4 (`stg.outage_hourly`) | 364,944 rows, (`fips_code`, `hour`) unique |
-| 7 | `int_stl__hours` | 5 (`stg.hours`) | 94,850 rows |
-| 8 | `mart_stl__hourly` | 6 | 663,950 = 343,735 outage + 313,942 quiet + 6,273 unknown |
-
-`sql/build_mo_il.sql` moves into dbt in milestone 2, reusing models 1–3.
+The St. Louis hourly prototype (KSTL weather, hourly grid) is in `../legacy/`.

@@ -1,8 +1,8 @@
 """Rebuild data/warehouse.duckdb from the raw files by running the SQL pipeline in order.
 
-Usage (from anywhere):  pixi run build
+Usage (from anywhere):  pixi run build-legacy
 
-Temporary until milestone 1, when dbt takes over running the SQL.
+Superseded by dbt (pixi run build); kept for the St. Louis hourly notebook.
 """
 import os
 import time
@@ -10,11 +10,11 @@ from pathlib import Path
 
 import duckdb
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent   # repo root (this file lives in legacy/)
 DB_PATH = ROOT / "data" / "warehouse.duckdb"
 SQL_FILES = [
-    ROOT / "sql" / "merge_all.sql",    # St. Louis metro: hourly outages + weather
-    ROOT / "sql" / "build_mo_il.sql",  # every Missouri/Illinois region (needs merge_all first)
+    ROOT / "legacy" / "sql" / "merge_all.sql",    # St. Louis metro: hourly outages + weather
+    ROOT / "legacy" / "sql" / "build_mo_il.sql",  # every Missouri/Illinois region (needs merge_all first)
 ]
 
 

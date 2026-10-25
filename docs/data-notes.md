@@ -16,6 +16,9 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | **Coverage grew over time** (Missouri ≈ 79% of customers tracked in 2018 → ≈ 95% from 2019; Jefferson Co. shows ~0% outage-hours in 2018) | Fake upward trend; untracked years look calm | Train on 2020+ by default |
 | `MCC.csv` (customers per county): FIPS stored as text **without leading zeros**; last row is `Grand Total` | Join misses some states; a fake "county" | `lpad(County_FIPS, 5, '0')`; exclude `Grand Total` |
 | Coverage varies by year at the snapshot level too (2017 low everywhere) | — | See `coverage_history.csv` (state-level) |
+| **Duplicate snapshots**, early Sept 2025: every snapshot recorded twice (`00:00:00` and `00:00:52`); a few others off the 15-min grid (`:01`, `:16`, `:31`, `:35`) | Blocks with up to 48 "snapshots"; summed regions double-count | `snapshot_time` = rounded to 15 min; one value (max) per county per slot before adding counties |
+| **Customer counts too low** for some counties (Worth Co., MO: 418 in MCC for ~2,000 residents) and **one-off spikes** (Boone Co., MO: 311,925 out of ~122k customers on 2019-12-13) | "300% of customers out" | `peak_suspect` when peak > 1.5x customers → percentage NULL; otherwise capped at 100% |
+| Utility coverage also varies **within** a state (Jefferson Co., MO ~0% outage-hours in 2018, 7% in 2019, 54% from 2020) | Untracked years look calm | History/resilience window and training start in 2020 |
 
 ## NOAA Global Hourly (ISD)
 
@@ -31,6 +34,18 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | Thunder almost never in coded `MW1`, but present in the METAR text (`REM`: `TS`, `-TSRA`, `VCTS`, `TSB28E51`) | Regex on `REM` |
 | 2025 file ends **2025-08-27** | Grid ends where the shorter dataset ends (`least(...)`) |
 
+## Other sources
+
+| Source | Quirk | Fix |
+|---|---|---|
+| HRRR via Open-Meteo | Free tier counts ~26 "calls" per region-year (10 variables x 2-week units); 10,000/day | `ingest/fetch_weather.py` paces requests, resumes, retries with backoff |
+| HRRR at one point per county | Storm winds are local: KSTL measured a 23.7 m/s gust on 2023-07-02 while HRRR at the county's point showed 5.8 | Keep Storm Events as an independent "storm happened" signal |
+| NOAA Storm Events | Times in **local standard time all year** (`CZ_TIMEZONE` = `CST-6`); `BEGIN_DATE_TIME` has a 2-digit year | Rebuild timestamps from `BEGIN_YEARMONTH/DAY/TIME`, subtract the offset |
+| NOAA Storm Events | Winter/wind events are filed by NWS **zone**, not county | NWS zone–county correlation file; zone events spread to every county in the zone |
+| NLCD Tree Canopy (MRLC WCS) | GeoTIFF's nodata tag says **0**, which is a real value (0% canopy); 254 = no data | Read raw pixels, mask by shape ourselves (`rasterio.mask` dropped every 0 → farm counties read 45% instead of ~2%) |
+| Census API | Now requires a key | Key-free table-based summary files (`acsdt5y2024-<table>.dat`) |
+| Census ACS | A merged region's median year built can't be computed from county medians | Housing-weighted average of the two county medians (St. Louis only) |
+
 ## Tooling traps
 
 - conda-forge and Homebrew builds of the DuckDB CLI **can't load official extensions** (e.g. the UI) — use the official build (`curl https://install.duckdb.org | sh`).
@@ -38,3 +53,7 @@ Everything surprising found in the raw data, and what the pipeline does about it
 - Only **one writer** can open a DuckDB file at a time; read-only connections also block writers. Close the UI / restart notebook kernels before `pixi run build`.
 - `WHERE` runs **before** window functions — filter years *after* computing lags, or the first lags come out empty.
 - DuckDB 2.x: the lambda arrow `x -> …` is deprecated (use `lambda x: …`); in Python, read each `execute()` result before running more SQL on the same connection.
+- **DuckDB's `least()` / `greatest()` skip NULLs**: `least(100, NULL)` is 100, not NULL. That turned every blank outage count into "100% out" (tens of thousands of fake events) until a test caught it — check `IS NULL` explicitly.
+- **dbt-duckdb `external_location` goes through Python `str.format()`**: curly braces (`read_csv(types = {...})`) break it. Read as text and cast in staging.
+- conda-forge `mlflow` pulls protobuf 7, which dbt-common rejects; Streamlit excludes pyarrow 25.0.0 (the installer silently fell back to Streamlit 1.8). Both come from PyPI in `pixi.toml`.
+
