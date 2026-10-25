@@ -1,0 +1,9 @@
+# Where dbt writes. Paths are relative to the repository root — run dbt
+# through pixi (`pixi run dbt build`), which starts in the root.
+storm_outage_risk:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: data/warehouse.duckdb
+      threads: 4

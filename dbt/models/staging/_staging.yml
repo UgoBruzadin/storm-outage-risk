@@ -1,0 +1,31 @@
+# Documentation + tests for the staging models. Every model you add gets an
+# entry here. `dbt build` runs each model, then its tests; a failing test
+# stops everything downstream of it.
+#
+# Built-in tests: unique, not_null, accepted_values, relationships.
+# Anything else: write a SQL file in dbt/tests/ that returns the BAD rows
+# (zero rows = pass) — see dbt/tests/assert_kstl_row_count.sql.
+
+version: 2
+
+models:
+  - name: stg_noaa__kstl_hourly
+    description: Hourly weather at KSTL, labeled with the hour it leads into.
+    columns:
+      - name: hour
+        description: Start of the hour this report describes the weather going into (UTC).
+        data_tests:
+          - unique        # the old "count(*) = count(DISTINCT hour)" check
+          - not_null
+      - name: temp_c
+        description: Air temperature, °C. NULL when NOAA marked it missing.
+      - name: wind_ms
+        description: Sustained wind speed, m/s (x 2.237 = mph).
+      - name: gust_ms
+        description: Peak gust, m/s; equals wind_ms when no gust was reported.
+      - name: precip_mm
+        description: Precipitation in the past hour, mm.
+      - name: thunder
+        description: Thunderstorm reported in the past hour (from the METAR text).
+        data_tests:
+          - not_null

@@ -13,5 +13,7 @@ A short log of choices and why. When you change your mind, add a new entry inste
 | 2026-10 | **Train and evaluate locally; publish only small outputs** to Hugging Face | Free, public, DuckDB reads `hf://` directly; raw data never leaves the laptop |
 | 2026-10 | **The app reads precomputed results only** | Fast, small image, free hosting, and the app can't break when model code changes |
 | 2026-10 | **dbt** for transformations (planned, milestone 1) | Turns hand-checked row counts into automatic tests; lineage docs |
+| 2026-10 | **dbt Core v1 (1.12) + dbt-duckdb from PyPI**, not dbt v2 | Works today with the DuckDB 2.0 warehouse (v2 bundles its own DuckDB, which may not open 2.0 files); Apache-licensed (v2's free build is under a license agreement); nearly all tutorials are v1. Projects mostly carry over — revisit later |
+| 2026-10 | Pin `python-dateutil < 3` | pandas pulled 3.0, but dbt-common requires < 3; pandas works with 2.9 |
 | open | **Forecast weather source** | Options: Open-Meteo historical forecast API (easy, check archive depth), NOAA GFS/HRRR on AWS (authentic, harder), observed-only (simplest, reframes as "how weather becomes outages") |
 | open | **License** | MIT is typical for portfolio code; data keeps its own terms |

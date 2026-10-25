@@ -11,8 +11,9 @@ Tick boxes as you go — this file is the project's to-do list. Each milestone e
 
 ## 1 — Move the SQL into dbt
 *You learn: dbt models, sources, tests, docs, lineage.*
-- [ ] Install `dbt-duckdb`; `dbt init` inside `dbt/` (check it supports the project's Python version — pin an older Python if not)
-- [ ] Declare the raw CSVs as **sources**
+- [x] Install `dbt-duckdb` (dbt Core 1.12 from PyPI); project skeleton in `dbt/`
+- [x] Declare the raw CSVs as **sources**; St. Louis counties as a **seed**
+- [x] Worked example: `stg_noaa__kstl_hourly` + tests
 - [ ] Split `merge_all.sql` into one model per table: `staging/` (cleaned raw), `intermediate/` (hourly, grid, heartbeat), `marts/` (merged tables)
 - [ ] Turn every `-- Check:` comment into a **test**: `unique`, `not_null`, `accepted_values`, row counts
 - [ ] `dbt docs generate` — screenshot the lineage graph for the README

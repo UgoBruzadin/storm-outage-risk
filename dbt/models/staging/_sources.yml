@@ -1,0 +1,36 @@
+# Raw files, declared once. Models read them with {{ source('eaglei', 'outages') }}
+# instead of hard-coding paths, so a path changes in one place only — and the
+# lineage graph shows where every table's data comes from.
+#
+# external_location is the dbt-duckdb way to point a source at files: it's
+# pasted in wherever the model says {{ source(...) }}.
+
+version: 2
+
+sources:
+  - name: eaglei
+    description: >
+      DOE/ORNL EAGLE-I recorded electricity outages: one row per county per
+      15-minute snapshot with at least one customer out (UTC). See
+      docs/data-notes.md for the quirks.
+    tables:
+      - name: outages
+        description: All yearly national files, 2014–2025.
+        config:
+          external_location: >-
+            read_csv('data/raw/eaglei/eaglei_outages_*.csv', union_by_name = true, filename = true)
+      - name: modeled_customers
+        description: MCC.csv — EAGLE-I's modeled number of customers per county.
+        config:
+          external_location: "read_csv('data/raw/eaglei/MCC.csv')"
+
+  - name: noaa
+    description: >
+      NOAA Global Hourly (ISD) observations, downloaded by ingest/fetch_noaa.py.
+      Values are packed text fields (e.g. TMP = '+0039,1').
+    tables:
+      - name: kstl_observations
+        description: St. Louis Lambert airport (KSTL), one file per year.
+        config:
+          external_location: >-
+            read_csv('data/raw/noaa/noaa_KSTL_*.csv', all_varchar = true, union_by_name = true)

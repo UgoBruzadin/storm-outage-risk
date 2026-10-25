@@ -1,0 +1,30 @@
+name: storm_outage_risk
+version: "0.1.0"
+profile: storm_outage_risk
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+clean-targets: ["target", "dbt_packages"]
+
+# Layers (see dbt/README.md):
+#   staging      one model per raw source: rename, fix types and codes. Views (cheap, always fresh).
+#   intermediate reshaping and joining: hourly tables, the grid, the heartbeat. Tables.
+#   marts        what the model and the app read. Tables.
+models:
+  storm_outage_risk:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  storm_outage_risk:
+    +schema: seeds

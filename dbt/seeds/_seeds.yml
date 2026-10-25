@@ -1,0 +1,15 @@
+version: 2
+
+seeds:
+  - name: stl_metro_counties
+    description: >
+      The 8 counties of the St. Louis metro study area. A seed is a small CSV
+      kept in git and loaded as a table by `dbt seed` (or `dbt build`).
+    config:
+      column_types:
+        fips_code: varchar   # keep leading zeros if a state code ever starts with 0
+    columns:
+      - name: fips_code
+        data_tests:
+          - unique
+          - not_null

@@ -17,8 +17,15 @@ requests = "*"
 scikit-learn = ">=1.9.1,<2"
 matplotlib = ">=3.11.2,<4"
 ipykernel = ">=7.4.0,<8"
+python-dateutil = ">=2.9,<3"
 
 [pypi-dependencies]
 # From PyPI, not conda-forge: conda-forge's python-duckdb lags behind (1.5.6),
 # and a 1.x client can't open a database file written by DuckDB 2.x.
 duckdb = "==2.0.0"
+dbt-duckdb = ">=1.11, <2"
+
+[activation.env]
+# Lets you run plain `pixi run dbt <command>` from the repo root.
+DBT_PROJECT_DIR = "dbt"
+DBT_PROFILES_DIR = "dbt"
