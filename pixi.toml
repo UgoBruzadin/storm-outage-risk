@@ -7,6 +7,11 @@ version = "0.1.0"
 
 [tasks]
 fetch-noaa = { cmd = "python ingest/fetch_noaa.py", description = "Download NOAA hourly weather into data/raw/noaa" }
+fetch-counties = { cmd = "python ingest/fetch_counties.py", description = "Census county shapes for MO + IL -> data/raw/geo" }
+fetch-weather = { cmd = "python ingest/fetch_weather.py", description = "HRRR storm ingredients per region via Open-Meteo (slow: rate-limited, resumable)" }
+fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = "USFS/NLCD tree canopy % per region (2021) -> data/raw/geo" }
+fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
+fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
 build = { cmd = "python scripts/build_warehouse.py", description = "Rebuild data/warehouse.duckdb from the raw files" }
 
 [dependencies]
@@ -18,6 +23,9 @@ scikit-learn = ">=1.9.1,<2"
 matplotlib = ">=3.11.2,<4"
 ipykernel = ">=7.4.0,<8"
 python-dateutil = ">=2.9,<3"
+rasterio = ">=1.5.2,<2"
+rasterstats = ">=0.21.0,<0.22"
+pyarrow = ">=25.0.0,<26"
 
 [pypi-dependencies]
 # From PyPI, not conda-forge: conda-forge's python-duckdb lags behind (1.5.6),

@@ -3,7 +3,12 @@
 # lineage graph shows where every table's data comes from.
 #
 # external_location is the dbt-duckdb way to point a source at files: it's
-# pasted in wherever the model says {{ source(...) }}.
+# pasted in wherever the model says {{ source(...) }}. Every file here is
+# downloaded by a script in ingest/ (see the pixi fetch-* tasks).
+#
+# No curly braces in external_location: dbt-duckdb runs it through Python's
+# str.format(), so read_csv(types = {...}) breaks. Read as text instead
+# (all_varchar) and cast in the staging model.
 
 version: 2
 
@@ -12,7 +17,7 @@ sources:
     description: >
       DOE/ORNL EAGLE-I recorded electricity outages: one row per county per
       15-minute snapshot with at least one customer out (UTC). See
-      docs/data-notes.md for the quirks.
+      docs/data-notes.md for the quirks. Manual download (data/README.md).
     tables:
       - name: outages
         description: All yearly national files, 2014–2025.
@@ -26,7 +31,7 @@ sources:
 
   - name: noaa
     description: >
-      NOAA Global Hourly (ISD) observations, downloaded by ingest/fetch_noaa.py.
+      NOAA Global Hourly (ISD) observations (ingest/fetch_noaa.py).
       Values are packed text fields (e.g. TMP = '+0039,1').
     tables:
       - name: kstl_observations
@@ -34,3 +39,67 @@ sources:
         config:
           external_location: >-
             read_csv('data/raw/noaa/noaa_KSTL_*.csv', all_varchar = true, union_by_name = true)
+
+  - name: hrrr
+    description: >
+      NOAA HRRR short-range forecasts of storm ingredients at each region's
+      weather point, via Open-Meteo's Historical Forecast API
+      (ingest/fetch_weather.py). Hourly, UTC, wind in m/s.
+    tables:
+      - name: hourly
+        description: One file per region per year (the download may still be filling in).
+        config:
+          external_location: >-
+            read_csv('data/raw/weather/hrrr/*.csv.gz', union_by_name = true, all_varchar = true)
+
+  - name: storm_events
+    description: >
+      NOAA Storm Events database (ingest/fetch_storm_events.py): severe weather
+      reports with times in local standard time (CZ_TIMEZONE, e.g. 'CST-6').
+    tables:
+      - name: details
+        config:
+          external_location: >-
+            read_csv('data/raw/storm_events/StormEvents_details-*.csv.gz', union_by_name = true, all_varchar = true)
+      - name: zone_county
+        description: NWS forecast zone -> county FIPS correlation file (pipe-delimited, no header).
+        config:
+          external_location: >-
+            read_csv('data/raw/storm_events/zone_county_*.dbx', delim = '|', header = false, all_varchar = true,
+                     names = ['state', 'zone', 'cwa', 'zone_name', 'state_zone', 'county', 'fips', 'time_zone',
+                              'fe_area', 'lat', 'lon'])
+
+  - name: geo
+    description: Region shapes and place features (ingest/fetch_counties.py, fetch_tree_canopy.py).
+    tables:
+      - name: regions
+        description: 216 MO+IL analysis regions with land area and a weather point.
+        config:
+          external_location: "read_csv('data/raw/geo/regions_mo_il.csv', all_varchar = true)"
+      - name: tree_canopy
+        description: USFS/NLCD Tree Canopy Cover 2021, summarized per region.
+        config:
+          external_location: "read_csv('data/raw/geo/tree_canopy_2021.csv', all_varchar = true)"
+
+  - name: acs
+    description: >
+      Census ACS 2020–2024 5-year estimates, table-based summary files, all U.S.
+      geographies (ingest/fetch_acs.py). Columns like B25034_E001 = estimate,
+      B25034_M001 = margin of error.
+    tables:
+      - name: year_built
+        description: B25034 — housing units by year structure built.
+        config:
+          external_location: "read_csv('data/raw/acs/acsdt5y2024-b25034.dat', delim = '|')"
+      - name: median_year_built
+        description: B25035 — median year structure built.
+        config:
+          external_location: "read_csv('data/raw/acs/acsdt5y2024-b25035.dat', delim = '|')"
+      - name: population
+        description: B01003 — total population.
+        config:
+          external_location: "read_csv('data/raw/acs/acsdt5y2024-b01003.dat', delim = '|')"
+      - name: housing_units
+        description: B25001 — housing units.
+        config:
+          external_location: "read_csv('data/raw/acs/acsdt5y2024-b25001.dat', delim = '|')"

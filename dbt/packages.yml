@@ -1,0 +1,5 @@
+# Community packages, installed into dbt/dbt_packages/ by `pixi run dbt deps`.
+# dbt_utils adds tests like unique_combination_of_columns and accepted_range.
+packages:
+  - package: dbt-labs/dbt_utils
+    version: [">=1.3.0", "<2.0.0"]

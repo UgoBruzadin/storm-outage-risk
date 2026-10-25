@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: mart_mo_il__region_6h
+    description: >
+      Modeling table: every MO+IL region x every 6-hour block with the outage
+      label, HRRR weather features, place features and storm-report context.
+      Storm report columns are context only — never model inputs.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, block_start]
+    columns:
+      - name: peak_out
+        description: Worst customers-out snapshot in the block; NULL = unknown (EAGLE-I down or blank).
+      - name: peak_suspect
+        description: True when peak_out > 1.5x the customer count (glitch or too-low customer count).
+      - name: peak_pct_out
+        description: peak_out as % of customers, capped at 100; NULL when unknown or suspect.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 100}
+      - name: has_weather
+        description: True when all 6 hours of HRRR weather exist for the block.
+        data_tests: [not_null]

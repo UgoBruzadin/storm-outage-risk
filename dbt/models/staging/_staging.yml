@@ -1,10 +1,10 @@
-# Documentation + tests for the staging models. Every model you add gets an
-# entry here. `dbt build` runs each model, then its tests; a failing test
-# stops everything downstream of it.
+# Documentation + tests for the staging models. Every model gets an entry
+# here. `dbt build` runs each model, then its tests; a failing test stops
+# everything downstream of it.
 #
 # Built-in tests: unique, not_null, accepted_values, relationships.
-# Anything else: write a SQL file in dbt/tests/ that returns the BAD rows
-# (zero rows = pass) — see dbt/tests/assert_kstl_row_count.sql.
+# dbt_utils (packages.yml) adds unique_combination_of_columns, accepted_range...
+# Anything else: a SQL file in dbt/tests/ that returns the BAD rows.
 
 version: 2
 
@@ -14,9 +14,7 @@ models:
     columns:
       - name: hour
         description: Start of the hour this report describes the weather going into (UTC).
-        data_tests:
-          - unique        # the old "count(*) = count(DISTINCT hour)" check
-          - not_null
+        data_tests: [unique, not_null]
       - name: temp_c
         description: Air temperature, °C. NULL when NOAA marked it missing.
       - name: wind_ms
@@ -27,5 +25,51 @@ models:
         description: Precipitation in the past hour, mm.
       - name: thunder
         description: Thunderstorm reported in the past hour (from the METAR text).
+        data_tests: [not_null]
+
+  - name: stg_eaglei__outages
+    description: EAGLE-I snapshots, national, all years; 2023's "sum" column merged in.
+    columns:
+      - name: fips_code
+        data_tests: [not_null]
+      - name: run_start_time
+        data_tests: [not_null]
+
+  - name: stg_eaglei__customers
+    description: Customers per county (MCC.csv), FIPS zero-padded, 'Grand Total' removed.
+    columns:
+      - name: fips_code
+        data_tests: [unique, not_null]
+      - name: customers
+        data_tests: [not_null]
+
+  - name: stg_acs__housing
+    description: ACS 2020–2024 5-year housing age, housing units, population per MO+IL county.
+    columns:
+      - name: fips_code
+        data_tests: [unique, not_null]
+
+  - name: stg_geo__regions
+    description: 216 MO+IL regions (St. Louis City + County merged) with tree canopy.
+    columns:
+      - name: region_fips
+        data_tests: [unique, not_null]
+      - name: canopy_mean_pct
         data_tests:
           - not_null
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 100}
+
+  - name: stg_hrrr__hourly
+    description: HRRR storm ingredients per region per hour, with u/v wind components.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, hour]
+
+  - name: stg_noaa__storm_events
+    description: NOAA Storm Events reports for MO + IL, times converted to UTC.
+    columns:
+      - name: begin_utc
+        data_tests: [not_null]
+
+  - name: stg_noaa__zone_county
+    description: NWS forecast zone -> county FIPS for MO + IL.
