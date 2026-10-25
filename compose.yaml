@@ -1,0 +1,12 @@
+# docker compose up --build   ->   http://localhost:8501
+services:
+  app:
+    build: .
+    # Hugging Face Spaces run x86_64; on Apple Silicon this builds under emulation
+    platform: linux/amd64
+    ports:
+      - "8501:8501"
+    environment:
+      # read the published dataset instead of the bundled files:
+      # APP_DATA: hf://datasets/<user>/storm-outage-risk-data
+      PORT: "8501"

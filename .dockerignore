@@ -1,0 +1,8 @@
+# Only pixi.toml/lock, app/, .streamlit/ and data/app/ go into the image.
+*
+!pixi.toml
+!pixi.lock
+!app/
+!.streamlit/
+!data/app/
+**/__pycache__

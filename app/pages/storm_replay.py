@@ -1,7 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-
 from lib import BLUE, ORANGE, choropleth, meta, style, table, theme
 
 m = meta()
@@ -39,7 +38,8 @@ with right:
 # the storm's timeline across the whole study area: two measures, two charts (never a dual axis)
 window = preds[(preds.block_start >= pd.Timestamp(block) - pd.Timedelta(days=2)) &
                (preds.block_start <= pd.Timestamp(block) + pd.Timedelta(days=2))]
-timeline = window.groupby("block_start").agg(out=("peak_out", "sum"), regions_flagged=("prob", lambda p: (p >= 0.5).sum()),
+timeline = window.groupby("block_start").agg(out=("peak_out", "sum"),
+                                             regions_flagged=("prob", lambda p: (p >= 0.5).sum()),
                                              regions_hit=("y", "sum")).reset_index()
 t = theme()
 a, b = st.columns(2)
@@ -54,7 +54,8 @@ with b:
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_flagged, name="flagged by model (p ≥ 0.5)",
                              mode="lines+markers", line=dict(color=t["series"][0], width=2), marker=dict(size=8)))
-    fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_hit, name=f"actually ≥ {m['threshold_pct']:g}% out",
+    fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_hit,
+                             name=f"actually ≥ {m['threshold_pct']:g}% out",
                              mode="lines+markers", line=dict(color=t["series"][1], width=2), marker=dict(size=8)))
     fig.add_vline(x=pd.Timestamp(block), line_dash="dot", line_color=t["muted"])
     fig.update_traces(hovertemplate="%{x|%b %d %H:00}<br>%{y} regions<extra>%{fullData.name}</extra>")
@@ -64,5 +65,6 @@ with st.expander("Table view"):
     st.dataframe(now[["region", "state", "prob", "pct", "peak_out", "gust_max_ms", "cape_max_jkg",
                       "precip_sum_mm", "storm_reports"]].sort_values("prob", ascending=False),
                  hide_index=True, width="stretch",
-                 column_config={"prob": st.column_config.ProgressColumn("predicted", format="%.0f%%", min_value=0, max_value=1),
+                 column_config={"prob": st.column_config.ProgressColumn("predicted", format="%.0f%%",
+                                                                        min_value=0, max_value=1),
                                 "pct": st.column_config.NumberColumn("% out", format="%.1f")})

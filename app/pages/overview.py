@@ -1,5 +1,4 @@
 import streamlit as st
-
 from lib import BLUE, choropleth, meta, table
 
 m = meta()
@@ -36,9 +35,10 @@ config = {
 }
 value, label, rng = config[metric or "Outage hours per customer"]
 st.plotly_chart(choropleth(df, value, label, BLUE, rng), width="stretch")
+start = str(regions.history_start.iloc[0])[:4]
+end = int(str(regions.history_end.iloc[0])[:4]) - 1
 st.caption(
-    "Outage hours per customer and storm hit rate come from {start}–{end} (before the model's years). "
+    f"Outage hours per customer and storm hit rate come from {start}–{end} (before the model's years). "
     "Storm hit rate = share of 6-hour blocks with a NOAA storm report in which ≥ 1% of customers lost power. "
-    "St. Louis City and County are one region: EAGLE-I mixes their records in 2020–2024.".format(
-        start=str(regions.history_start.iloc[0])[:4], end=int(str(regions.history_end.iloc[0])[:4]) - 1)
+    "St. Louis City and County are one region: EAGLE-I mixes their records in 2020–2024."
 )

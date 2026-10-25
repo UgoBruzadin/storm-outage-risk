@@ -1,6 +1,5 @@
 import plotly.graph_objects as go
 import streamlit as st
-
 from lib import meta, style, table, theme
 
 m = meta()

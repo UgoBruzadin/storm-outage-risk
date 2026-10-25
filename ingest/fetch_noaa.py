@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import requests
 
 # NOAA Global Hourly (ISD), mirrored on AWS Open Data since NCEI moved it

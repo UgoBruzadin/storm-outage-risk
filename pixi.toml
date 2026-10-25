@@ -2,7 +2,7 @@
 authors = ["Ugo Bruzadin Nunes <25592470+UgoBruzadin@users.noreply.github.com>"]
 channels = ["conda-forge"]
 name = "storm-outage-risk"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64"]   # linux-64: the Docker image
 version = "0.1.0"
 
 [tasks]
@@ -26,7 +26,6 @@ requests = "*"
 scikit-learn = ">=1.9.1,<2"
 matplotlib = ">=3.11.2,<4"
 ipykernel = ">=7.4.0,<8"
-python-dateutil = ">=2.9,<3"
 rasterio = ">=1.5.2,<2"
 rasterstats = ">=0.21.0,<0.22"
 pyarrow = ">=21,!=25.0.0"
@@ -35,13 +34,47 @@ pyarrow = ">=21,!=25.0.0"
 # From PyPI, not conda-forge: conda-forge's python-duckdb lags behind (1.5.6),
 # and a 1.x client can't open a database file written by DuckDB 2.x.
 duckdb = "==2.0.0"
-dbt-duckdb = ">=1.11, <2"
 mlflow = ">=3.17.2, <4"
 streamlit = ">=1.60, <2"
 plotly = ">=7.1.0, <8"
 
 [activation.env]
+MLFLOW_DISABLE_AGENT_HINT = "1"
+
+# --- Minimal environment for the dashboard (used by the Docker image) --------
+# Only what app/ imports: no dbt, MLflow, geo or ML libraries.
+[feature.app.dependencies]
+python = "3.14.*"
+pandas = ">=3.1.0,<4"
+pyarrow = ">=21,!=25.0.0"
+
+[feature.app.pypi-dependencies]
+duckdb = "==2.0.0"
+streamlit = ">=1.60,<2"
+plotly = ">=7.1.0,<8"
+
+[feature.app.tasks]
+serve = "streamlit run app/streamlit_app.py --server.address=0.0.0.0 --server.port=${PORT:-8501}"
+
+# --- dbt (in the default and CI environments) --------------------------------
+[feature.dbt.dependencies]
+python-dateutil = ">=2.9,<3"      # dbt-common needs < 3; pandas pulls 3.0 otherwise
+
+[feature.dbt.pypi-dependencies]
+dbt-duckdb = ">=1.11, <2"
+duckdb = "==2.0.0"
+
+[feature.dbt.activation.env]
 # Lets you run plain `pixi run dbt <command>` from the repo root.
 DBT_PROJECT_DIR = "dbt"
 DBT_PROFILES_DIR = "dbt"
-MLFLOW_DISABLE_AGENT_HINT = "1"
+
+# --- Dev tools: linting and tests (also used by CI) --------------------------
+[feature.dev.dependencies]
+ruff = "*"
+pytest = "*"
+
+[environments]
+default = { features = ["dev", "dbt"], solve-group = "default" }
+app = { features = ["app"], no-default-feature = true }                  # Docker image
+ci = { features = ["app", "dev", "dbt"], no-default-feature = true }     # GitHub Actions: tests, lint, dbt parse

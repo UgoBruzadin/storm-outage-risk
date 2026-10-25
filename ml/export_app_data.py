@@ -18,14 +18,12 @@ Usage: pixi run export-app [--features weather+place+history] [--threshold 5]
 """
 import argparse
 import json
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 
 import duckdb
 import geopandas as gpd
 import pandas as pd
 from sklearn.inspection import permutation_importance
-
 from train import DB, FEATURE_SETS, RESULTS, ROOT, YEARS, load, make_model
 
 OUT = ROOT / "data" / "app"
@@ -87,7 +85,7 @@ def main():
     pd.concat(runs).to_parquet(OUT / "metrics.parquet", index=False)
 
     meta = {
-        "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "features": args.features,
         "feature_list": features,
         "threshold_pct": args.threshold,

@@ -1,0 +1,9 @@
+# Linting: pixi run ruff check .
+line-length = 120
+extend-exclude = ["dbt/dbt_packages", "dbt/target"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]   # pycodestyle, pyflakes, import order, bugbear, pyupgrade
+
+[lint.per-file-ignores]
+"notebooks/*" = ["E501"]   # exploration notebook: long lines are fine

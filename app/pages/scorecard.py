@@ -1,5 +1,4 @@
 import streamlit as st
-
 from lib import table
 
 regions = table("regions")
@@ -22,7 +21,8 @@ st.dataframe(
         "customers": st.column_config.NumberColumn("customers", format="%,d"),
         "hours_out_per_customer": st.column_config.NumberColumn("outage h / customer / yr", format="%.1f"),
         "events_per_year": st.column_config.NumberColumn("events / yr", format="%.1f"),
-        "storm_hit_rate": st.column_config.ProgressColumn("storm hit rate", format="%.0f%%", min_value=0, max_value=0.35),
+        "storm_hit_rate": st.column_config.ProgressColumn("storm hit rate", format="%.0f%%",
+                                                          min_value=0, max_value=0.35),
         "quiet_event_rate": st.column_config.NumberColumn("events w/o storm", format="%.1f%%"),
         "repeat_7d_share": st.column_config.NumberColumn("repeat ≤ 7 days", format="%.0f%%"),
         "canopy_mean_pct": st.column_config.NumberColumn("tree canopy %", format="%.0f"),

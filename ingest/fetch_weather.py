@@ -83,7 +83,8 @@ def main(years):
     regions = pd.read_csv(REGIONS_CSV, dtype={"region_fips": str})
     todo = [(row, y) for _, row in regions.iterrows() for y in years
             if not (OUT_DIR / f"{row.region_fips}_{y}.csv.gz").exists()]
-    print(f"{len(todo)} region-years to download (~{len(todo) * SECONDS_BETWEEN / 3600:.1f} h at the paced rate)", flush=True)
+    hours = len(todo) * SECONDS_BETWEEN / 3600
+    print(f"{len(todo)} region-years to download (~{hours:.1f} h at the paced rate)", flush=True)
 
     for i, (row, year) in enumerate(todo, 1):
         start = time.time()

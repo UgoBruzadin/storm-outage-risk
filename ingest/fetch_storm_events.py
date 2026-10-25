@@ -34,7 +34,7 @@ def fetch_zone_county():
     links = re.findall(r'href="(/source/gis/Shapefiles/County/(bp\d{2}[a-z]{2}\d{2})\.dbx)"', page)
     # file names carry the date as DDmonYY, e.g. bp16ap26 = 16 Apr 2026: pick the newest
     months = ["ja", "fe", "mr", "ap", "my", "jn", "jl", "au", "se", "oc", "no", "de"]
-    newest = max(links, key=lambda l: (l[1][6:8], months.index(l[1][4:6]), l[1][2:4]))
+    newest = max(links, key=lambda link: (link[1][6:8], months.index(link[1][4:6]), link[1][2:4]))
     out = OUT_DIR / f"zone_county_{newest[1]}.dbx"
     if not out.exists():
         r = requests.get("https://www.weather.gov" + newest[0], timeout=60)

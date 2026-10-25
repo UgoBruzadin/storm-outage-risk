@@ -1,0 +1,38 @@
+# Runs on every push and pull request. No real data in CI: tests use a tiny
+# fake dataset (tests/conftest.py), and dbt is only parsed, not built.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: Lint, tests, dbt parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          pixi-version: v0.53.0
+          environments: ci          # app + dev tools + dbt; skips the heavy geo/ML libraries
+          locked: true              # fail if pixi.lock is out of date with pixi.toml
+          cache: true
+      - name: Lint
+        run: pixi run -e ci ruff check .
+      - name: Tests
+        run: pixi run -e ci pytest -q
+      - name: dbt parse (models, sources, tests compile)
+        run: |
+          pixi run -e ci dbt deps
+          pixi run -e ci dbt parse
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Build (with an empty data/app — the real files aren't in git)
+        run: |
+          mkdir -p data/app
+          docker build -t storm-outage-risk:ci .
