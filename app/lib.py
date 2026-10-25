@@ -63,17 +63,26 @@ def style(fig, height=None):
     return fig
 
 
+@st.cache_resource(show_spinner=False)
+def connection():
+    """One DuckDB connection; with HF_TOKEN set, it can read a private Hugging Face dataset."""
+    con = duckdb.connect()
+    if APP_DATA.startswith("hf://") and os.environ.get("HF_TOKEN"):
+        con.execute("CREATE SECRET hf (TYPE huggingface, TOKEN ?)", [os.environ["HF_TOKEN"]])
+    return con
+
+
 @st.cache_data(show_spinner=False)
 def table(name):
     """One exported table as a DataFrame (local path or hf://)."""
-    return duckdb.sql(f"SELECT * FROM '{APP_DATA}/{name}.parquet'").df()
+    return connection().sql(f"SELECT * FROM '{APP_DATA}/{name}.parquet'").df()
 
 
 @st.cache_data(show_spinner=False)
 def meta():
     path = f"{APP_DATA}/meta.json"
     if path.startswith("hf://"):
-        return json.loads(duckdb.sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0])
+        return json.loads(connection().sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0])
     return json.loads(Path(path).read_text())
 
 

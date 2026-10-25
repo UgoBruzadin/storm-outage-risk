@@ -17,6 +17,8 @@ train = { cmd = "python ml/train.py", description = "Train + evaluate outage mod
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
 export-app = { cmd = "python ml/export_app_data.py", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
 app = { cmd = "streamlit run app/streamlit_app.py", description = "Run the dashboard locally" }
+publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }
+deploy-space = { cmd = "python scripts/publish_hf.py space", description = "Deploy the dashboard as a Hugging Face Docker Space (private by default; needs HF_TOKEN)" }
 
 [dependencies]
 python = "3.14.*"
@@ -37,6 +39,7 @@ duckdb = "==2.0.0"
 mlflow = ">=3.17.2, <4"
 streamlit = ">=1.60, <2"
 plotly = ">=7.1.0, <8"
+huggingface-hub = ">=0.30"
 
 [activation.env]
 MLFLOW_DISABLE_AGENT_HINT = "1"
