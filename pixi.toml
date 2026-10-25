@@ -13,6 +13,8 @@ fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = 
 fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
 build = { cmd = "python scripts/build_warehouse.py", description = "Rebuild data/warehouse.duckdb from the raw files" }
+train = { cmd = "python ml/train.py", description = "Train + evaluate outage models (MLflow); args: --threshold 5" }
+mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
 
 [dependencies]
 python = "3.14.*"
@@ -32,8 +34,10 @@ pyarrow = ">=25.0.0,<26"
 # and a 1.x client can't open a database file written by DuckDB 2.x.
 duckdb = "==2.0.0"
 dbt-duckdb = ">=1.11, <2"
+mlflow = ">=3.17.2, <4"
 
 [activation.env]
 # Lets you run plain `pixi run dbt <command>` from the repo root.
 DBT_PROJECT_DIR = "dbt"
 DBT_PROFILES_DIR = "dbt"
+MLFLOW_DISABLE_AGENT_HINT = "1"

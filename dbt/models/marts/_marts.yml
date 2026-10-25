@@ -21,3 +21,17 @@ models:
       - name: has_weather
         description: True when all 6 hours of HRRR weather exist for the block.
         data_tests: [not_null]
+
+  - name: mart_mo_il__region_resilience
+    description: >
+      Resilience scorecard per region from its outage history (default window
+      2020–2023, before the model's train/test years — safe to use as features).
+    columns:
+      - name: region_fips
+        data_tests: [unique, not_null]
+      - name: storm_hit_rate
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 1}
+      - name: repeat_7d_share
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 1}

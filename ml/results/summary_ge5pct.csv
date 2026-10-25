@@ -1,0 +1,5 @@
+split,model,features,pr_auc,roc_auc,brier,event_rate,n_test,n_events
+time,hgb,weather,0.0532,0.7627,0.007,0.0072,21528,154
+time,hgb,weather+place,0.0551,0.7851,0.007,0.0072,21528,154
+time,hgb,weather+place-canopy,0.0527,0.7895,0.007,0.0072,21528,154
+time,hgb,weather+place+history,0.0661,0.7794,0.0069,0.0072,21528,154
