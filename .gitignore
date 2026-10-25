@@ -1,0 +1,23 @@
+# Data: large and rebuilt from public sources (see data/README.md)
+data/*
+!data/README.md
+*.duckdb
+*.duckdb.wal
+*.parquet
+
+# Environments, caches, tool output
+.pixi/*
+!.pixi/config.toml
+__pycache__/
+.ipynb_checkpoints/
+mlruns/
+mlartifacts/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# Secrets (Hugging Face token etc.) — never commit these
+.env
+
+# OS
+.DS_Store

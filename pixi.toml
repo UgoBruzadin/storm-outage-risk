@@ -1,0 +1,24 @@
+[workspace]
+authors = ["Ugo Bruzadin Nunes <25592470+UgoBruzadin@users.noreply.github.com>"]
+channels = ["conda-forge"]
+name = "storm-outage-risk"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+fetch-noaa = { cmd = "python ingest/fetch_noaa.py", description = "Download NOAA hourly weather into data/raw/noaa" }
+build = { cmd = "python scripts/build_warehouse.py", description = "Rebuild data/warehouse.duckdb from the raw files" }
+
+[dependencies]
+python = "3.14.*"
+pandas = ">=3.1.0,<4"
+geopandas = ">=1.2.0,<2"
+requests = "*"
+scikit-learn = ">=1.9.1,<2"
+matplotlib = ">=3.11.2,<4"
+ipykernel = ">=7.4.0,<8"
+
+[pypi-dependencies]
+# From PyPI, not conda-forge: conda-forge's python-duckdb lags behind (1.5.6),
+# and a 1.x client can't open a database file written by DuckDB 2.x.
+duckdb = "==2.0.0"
