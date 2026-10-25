@@ -13,12 +13,12 @@ PAGES = ["overview", "storm_replay", "scorecard", "model"]
 
 @pytest.mark.parametrize("page", PAGES)
 def test_page_renders(page):
-    at = AppTest.from_file(str(ROOT / "app" / "pages" / f"{page}.py"), default_timeout=60).run()
+    at = AppTest.from_file(str(ROOT / "app" / "views" / f"{page}.py"), default_timeout=60).run()
     assert not at.exception, [e.value for e in at.exception]
 
 
 def test_storm_replay_shows_both_maps():
-    at = AppTest.from_file(str(ROOT / "app" / "pages" / "storm_replay.py"), default_timeout=60).run()
+    at = AppTest.from_file(str(ROOT / "app" / "views" / "storm_replay.py"), default_timeout=60).run()
     assert len(at.get("plotly_chart")) == 4          # predicted map, actual map, two timelines
 
 

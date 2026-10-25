@@ -2,7 +2,7 @@
 
 The Streamlit dashboard: `pixi run app` → http://localhost:8501 (after `pixi run export-app`).
 
-- `streamlit_app.py` — navigation; `pages/` — Overview map, Storm replay, Resilience scorecard, Model.
+- `streamlit_app.py` — navigation; `views/` — Overview map (named views/, not pages/: a pages/ folder triggers Streamlit's older auto-navigation), Storm replay, Resilience scorecard, Model.
 - `lib.py` — data loading (local `data/app/` or `APP_DATA=hf://datasets/...`; `HF_TOKEN` for a
   private dataset) and chart styling (one validated palette, light + dark).
 

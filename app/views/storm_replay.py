@@ -14,6 +14,9 @@ st.markdown(
     "Left: what the model predicted from the weather and the place. Right: what actually happened."
 )
 
+# alert level = the top 1% of predicted risk in the test year (see ml/export_app_data.py)
+alert = m.get("alert_threshold", 0.5)
+
 labels = {
     r.block_start: f"{pd.Timestamp(r.block_start):%b %d, %Y %H:00} UTC — "
                    f"{int(r.customers_out):,} out, {int(r.regions_hit)} regions ≥ {m['threshold_pct']:g}%"
@@ -26,7 +29,8 @@ now["pct"] = now["peak_pct_out"]
 left, right = st.columns(2)
 with left:
     st.subheader("Predicted risk")
-    st.plotly_chart(choropleth(now, "prob", "probability", BLUE, (0, 1), height=440,
+    # scale to this block's highest risk: probabilities stay low even in big storms (events are rare)
+    st.plotly_chart(choropleth(now, "prob", "probability", BLUE, (0, max(2 * alert, now.prob.max())), height=440,
                                hover={"prob": ":.0%", "pct": ":.1f", "region_fips": False}),
                     width="stretch")
 with right:
@@ -39,7 +43,7 @@ with right:
 window = preds[(preds.block_start >= pd.Timestamp(block) - pd.Timedelta(days=2)) &
                (preds.block_start <= pd.Timestamp(block) + pd.Timedelta(days=2))]
 timeline = window.groupby("block_start").agg(out=("peak_out", "sum"),
-                                             regions_flagged=("prob", lambda p: (p >= 0.5).sum()),
+                                             regions_flagged=("prob", lambda p: (p >= alert).sum()),
                                              regions_hit=("y", "sum")).reset_index()
 t = theme()
 a, b = st.columns(2)
@@ -52,7 +56,7 @@ with a:
                     width="stretch")
 with b:
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_flagged, name="flagged by model (p ≥ 0.5)",
+    fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_flagged, name="flagged by model (top 1% risk)",
                              mode="lines+markers", line=dict(color=t["series"][0], width=2), marker=dict(size=8)))
     fig.add_trace(go.Scatter(x=timeline.block_start, y=timeline.regions_hit,
                              name=f"actually ≥ {m['threshold_pct']:g}% out",

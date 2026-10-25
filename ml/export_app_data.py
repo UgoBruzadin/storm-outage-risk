@@ -84,7 +84,14 @@ def main():
             for p in sorted(RESULTS.glob("summary_ge*pct.csv"))]
     pd.concat(runs).to_parquet(OUT / "metrics.parquet", index=False)
 
+    # Alert level for the app: the top 1% of predicted risk. A fixed 0.5 would almost never
+    # fire — events are rare (~1% of blocks), so probabilities stay low even before big storms.
+    alert = float(test["prob"].quantile(0.99))
+    alerts = test["prob"] >= alert
     meta = {
+        "alert_threshold": round(alert, 4),
+        "alert_precision": round(float(test.loc[alerts, "y"].mean()), 4),
+        "alert_recall": round(float(alerts[test["y"] == 1].mean()), 4),
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "features": args.features,
         "feature_list": features,
