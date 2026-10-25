@@ -6,7 +6,7 @@ Tick boxes as you go — this file is the project's to-do list. Each milestone e
 - [x] Repo layout, pixi environment, `.gitignore` (data and secrets stay out of git)
 - [x] Carry over the SQL pipeline, NOAA downloader, model playground
 - [x] `pixi run build` rebuilds everything; check numbers match the sandbox
-- [ ] Push to GitHub
+- [x] Push to GitHub (private for now; make public when ready to show)
 - [ ] Pick a license (MIT is the usual choice for portfolio code)
 
 ## 1 — Move the SQL into dbt
