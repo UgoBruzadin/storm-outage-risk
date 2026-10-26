@@ -73,7 +73,7 @@ Then open `notebooks/model_playground.ipynb` with the pixi kernel.
 | `app/` | *milestone 7:* Streamlit dashboard |
 | `tests/` | pytest |
 | `data/` | local data, not in git — see `data/README.md` |
-| `docs/` | [roadmap](docs/roadmap.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [working on this project](docs/working-on-this.md) |
+| `docs/` | [roadmap](docs/roadmap.md), [data dictionary](docs/data-dictionary.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [walkthrough](docs/walkthrough.md), [working on this project](docs/working-on-this.md) |
 
 ## Data sources & credits
 
