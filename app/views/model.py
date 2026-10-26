@@ -8,13 +8,13 @@ importance = table("importance")
 t = theme()
 BASELINES = {"prior", "climatology"}
 SPLITS = {"time": "Next year (train 2024 → test 2025)", "county": "Unseen counties (5-fold by region)",
-          "random": "Random region-days (weathernext-style, leaky)"}
+          "random": "Random region-days (leaky, for comparison)"}
 
 st.title("📈 Model benchmark")
 st.markdown(
-    "Predicting whether a region loses power at scale in a 6-hour block — the setup of "
-    "*weathernext-outage-forecasting*, with free HRRR weather instead of WeatherNext, plus place, history and "
-    "recent-outage features. Scores are **PR-AUC**; for rare events, no skill = the event rate, so **lift** "
+    "Predicting whether a region loses power at scale in a 6-hour block from HRRR storm ingredients plus "
+    "place, history and recent-outage features. Scores are **PR-AUC**; for rare events, no skill = the event "
+    "rate, so **lift** "
     "(PR-AUC ÷ event rate) compares fairly. **New outages** = blocks whose previous 6 hours weren't already an "
     "event: outages persist, so scoring every block rewards \"it's out, it'll stay out\". "
     "Every run: `ml/benchmarks/*.yaml`."

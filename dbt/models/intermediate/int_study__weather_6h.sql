@@ -1,5 +1,4 @@
--- HRRR storm ingredients summarized per region per 6-hour block — the same
--- "multi-ingredient" idea as weathernext-outage-forecasting:
+-- HRRR storm ingredients summarized per region per 6-hour block:
 --
 --   gust / wind10       damaging surface wind
 --   wind850             low-level jet (~1.5 km): wind that can mix down in storms

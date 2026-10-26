@@ -2,7 +2,7 @@
 
   time    train on some years, test on later ones: "can it predict the future?"
   county  k-fold by region: every region is tested by a model that never saw it
-  random  k-fold by region-day hash — weathernext's approach. Neighbouring counties
+  random  k-fold by region-day hash, the common random-day evaluation. Neighbouring counties
           on the same storm day land on both sides, so it's optimistic on purpose.
 """
 import hashlib

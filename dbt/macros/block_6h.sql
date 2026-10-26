@@ -1,6 +1,6 @@
 {#
   Start of the 6-hour block a timestamp falls in: 00, 06, 12 or 18 UTC.
-  The modeling unit, as in weathernext-outage-forecasting:
+  The modeling unit:
 
       {{ block_6h('run_start_time') }} AS block_start
 #}

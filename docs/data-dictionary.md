@@ -103,7 +103,7 @@ features for 2024–2025 without leaking. An **event** = consecutive blocks with
 
 Rule for every feature: **would I know this at the start of the block?**
 
-### `weather` — HRRR storm ingredients for the block (≈ weathernext)
+### `weather` — HRRR storm ingredients for the block
 
 | Feature | Definition | Why it matters |
 |---|---|---|
@@ -117,7 +117,7 @@ Rule for every feature: **would I know this at the start of the block?**
 | `freezing_level_min_m` | lowest freezing level | low + unstable = hail |
 | `icing_hours` | hours with temp ≤ 0 °C and precipitation | ice on lines and limbs |
 | `hail_hours` | hours with CAPE ≥ 500, rain ≥ 2 mm, freezing level ≤ 3.5 km | crude hail proxy |
-| `wind_x_precip`, `wind_squared`, `shear_x_cape` | interactions (from weathernext) | wind load grows ~ with speed² |
+| `wind_x_precip`, `wind_squared`, `shear_x_cape` | interactions | wind load grows ~ with speed² |
 | `month`, `block_hour_utc` | calendar | seasons, time of day |
 
 **Caveat:** HRRR via Open-Meteo is close to observed weather (each run's first hours), so
@@ -176,7 +176,7 @@ They answer different questions, so they can disagree — and that's informative
 place features help more on `county` (they're how the model tells an unseen place apart)
 than on `time` (where the model already knows every region from training).
 
-A third split, **random** (5 folds by region-day hash), copies weathernext. One storm hits
+A third split, **random** (5 folds by region-day hash), is included for comparison with random-day evaluations such as weathernext-outage-forecasting. One storm hits
 neighboring counties on the same day, so it lands on both sides of the split and scores
 come out optimistic. It's in the code to *demonstrate* that, not to choose models.
 

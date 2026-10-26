@@ -21,7 +21,7 @@ splits:
     folds: 5
 
 features:                     # groups in ml/data.py; "+" adds, "-" removes
-  - weather                   # ≈ weathernext
+  - weather                   # storm ingredients only
   - weather+place+history
   - weather+place+history+recent
 

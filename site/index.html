@@ -107,10 +107,10 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
   storms will cause outages, but <em>where</em> — and the same storm takes out 2% of one county and 40% of the next.</p>
 <p>This project predicts, for every county and every 6-hour block, whether at least 1%, 5% or 10% of customers lose
   power, from storm ingredients (wind, gusts, wind shear, instability, rain, ice) and from what each place is like:
-  tree canopy, housing age, density, and its own outage history. It builds on the
-  <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>
-  approach and changes the parts that matter for an honest answer: place features, splits by time and by county
-  instead of random days, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
+  tree canopy, housing age, density, and its own outage history. A related project,
+  <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>, forecasts county outages from weather
+  forecasts and evaluates on random days. This one differs where it matters for an honest answer: place features, splits by
+  time and by county, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
 
 <figure>
   <img src="assets/storm-replay.jpg" alt="Two county maps side by side: predicted outage risk (blue) and actual share of customers out (orange) during the March 15, 2025 storm; the highest predicted risk lines up with the worst outages in southeastern Missouri." loading="lazy">

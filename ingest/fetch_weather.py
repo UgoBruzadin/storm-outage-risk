@@ -1,9 +1,8 @@
 """Hourly storm "ingredients" per region from NOAA's HRRR model, via Open-Meteo.
 
-This is the free stand-in for WeatherNext in the weathernext-outage-forecasting
-project: the same kinds of variables (surface wind and gusts, wind aloft for
-shear, CAPE for updraft strength, precipitation, temperature, freezing level
-for a hail proxy), from HRRR — NOAA's 3 km storm-resolving model.
+Variables: surface wind and gusts, wind aloft for shear, CAPE for updraft
+strength, precipitation, temperature, and freezing level as a hail proxy, from
+HRRR — NOAA's free 3 km storm-resolving model.
 
 Open-Meteo's Historical Forecast API stitches together the first hours of each
 HRRR run, so this is "short-range forecast" weather: close to what happened,

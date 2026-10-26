@@ -19,7 +19,7 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 - [x] NOAA Storm Events (county + zone events) per block
 - [x] HRRR storm ingredients per region via Open-Meteo — 2024–2025
 - [ ] Backfill HRRR 2020–2023 (`pixi run fetch-weather 2020 2021 2022 2023`, ~3–4 days of the free quota) → train on more years
-- [ ] True 24–48 h lead-time forecasts (Open-Meteo Previous Runs / Single Runs APIs, 2024+) to replicate weathernext's lead-time evaluation
+- [ ] True 24–48 h lead-time forecasts (Open-Meteo Previous Runs / Single Runs APIs, 2024+) for a lead-time evaluation
 
 ## ✅ 3 — County traits (geo features)
 - [x] County shapes (Census), tree canopy % (USFS/NLCD 2021), housing age + density (ACS 2024)
@@ -33,7 +33,7 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 - [ ] Size-adjusted events (a fixed 1% threshold makes small counties look fragile)
 
 ## 5 — Model
-- [x] WeatherNext-style 6-hour classifier, feature-set ablation, time / county / random splits, MLflow
+- [x] 6-hour storm-outage classifier, feature-set ablation, time / county / random splits, MLflow
 - [x] Benchmark suite: YAML configs, model registry (baselines, logistic, HGB, random forest, LightGBM,
       XGBoost), feature groups, leaderboards in `ml/results/`
 - [x] "recent" features: outages in the previous block / 24 h (known at the block's start)

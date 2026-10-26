@@ -52,6 +52,6 @@ final: {model: lightgbm, params: {num_leaves: 15}, features: weather+place}
 - Always look at the **baselines** first. A model that can't beat `climatology` (each
   region's usual rate by month, no weather) hasn't learned anything about storms.
 - **`time`** = predicting a future year; **`county`** = predicting places the model never
-  saw; **`random`** = weathernext's split, optimistic because one storm lands on both sides.
+  saw; **`random`** = random region-days, optimistic because one storm lands on both sides.
 - Change one thing per comparison. MLflow's compare view (select runs → Compare) shows
   which parameter moved the score.

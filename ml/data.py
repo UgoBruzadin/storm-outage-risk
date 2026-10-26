@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DB = ROOT / "data" / "warehouse.duckdb"
 
 FEATURE_GROUPS = {
-    # weathernext's storm ingredients (HRRR) + its interaction terms + calendar
+    # storm ingredients (HRRR) + interaction terms + calendar
     "weather": [
         "gust_max_ms", "wind10_max_ms", "wind850_max_ms", "shear_0_6km_max_ms",
         "cape_max_jkg", "precip_sum_mm", "precip_max_1h_mm", "temp_min_c",
