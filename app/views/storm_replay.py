@@ -69,6 +69,6 @@ with st.expander("Table view"):
     st.dataframe(now[["region", "state", "prob", "pct", "peak_out", "gust_max_ms", "cape_max_jkg",
                       "precip_sum_mm", "storm_reports"]].sort_values("prob", ascending=False),
                  hide_index=True, width="stretch",
-                 column_config={"prob": st.column_config.ProgressColumn("predicted", format="%.0f%%",
+                 column_config={"prob": st.column_config.ProgressColumn("predicted", format="percent",
                                                                         min_value=0, max_value=1),
                                 "pct": st.column_config.NumberColumn("% out", format="%.1f")})

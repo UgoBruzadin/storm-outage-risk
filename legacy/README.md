@@ -2,7 +2,7 @@
 
 The first version of the pipeline: plain SQL files run in order by a small
 Python script, before the move to dbt. Kept because
-`notebooks/model_playground.ipynb` (St. Louis metro, hourly) reads its tables.
+`model_playground.ipynb` (St. Louis metro, hourly) reads its tables.
 
 - `sql/merge_all.sql` — 7 St. Louis-area regions × every hour, outages +
   KSTL airport weather → `stg.merged_hourly`

@@ -13,7 +13,7 @@ fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = 
 fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
 build = { cmd = "dbt deps && dbt build", description = "Rebuild the warehouse with dbt: every model + test (~30 s)" }
-build-legacy = { cmd = "python legacy/build_warehouse.py", description = "Old St. Louis hourly SQL pipeline (for notebooks/model_playground.ipynb)" }
+build-legacy = { cmd = "python legacy/build_warehouse.py", description = "Old St. Louis hourly SQL pipeline (for legacy/model_playground.ipynb)" }
 benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark config: pixi run benchmark ml/benchmarks/quick.yaml [--dry-run]" }
 train = { cmd = "python -m ml.benchmark ml/benchmarks/quick.yaml", description = "The quick benchmark (baselines vs model families, ~minutes)" }
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }

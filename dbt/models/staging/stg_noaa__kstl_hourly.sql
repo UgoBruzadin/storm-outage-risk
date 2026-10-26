@@ -1,10 +1,5 @@
--- Weather at St. Louis Lambert airport, one row per hour.
--- This is Section 3 of the old sql/merge_all.sql, almost unchanged. What's
--- different in dbt:
---   * no CREATE TABLE line — dbt wraps the SELECT for you (as a view here,
---     see dbt_project.yml); the file name becomes the table name
---   * FROM {{ source('noaa', 'kstl_observations') }} instead of a file path
---   * the "-- Check:" comments became tests in _staging.yml
+-- Weather at St. Louis Lambert airport (KSTL), one row per hour. Used by the
+-- legacy St. Louis hourly prototype (legacy/).
 --
 -- Unpacking pattern, read inside-out:
 --   split_part(TMP, ',', 1)   take piece 1 before the comma   '+0039'

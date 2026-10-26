@@ -1,10 +1,5 @@
-# Documentation + tests for the staging models. Every model gets an entry
-# here. `dbt build` runs each model, then its tests; a failing test stops
-# everything downstream of it.
-#
-# Built-in tests: unique, not_null, accepted_values, relationships.
-# dbt_utils (packages.yml) adds unique_combination_of_columns, accepted_range...
-# Anything else: a SQL file in dbt/tests/ that returns the BAD rows.
+# Documentation and tests for the staging models. Custom tests that don't fit a
+# generic test live in dbt/tests/ as queries that return the failing rows.
 
 version: 2
 

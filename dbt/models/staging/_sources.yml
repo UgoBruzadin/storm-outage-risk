@@ -1,14 +1,9 @@
-# Raw files, declared once. Models read them with {{ source('eaglei', 'outages') }}
-# instead of hard-coding paths, so a path changes in one place only — and the
-# lineage graph shows where every table's data comes from.
+# Raw files, declared once and read in models with {{ source(...) }}. Every file is
+# downloaded by a script in ingest/ (see the pixi fetch-* tasks), except EAGLE-I.
 #
-# external_location is the dbt-duckdb way to point a source at files: it's
-# pasted in wherever the model says {{ source(...) }}. Every file here is
-# downloaded by a script in ingest/ (see the pixi fetch-* tasks).
-#
-# No curly braces in external_location: dbt-duckdb runs it through Python's
-# str.format(), so read_csv(types = {...}) breaks. Read as text instead
-# (all_varchar) and cast in the staging model.
+# external_location is passed through Python's str.format() by dbt-duckdb, so it
+# can't contain curly braces (e.g. read_csv(types = {...})): such files are read as
+# text (all_varchar) and cast in the staging model.
 
 version: 2
 

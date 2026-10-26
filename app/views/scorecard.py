@@ -18,16 +18,30 @@ st.dataframe(
       .sort_values("hours_out_per_customer", ascending=False),
     hide_index=True, width="stretch", height=640,
     column_config={
-        "customers": st.column_config.NumberColumn("customers", format="%,d"),
-        "hours_out_per_customer": st.column_config.NumberColumn("outage h / customer / yr", format="%.1f"),
-        "events_per_year": st.column_config.NumberColumn("events / yr", format="%.1f"),
-        "storm_hit_rate": st.column_config.ProgressColumn("storm hit rate", format="%.0f%%",
-                                                          min_value=0, max_value=0.35),
-        "quiet_event_rate": st.column_config.NumberColumn("events w/o storm", format="%.1f%%"),
-        "repeat_7d_share": st.column_config.NumberColumn("repeat ≤ 7 days", format="%.0f%%"),
-        "canopy_mean_pct": st.column_config.NumberColumn("tree canopy %", format="%.0f"),
-        "share_homes_pre1960": st.column_config.NumberColumn("homes pre-1960", format="%.0f%%"),
-        "housing_per_km2": st.column_config.NumberColumn("homes / km²", format="%.0f"),
+        "customers": st.column_config.NumberColumn(
+            "customers", format="localized",
+            help="Electric customers in the region (EAGLE-I modeled customer counts)."),
+        "hours_out_per_customer": st.column_config.NumberColumn(
+            "outage h / customer / yr", format="%.1f",
+            help="Customer-hours without power per customer per year (EAGLE-I outage records)."),
+        "events_per_year": st.column_config.NumberColumn(
+            "events / yr", format="%.1f", help="Runs of 6-hour blocks with ≥ 1% of customers out, per year."),
+        "storm_hit_rate": st.column_config.ProgressColumn(
+            "storm hit rate", format="percent", min_value=0, max_value=0.35,
+            help="Of the 6-hour blocks with a NOAA Storm Events report in the region, the share where ≥ 1% of "
+                 "customers lost power. Compares places under similar weather: closest to vulnerability."),
+        "quiet_event_rate": st.column_config.NumberColumn(
+            "events w/o storm", format="percent",
+            help="Of the 6-hour blocks without a storm report, the share where ≥ 1% of customers lost power."),
+        "repeat_7d_share": st.column_config.NumberColumn(
+            "repeat ≤ 7 days", format="percent",
+            help="Share of outage events followed by another within 7 days (mostly storm clustering)."),
+        "canopy_mean_pct": st.column_config.NumberColumn(
+            "tree canopy %", format="%.0f", help="Average tree canopy cover (USFS / NLCD Tree Canopy Cover 2021)."),
+        "share_homes_pre1960": st.column_config.NumberColumn(
+            "homes pre-1960", format="percent", help="Share of homes built before 1960 (Census ACS 2020–2024)."),
+        "housing_per_km2": st.column_config.NumberColumn(
+            "homes / km²", format="%.0f", help="Housing units per km² of land (Census ACS, TIGER boundaries)."),
     },
 )
 st.caption(
