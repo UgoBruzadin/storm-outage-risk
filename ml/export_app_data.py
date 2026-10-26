@@ -54,6 +54,7 @@ def main():
     # --- final model: train on the first year, predict the last ---------------
     threshold = final.get("threshold_pct", benchmark_thresholds(config)[0])
     df = data.load(threshold, years)
+    data.check_history(df, features)
     train, test = df[df.year < max(years)], df[df.year == max(years)].copy()   # all earlier years -> the last
     model = models.build(final["model"], final.get("params")).fit(train[features], train["y"])
     test["prob"] = model.predict_proba(test[features])[:, 1]

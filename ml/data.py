@@ -99,10 +99,18 @@ def load(threshold_pct, years, db=DB):
           AND year(m.block_start) BETWEEN {min(years)} AND {max(years)}
     """).df()
     con.close()
-    # history must end before the first year we train or test on
-    assert (df["history_end"] <= pd.Timestamp(f"{min(years)}-01-01")).all(), "history overlaps train/test years"
     df = add_derived(df)
     return label(df, threshold_pct) if threshold_pct is not None else df
+
+
+def check_history(df, features):
+    """History features summarize a fixed window of outages; using them on rows inside that
+    window would feed the model the outcomes it is asked to predict."""
+    if set(features) & set(FEATURE_GROUPS["history"]):
+        first = pd.Timestamp(f"{int(df['year'].min())}-01-01")
+        if (df["history_end"] > first).any():
+            raise ValueError(f"history features cover outages up to {df['history_end'].max():%Y-%m-%d}, after "
+                             f"the first year here ({first.year}): drop +history or move the history window")
 
 
 def label(df, threshold_pct):

@@ -80,6 +80,7 @@ def evaluate(df, run):
     """
     feature_cols = models.NEEDS_COLUMNS.get(run["model"], []) if run["features"] == "-" \
         else data.resolve_features(run["features"])
+    data.check_history(df, feature_cols)
     kind = run["split"]["kind"]
     options = {k: v for k, v in run["split"].items() if k != "kind"}
     proba = np.full(len(df), np.nan)

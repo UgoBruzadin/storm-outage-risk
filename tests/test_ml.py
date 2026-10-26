@@ -166,3 +166,10 @@ def test_f1_at_50():
     y = np.array([1, 1, 0, 0])
     s = score(y, np.array([0.9, 0.2, 0.7, 0.1]))        # flags 2 blocks, 1 of them an event
     assert s["precision_at_50"] == 0.5 and s["recall_at_50"] == 0.5 and s["f1_at_50"] == 0.5
+
+
+def test_history_features_refused_inside_the_history_window(frame):
+    df = frame.assign(history_end=pd.Timestamp("2025-01-01"))         # history covers 2024, a row year here
+    with pytest.raises(ValueError, match="history"):
+        data.check_history(df, data.resolve_features("weather+place+history"))
+    data.check_history(df, data.resolve_features("weather+place"))     # no history features: fine

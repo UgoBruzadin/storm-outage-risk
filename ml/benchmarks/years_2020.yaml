@@ -1,0 +1,30 @@
+# Does more training history help? Same features, model and test year (2025) as
+# years_2024.yaml; only the training years differ. History features are left out:
+# their 2020–2023 window would overlap the training years.
+name: years_2020
+description: >
+  Final XGBoost settings trained on 2020–2024, tested on 2025, >= 5% of customers.
+  Ranked by onset PR-AUC.
+
+data:
+  threshold_pct: [5]
+  years: [2020, 2021, 2022, 2023, 2024, 2025]
+  train_on: all
+
+rank_by: onset_pr_auc
+
+splits:
+  - kind: time
+    train_years: [2020, 2021, 2022, 2023, 2024]
+    test_years: [2025]
+
+features:
+  - weather
+  - weather+place
+  - weather+place+recent
+
+models:
+  - name: climatology
+  - name: xgboost
+    params: {n_estimators: 400, learning_rate: 0.03, max_depth: 4, min_child_weight: 5,
+             subsample: 0.8, colsample_bytree: 0.8}
