@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "ml" / "results"
 TRACKING_URI = f"sqlite:///{ROOT / 'data' / 'mlflow.db'}"
 ARTIFACTS = (ROOT / "data" / "mlruns").as_uri()
-BASELINES = {"prior", "climatology"}
+BASELINES = {"prior", "climatology", "nws_warnings", "spc_outlook", "official"}
 
 
 def expand_grid(params):

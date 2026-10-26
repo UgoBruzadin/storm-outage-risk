@@ -18,6 +18,9 @@
 --   place      customers, canopy, housing age/density — fixed per region
 --   calendar   month, hour of block (UTC)
 --
+--   official   NWS warnings in force during the block, and the SPC Day 1 outlook
+--              in force at its start (int_study__nws_6h): the baselines to beat
+--
 -- Context (NOT model inputs — reported after the fact, so using them would
 -- leak the answer): storm_* counts from NOAA Storm Events.
 
@@ -81,8 +84,20 @@ SELECT
     r.canopy_mean_pct,
     r.canopy_dense_share,
 
+    -- official forecasts (NWS / SPC)
+    coalesce(n.warn_svr, false)                                     AS warn_svr,
+    coalesce(n.warn_tor, false)                                     AS warn_tor,
+    coalesce(n.warn_wind, false)                                    AS warn_wind,
+    coalesce(n.warn_winter, false)                                  AS warn_winter,
+    n.spc_cat,
+    n.spc_wind_prob,
+    n.spc_tor_prob,
+    n.spc_hail_prob,
+    n.spc_lead_hours,
+
     -- calendar
     month(g.block_start)                                            AS month,
+    dayofweek(g.block_start)                                        AS day_of_week,
     hour(g.block_start)                                             AS block_hour_utc,
 
     -- context: storm reports (not features)
@@ -97,3 +112,4 @@ FROM grid AS g
 JOIN {{ ref('int_study__regions') }}               AS r USING (region_fips)
 LEFT JOIN {{ ref('int_study__weather_6h') }}       AS w USING (region_fips, block_start)
 LEFT JOIN {{ ref('int_study__storm_events_6h') }}  AS s USING (region_fips, block_start)
+LEFT JOIN {{ ref('int_study__nws_6h') }}           AS n USING (region_fips, block_start)

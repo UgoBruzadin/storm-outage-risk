@@ -26,6 +26,7 @@ except EAGLE-I is downloaded by a script (`pixi run fetch-<name>`, code in `inge
 | Customers per county | same (EAGLE-I) | modeled customer count per county (`MCC.csv`) and state coverage over time (`coverage_history.csv`) | ships with the outage data | same download | manual | `data/raw/eaglei/` |
 | **Storm ingredients** | NOAA (HRRR model), served by **Open-Meteo** | hourly wind, gusts, winds aloft, CAPE, precipitation, temperature, freezing level at each region's weather point | 2018–2025 (HRRR archive begins 2018-01-01) | `https://historical-forecast-api.open-meteo.com/v1/forecast` with `models=ncep_hrrr_conus` | `fetch-weather` (rate-limited, resumable) | `data/raw/weather/hrrr/<region>_<year>.csv.gz` |
 | **Storm reports** | NOAA NCEI Storm Events database | spotter / NWS reports of thunderstorm wind, hail, tornadoes, winter storms… with times and places | 2014–2025 | `https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/` | `fetch-storm-events` (newest file per year) | `data/raw/storm_events/` |
+| **Official forecasts** | NWS warnings and SPC Day 1 convective outlooks, archived by the Iowa Environmental Mesonet | warnings (severe thunderstorm, tornado, high wind, ice storm, winter storm, blizzard) by county or zone, with issue and expiry; outlook polygons (risk level, wind / tornado / hail probability) joined to each region's interior point | 2014–2025 | `https://mesonet.agron.iastate.edu/cgi-bin/request/gis/` (`watchwarn.py`, `outlooks.py`) | `fetch-nws` | `data/raw/nws/` |
 | Zone → county map | NOAA National Weather Service | which counties make up each forecast zone | file `bp16ap26` (16 Apr 2026) | `https://www.weather.gov/gis/ZoneCounty` | `fetch-storm-events` | `data/raw/storm_events/zone_county_*.dbx` |
 | **County shapes** | U.S. Census Bureau (TIGER cartographic boundaries) | county polygons and land area, 1:500k | 2023 | `https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip` | `fetch-counties` | `data/raw/geo/regions_study.*` |
 | **Tree canopy** | USDA Forest Service, distributed by MRLC (NLCD Tree Canopy Cover) | % tree canopy per 30 m pixel; we request 90 m | 2021 (v2021-4) | MRLC map service `https://www.mrlc.gov/geoserver/ows`, coverage `mrlc_download__nlcd_tcc_conus_2021_v2021-4` | `fetch-tree-canopy` (one cut-out per region, summarized) | `data/raw/geo/tree_canopy_2021.csv` |
@@ -151,6 +152,18 @@ this is an upper bound for a 24–48 h forecast.
 Computed on the full grid **before** filtering years, so a year's first block still sees
 the previous year.
 
+### `warnings` and `outlook` — official forecasts (`int_study__nws_6h`)
+
+| Feature | Definition |
+|---|---|
+| `warn_svr`, `warn_tor`, `warn_wind`, `warn_winter` | an NWS severe thunderstorm / tornado / high wind / winter (ice storm, winter storm, blizzard) warning was in force at any time in the block; zone warnings spread to every county in the zone |
+| `spc_cat` | SPC Day 1 categorical risk at the region's interior point: 0 none, 1 TSTM, 2 MRGL, 3 SLGT, 4 ENH, 5 MDT, 6 HIGH |
+| `spc_wind_prob`, `spc_tor_prob`, `spc_hail_prob` | that outlook's probability of the hazard within 25 miles |
+
+The outlook is the latest product issued **before** the block starts and valid at its start
+(`spc_lead_hours` > 0, tested). Warnings are often issued during the block. Used as features
+and as the `nws_warnings`, `spc_outlook` and `official` baselines (`ml/models.py`).
+
 ### Label and evaluation columns (added in `ml/data.py`, not in dbt)
 
 | Column | Meaning |
@@ -190,9 +203,13 @@ roadmap; until then, treat differences under ~0.005 PR-AUC as possibly noise.)
 |---|---|---|---|---|
 | `quick.yaml` | Which **model family** is best, and do features beyond weather help? | 66 | models: prior, climatology, logistic, LightGBM, XGBoost (one setting each); features: weather → +place+history → +recent; outage size 1/5/10% | trained on all blocks |
 | `onsets.yaml` | Should a model of **new outages** be **trained** on new outages only? And does **canopy** help? | 72 | `train_on`: all vs onsets; features incl. `weather+place` vs `weather+place-canopy`; outage size 1/5/10% | LightGBM only (+ climatology baseline) |
+| `official.yaml` | Does the model beat, and add to, **NWS warnings and SPC outlooks**? | 54 | baselines: climatology, nws_warnings, spc_outlook, official; XGBoost on official forecasts only, on the model's features, and on both; outage size 1/5/10% | final XGBoost settings |
+| `weathernext.yaml` | How does **weathernext-outage-forecasting's setup** score on this data, under its split and under ours? | 9 | splits: random (theirs), county, time; their features, class-weighted boosted tree and logistic regression vs the final model | ≥ 5% |
+| `splits.yaml` | How much does the **choice of test set** change the score? | 9 | splits: time, county, random | final XGBoost settings, ≥ 5% |
+| `wet_soil.yaml` | Does **rain before the block** help? | 64 | `wet_soil` group on/off, LightGBM and XGBoost, train on all vs onsets; outage size 5/10% | — |
 | `full.yaml` | What are the **best hyperparameters**? | 264 | grids: LightGBM (trees, learning rate, leaves, class weight), XGBoost (trees, depth, min child weight, class weight), HGB; plus the canopy ablation; outage size 1/5/10% | trained on all blocks |
 
-All three use the same data, splits and metrics, and **every run is scored twice**: on all
+All configs use the same data, splits and metrics, and **every run is scored twice**: on all
 blocks, and on **new outages** (blocks whose previous 6 hours weren't already an event) —
 leaderboards rank by the second. `train_on` is about which rows the model *learns* from;
 the onset *score* is computed for every run either way.

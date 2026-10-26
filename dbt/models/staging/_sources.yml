@@ -64,6 +64,21 @@ sources:
                      names = ['state', 'zone', 'cwa', 'zone_name', 'state_zone', 'county', 'fips', 'time_zone',
                               'fe_area', 'lat', 'lon'])
 
+  - name: nws
+    description: >
+      Official forecasts from the Iowa Environmental Mesonet archive (ingest/fetch_nws.py):
+      NWS warnings for MO and IL, and SPC Day 1 convective outlooks joined to each region.
+      The baselines a model has to beat.
+    tables:
+      - name: warnings
+        description: One row per warning per county (MOC...) or zone (MOZ...), latest status.
+        config:
+          external_location: "read_csv('data/raw/nws/warnings_*.csv', all_varchar = true)"
+      - name: spc_day1
+        description: Every Day 1 outlook product x every region; 0 where the outlook doesn't reach it.
+        config:
+          external_location: "read_csv('data/raw/nws/spc_day1_*.csv', all_varchar = true)"
+
   - name: geo
     description: Region shapes and place features (ingest/fetch_counties.py, fetch_tree_canopy.py).
     tables:

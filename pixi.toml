@@ -12,6 +12,7 @@ fetch-weather = { cmd = "python ingest/fetch_weather.py", description = "HRRR st
 fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = "USFS/NLCD tree canopy % per region (2021) -> data/raw/geo" }
 fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
+fetch-nws = { cmd = "python ingest/fetch_nws.py", description = "NWS warnings + SPC Day 1 outlooks for MO/IL, 2014-2025 (Iowa Environmental Mesonet) -> data/raw/nws" }
 build = { cmd = "dbt deps && dbt build", description = "Rebuild the warehouse with dbt: every model + test (~30 s)" }
 build-legacy = { cmd = "python legacy/build_warehouse.py", description = "Old St. Louis hourly SQL pipeline (for legacy/model_playground.ipynb)" }
 benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark config: pixi run benchmark ml/benchmarks/quick.yaml [--dry-run]" }

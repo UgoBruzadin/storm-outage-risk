@@ -58,6 +58,28 @@ What the numbers say:
   outages (`ml/results/leaderboard_onsets.md`), shrank the effect to a few percent and
   sometimes reversed it. Across models, canopy's effect is weak and inconsistent.
 
+### How it compares
+
+PR-AUC on new ≥ 5% outages, next year (`ml/results/leaderboard_official.md`,
+`ml/results/leaderboard_weathernext.md`):
+
+| Approach | PR-AUC |
+|---|---|
+| SPC Day 1 outlook (event rate per risk level) | 0.032 |
+| NWS warnings in force (event rate per warning combination) | 0.044 |
+| Warnings + outlook | 0.051 |
+| weathernext-outage-forecasting's setup, reproduced on this data | 0.032 |
+| This model | 0.091 |
+| This model with warnings + outlook as features | **0.132** |
+
+- **The model beats the official forecasts** (1.8× warnings + outlook), at every outage
+  size and on both splits, and gains another 45% when given them as inputs.
+- The outlook is always issued before the block; warnings are often issued during it, the
+  same timing as the HRRR inputs.
+- The weathernext row reproduces that project's method (weather-only features, class-weighted
+  boosted tree, 80/20 county-date hash split) with HRRR in place of WeatherNext. On its own
+  split it scores 0.072, and its precision at a 0.5 cut-off is 3%.
+
 ### Limitations
 
 - **Weather is short-range, not a 24–48 h forecast.** The HRRR archive stitches the first
@@ -142,6 +164,8 @@ pixi run export-app && pixi run app   # dashboard at http://localhost:8501
 - **Storm ingredients:** NOAA High-Resolution Rapid Refresh (HRRR), via the
   [Open-Meteo](https://open-meteo.com) Historical Forecast API.
 - **Storm reports:** NOAA NCEI Storm Events Database; NWS zone–county correlation file.
+- **Official forecasts:** NWS warnings and SPC Day 1 convective outlooks, archived by the
+  Iowa Environmental Mesonet.
 - **Tree canopy:** USDA Forest Service / NLCD Tree Canopy Cover 2021, via MRLC.
 - **Housing and population:** U.S. Census Bureau, ACS 2020–2024 5-year estimates.
 - **County boundaries:** U.S. Census Bureau cartographic boundary files (2023).

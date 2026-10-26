@@ -27,6 +27,22 @@ models:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [region_fips, block_start]
 
+  - name: int_study__nws_6h
+    description: NWS warnings in force during each block and the SPC Day 1 outlook in force at its start.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, block_start]
+    columns:
+      - name: spc_cat
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6]
+      - name: spc_lead_hours
+        description: Hours between the outlook's issue and the block start; always > 0 (no peeking).
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, inclusive: false}
+
   - name: int_study__weather_6h
     description: HRRR storm ingredients summarized per region per 6-hour block.
     data_tests:

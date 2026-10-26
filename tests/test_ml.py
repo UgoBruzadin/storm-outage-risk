@@ -134,3 +134,35 @@ def test_top1_alerts_exactly_one_percent_even_with_ties():
     assert s["recall_top1"] < 1.0                      # was 1.0 when ties made every block an alert
     ranked = score(y, np.r_[np.zeros(990), np.ones(10)])
     assert ranked["precision_top1"] == 1.0 and ranked["recall_top1"] == 1.0   # top 10 of 1000 = the 10 events
+
+
+def test_balanced_gives_events_and_non_events_equal_weight():
+    class Recorder(models.RateBaseline):
+        def fit(self, X, y, sample_weight=None):
+            self.weight_ = sample_weight
+            return super().fit(X, y)
+
+    y = np.r_[np.zeros(90), np.ones(10)]
+    fitted = models.Balanced(Recorder()).fit(pd.DataFrame({"x": np.arange(100)}), y)
+    w = fitted.estimator_.weight_
+    assert w[y == 1].sum() == pytest.approx(w[y == 0].sum())
+
+
+def test_class_weight_balanced_reaches_a_pipeline(frame):
+    model = models.build("logistic", {"class_weight": "balanced"})
+    cols = data.resolve_features("weather")
+    model.fit(frame[cols], frame["y"])                   # the weights must route to the last step
+    assert model.predict_proba(frame[cols]).shape == (len(frame), 2)
+
+
+@pytest.mark.parametrize("name", ["nws_warnings", "spc_outlook", "official"])
+def test_official_baselines_run_without_features(frame, name):
+    run = {"threshold_pct": 5, "split": {"kind": "time", "train_years": [2024], "test_years": [2025]},
+           "model": name, "features": "-", "params": {}}
+    assert 0 <= benchmark.evaluate(frame, run)["roc_auc"] <= 1
+
+
+def test_f1_at_50():
+    y = np.array([1, 1, 0, 0])
+    s = score(y, np.array([0.9, 0.2, 0.7, 0.1]))        # flags 2 blocks, 1 of them an event
+    assert s["precision_at_50"] == 0.5 and s["recall_at_50"] == 0.5 and s["f1_at_50"] == 0.5

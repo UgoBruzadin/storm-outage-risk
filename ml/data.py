@@ -31,6 +31,17 @@ FEATURE_GROUPS = {
     ],
     # subset of "place", for ablations: "weather+place-canopy"
     "canopy": ["canopy_mean_pct", "canopy_dense_share"],
+    # official forecasts: NWS warnings in force during the block, SPC Day 1 outlook at its start
+    "warnings": ["warn_svr", "warn_tor", "warn_wind", "warn_winter"],
+    "outlook": ["spc_cat", "spc_wind_prob", "spc_tor_prob", "spc_hail_prob"],
+    # weathernext-outage-forecasting's feature list, mapped to the closest HRRR columns:
+    # 925 hPa wind -> 850 hPa, 700 hPa updraft -> CAPE, 700/850 hPa temperature -> 2 m,
+    # hail flag -> hail_hours; interactions built from sustained 10 m wind as theirs are
+    "weathernext": [
+        "wind10_max_ms", "wind850_max_ms", "shear_0_6km_max_ms", "cape_max_jkg", "precip_sum_mm",
+        "temp_min_c", "temp_mean_c", "hail_hours", "block_hour_utc", "day_of_week", "month",
+        "wn_wind_x_precip", "wn_wind_squared", "shear_x_cape",
+    ],
     # rain before the block (wet ground); opt-in: no consistent gain (benchmarks/wet_soil.yaml)
     "wet_soil": ["precip_prev_72h_mm", "precip_prev_7d_mm", "wind_x_wet_soil"],
     # the region's own track record, 2020–2023 (before the train/test years)
@@ -116,5 +127,10 @@ def add_derived(df):
     df["wind_x_precip"] = df["gust_max_ms"] * df["precip_sum_mm"]
     df["wind_squared"] = df["gust_max_ms"] ** 2
     df["shear_x_cape"] = df["shear_0_6km_max_ms"] * df["cape_max_jkg"]
+    df["wn_wind_x_precip"] = df["wind10_max_ms"] * df["precip_sum_mm"]
+    df["wn_wind_squared"] = df["wind10_max_ms"] ** 2
+    for col in ["warn_svr", "warn_tor", "warn_wind", "warn_winter"]:
+        if col in df:
+            df[col] = df[col].astype(int)
     df["wind_x_wet_soil"] = df["gust_max_ms"] * df["precip_prev_72h_mm"]
     return df.reset_index(drop=True)
