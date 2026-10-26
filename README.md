@@ -61,21 +61,24 @@ What the numbers say:
 ### How it compares
 
 PR-AUC on new ≥ 5% outages, next year (`ml/results/leaderboard_official.md`,
-`ml/results/leaderboard_weathernext.md`):
+`ml/results/leaderboard_weathernext.md`). Official forecasts are taken as they stood when
+the block started; the model's HRRR weather covers the block itself.
 
-| Approach | PR-AUC |
-|---|---|
-| SPC Day 1 outlook (event rate per risk level) | 0.032 |
-| NWS warnings in force (event rate per warning combination) | 0.044 |
-| Warnings + outlook | 0.051 |
-| weathernext-outage-forecasting's setup, reproduced on this data | 0.032 |
-| This model | 0.091 |
-| This model with warnings + outlook as features | **0.132** |
+| Approach | Known | PR-AUC |
+|---|---|---|
+| NWS warnings in force at block start (event rate per combination) | in advance | 0.024 |
+| SPC Day 1 outlook (event rate per risk level) | in advance | 0.032 |
+| Warnings + outlook | in advance | 0.035 |
+| weathernext-outage-forecasting's setup, reproduced on this data | during the block | 0.032 |
+| This model | during the block | 0.089 |
+| This model with warnings + outlook as features | during the block | **0.115** |
 
-- **The model beats the official forecasts** (1.8× warnings + outlook), at every outage
-  size and on both splits, and gains another 45% when given them as inputs.
-- The outlook is always issued before the block; warnings are often issued during it, the
-  same timing as the HRRR inputs.
+- **Official forecasts add to the model**: +29% next year, +14% on unseen counties.
+- **Warnings are counted only if in force at the block's start.** Counting any warning that
+  touched the block nearly doubled their score (0.044), because most severe thunderstorm and
+  tornado warnings are issued as the storm, and often the outage, arrives.
+- **Not a fair race yet**: the model sees the block's weather, the forecasts didn't. Matching
+  lead times needs weather forecasts issued before the block (roadmap).
 - The weathernext row reproduces that project's method (weather-only features, class-weighted
   boosted tree, 80/20 county-date hash split) with HRRR in place of WeatherNext. On its own
   split it scores 0.072, and its precision at a 0.5 cut-off is 3%.

@@ -156,12 +156,13 @@ the previous year.
 
 | Feature | Definition |
 |---|---|
-| `warn_svr`, `warn_tor`, `warn_wind`, `warn_winter` | an NWS severe thunderstorm / tornado / high wind / winter (ice storm, winter storm, blizzard) warning was in force at any time in the block; zone warnings spread to every county in the zone |
+| `warn_svr`, `warn_tor`, `warn_wind`, `warn_winter` | an NWS severe thunderstorm / tornado / high wind / winter (ice storm, winter storm, blizzard) warning was **in force when the block started** (issued before it, not yet expired); zone warnings spread to every county in the zone |
 | `spc_cat` | SPC Day 1 categorical risk at the region's interior point: 0 none, 1 TSTM, 2 MRGL, 3 SLGT, 4 ENH, 5 MDT, 6 HIGH |
 | `spc_wind_prob`, `spc_tor_prob`, `spc_hail_prob` | that outlook's probability of the hazard within 25 miles |
 
 The outlook is the latest product issued **before** the block starts and valid at its start
-(`spc_lead_hours` > 0, tested). Warnings are often issued during the block. Used as features
+(`spc_lead_hours` > 0, tested). Both are known at the block's start: a warning issued during
+the block is ignored, because it usually follows the storm's arrival. Used as features
 and as the `nws_warnings`, `spc_outlook` and `official` baselines (`ml/models.py`).
 
 ### Label and evaluation columns (added in `ml/data.py`, not in dbt)

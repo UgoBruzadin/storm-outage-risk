@@ -1,11 +1,14 @@
--- Official forecasts per region per 6-hour block: the warnings in force during
--- the block, and the SPC outlook in force when the block started.
+-- Official forecasts per region per 6-hour block, as known when the block starts:
+-- the warnings in force at that moment, and the latest SPC outlook.
 --
 -- Warnings: county warnings carry the county directly; zone warnings (high wind,
 -- winter, ice) go to every county in the zone, as in int_study__storm_events_6h.
--- A warning counts in every block its issue -> expire window touches.
--- Warnings are issued minutes ahead of the hazard, often during the block itself:
--- the same "inside the block" timing as the HRRR weather features.
+-- A warning counts for a block only if it was issued BEFORE the block started
+-- and hadn't expired: issue < block_start < expire. Counting any warning that
+-- touches the block would mostly capture warnings issued once the storm (and
+-- often the outage) had already arrived: of 1,445 new >= 5% outages in 2025,
+-- 335 had a severe thunderstorm or tornado warning somewhere in the block, but
+-- only 65 had one in force at its start.
 --
 -- Outlook: the latest Day 1 product issued BEFORE the block starts and valid at
 -- its start, so it is a genuine forecast (hours of lead time). A product that
@@ -29,7 +32,9 @@ WITH warning_counties AS (
 warning_blocks AS (
     SELECT
         {{ region_fips('fips_code') }}                                   AS region_fips,
-        unnest(generate_series({{ block_6h('issue_utc') }},
+        -- block starts strictly inside (issue, expire); empty for most warnings,
+        -- which last under an hour and don't cross a block boundary
+        unnest(generate_series({{ block_6h('issue_utc') }} + INTERVAL 6 HOUR,
                                {{ block_6h("expire_utc - INTERVAL 1 MINUTE") }},
                                INTERVAL 6 HOUR))                         AS block_start,
         phenomena

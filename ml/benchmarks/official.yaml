@@ -3,8 +3,8 @@
 #   spc_outlook   event rate by SPC Day 1 categorical risk (issued before the block)
 #   official      both together
 # then XGBoost on the official forecasts alone, on the model's own features, and on both.
-# Warnings are issued minutes ahead, often inside the block, like the HRRR features;
-# the outlook is issued hours ahead.
+# Both are what was known at the block's start: warnings already in force, and the
+# latest outlook. The model's HRRR weather, by contrast, covers the block itself.
 name: official
 description: >
   NWS warnings and SPC outlooks as baselines, and as features, against the model,
