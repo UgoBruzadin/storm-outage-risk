@@ -1,13 +1,15 @@
 # Hyperparameter grids for the boosted-tree models, plus the place/canopy ablation.
-# ~30-60 min. Check the run count first: pixi run benchmark ml/benchmarks/full.yaml --dry-run
+# A few hours (3 outage sizes). Check the run count first: pixi run benchmark ml/benchmarks/full.yaml --dry-run
 name: full
 description: >
   Grid search over LightGBM / XGBoost / HGB, with the canopy ablation, on 2024 → 2025
-  and unseen counties. Label = peak outage >= 5% of customers in a 6-hour block.
+  and unseen counties. Outages of >= 1%, 5% and 10% of customers in a 6-hour block, ranked on new outages (onsets).
 
 data:
-  threshold_pct: 5
+  threshold_pct: [1, 5, 10]
   years: [2024, 2025]
+
+rank_by: onset_pr_auc         # new outages: the hard, useful part
 
 splits:
   - kind: time
@@ -49,9 +51,10 @@ models:
       n_estimators: [400, 800]
       learning_rate: [0.03]
       max_depth: [4, 8]
-      min_child_weight: [5]
+      min_child_weight: [5, 20]
       subsample: 0.8
       colsample_bytree: 0.8
+      scale_pos_weight: [1, 10]
   - name: hgb
     features: [weather+place+history+recent]
     params:

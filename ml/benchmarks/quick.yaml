@@ -33,6 +33,9 @@ models:
   - name: lightgbm
     params: {n_estimators: 400, learning_rate: 0.03, num_leaves: 31, min_child_samples: 50,
              subsample: 0.8, subsample_freq: 1, colsample_bytree: 0.8}
+  - name: xgboost
+    params: {n_estimators: 400, learning_rate: 0.03, max_depth: 6, min_child_weight: 5,
+             subsample: 0.8, colsample_bytree: 0.8}
 
 # what `pixi run export-app` trains for the dashboard (threshold = the first in the list above
 # unless set here)
