@@ -150,9 +150,11 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
     catch about a quarter of all new ≥ 5% outages.</li>
   <li><strong>The algorithm barely matters.</strong> Tuned XGBoost and LightGBM tie (264-run grid search). Up-weighting
     rare events hurt, and shallow trees generalized best to the next year.</li>
-  <li><strong>Tree canopy helps most for large outages</strong>: removing it costs 12% (≥ 5%) and 22% (≥ 10%) of
-    next-year PR-AUC with every other feature present. Canopy is correlated with rurality and the serving utility, so
-    this is an association, not a cause.</li>
+  <li><strong>Tree canopy is why I compare across models.</strong> With LightGBM alone, canopy looked important:
+    removing it cost 12% (≥ 5%) and 22% (≥ 10%) of next-year PR-AUC. Repeating the same ablation with XGBoost, and
+    with models trained only on new outages, the effect shrank to a few percent and sometimes reversed. From one model
+    I would have called canopy a strong feature; across models it is weak and inconsistent. It is also correlated with
+    rurality and the serving utility, so even where it helps, it is an association, not a cause.</li>
 </ul>
 
 <div class="grid2">

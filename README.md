@@ -52,8 +52,11 @@ What the numbers say:
 - **Model family barely matters.** Tuned XGBoost and LightGBM tie; XGBoost trains ~1.6× faster.
 - **Up-weighting rare events hurt** (`scale_pos_weight`), and shallow trees generalized
   better to the next year.
-- **Tree canopy** helps most for large outages: removing it costs 12% (≥ 5%) and 22% (≥ 10%)
-  of next-year PR-AUC with all other features present, and 4–10% on unseen counties.
+- **Tree canopy shows why the comparison spans several models.** With LightGBM alone,
+  removing canopy cost 12% (≥ 5%) and 22% (≥ 10%) of next-year PR-AUC — it looked like a
+  strong feature. The same ablation with XGBoost, and with models trained only on new
+  outages (`ml/results/leaderboard_onsets.md`), shrank the effect to a few percent and
+  sometimes reversed it. Across models, canopy's effect is weak and inconsistent.
 
 ### Limitations
 
