@@ -25,3 +25,4 @@ dbt/dbt_packages/
 # OS
 .DS_Store
 dbt/.user.yml
+ml/benchmarks/lab.yaml
