@@ -3,36 +3,70 @@ import streamlit as st
 from lib import meta, style, table, theme
 
 m = meta()
-metrics = table("metrics")
+results = table("metrics")
 importance = table("importance")
 t = theme()
+BASELINES = {"prior", "climatology"}
+SPLITS = {"time": "Next year (train 2024 → test 2025)", "county": "Unseen counties (5-fold by region)",
+          "random": "Random region-days (weathernext-style, leaky)"}
 
-st.title("📈 Model")
+st.title("📈 Model benchmark")
 st.markdown(
-    f"Gradient-boosted trees predicting whether **≥ {m['threshold_pct']:g}% of a region's customers** lose power "
-    "in a 6-hour block — the setup of *weathernext-outage-forecasting*, with free HRRR weather instead of "
-    "WeatherNext, plus place features. Scores are **PR-AUC**: for rare events, a coin flip scores the event rate."
+    "Predicting whether a region loses power at scale in a 6-hour block — the setup of "
+    "*weathernext-outage-forecasting*, with free HRRR weather instead of WeatherNext, plus place, history and "
+    "recent-outage features. Scores are **PR-AUC**; for rare events, no skill = the event rate, so **lift** "
+    "(PR-AUC ÷ event rate) compares fairly. **New outages** = blocks whose previous 6 hours weren't already an "
+    "event: outages persist, so scoring every block rewards \"it's out, it'll stay out\". "
+    "Every run: `ml/benchmarks/*.yaml`."
 )
 
+benchmarks = sorted(results.benchmark.unique())
+c1, c2, c3, c4 = st.columns(4)
+bench = c1.segmented_control("Benchmark", benchmarks, default="quick" if "quick" in benchmarks else benchmarks[0])
+res = results[results.benchmark == (bench or benchmarks[0])]
+sizes = sorted(res.threshold_pct.unique())
+size = c2.segmented_control("Outage size (% of customers)", sizes, default=5 if 5 in sizes else sizes[0],
+                            format_func=lambda v: f"≥ {v:g}%")
+target = c3.segmented_control("Score on", ["New outages", "All blocks"], default="New outages")
+trained = sorted(res.train_on.unique())
+train_on = c4.segmented_control("Trained on", trained, default="all" if "all" in trained else trained[0])
+res = res[(res.threshold_pct == (size if size is not None else sizes[0])) & (res.train_on == (train_on or trained[0]))]
+p = "onset_" if target != "All blocks" else ""
+
+st.subheader("Leaderboard: best run per model")
+cols = st.columns(len([s for s in SPLITS if s in set(res.split_kind)]))
+for col, kind in zip(cols, [s for s in SPLITS if s in set(res.split_kind)], strict=False):
+    best = res[res.split_kind == kind].sort_values(p + "pr_auc").groupby("model").tail(1).sort_values(p + "pr_auc")
+    colors = [t["muted"] if mdl in BASELINES else t["series"][0] for mdl in best.model]
+    fig = go.Figure(go.Bar(
+        x=best[p + "pr_auc"], y=best.model, orientation="h", marker_color=colors,
+        marker_line_width=2, marker_line_color=t["surface"],
+        text=[f"{v:.3f}" for v in best[p + "pr_auc"]], textposition="outside", cliponaxis=False,
+        customdata=best[["features", p + "pr_auc_lift", p + "roc_auc", p + "precision_top1"]].to_numpy(),
+        hovertemplate="%{y}<br>PR-AUC %{x:.3f} (%{customdata[1]:.1f}x chance)<br>features: %{customdata[0]}"
+                      "<br>ROC-AUC %{customdata[2]:.3f} · precision@top1% %{customdata[3]:.1%}<extra></extra>"))
+    fig.add_vline(x=best[p + "event_rate"].iloc[0], line_dash="dot", line_color=t["muted"])
+    fig.update_layout(title=SPLITS[kind], xaxis_title="PR-AUC (dotted = no skill)")
+    col.plotly_chart(style(fig, height=320), width="stretch")
+st.caption("Gray bars are baselines: *prior* = the event rate for everyone; *climatology* = each region's "
+           "historical rate by month, no weather at all.")
+
 st.subheader("Does knowing the place help?")
-split_names = {"time": "Next year (train 2024 → test 2025)", "county": "Unseen counties (5-fold by region)",
-               "random": "Random region-days (weathernext-style, leaky)"}
-sets = ["weather", "weather+place", "weather+place-canopy", "weather+place+history"]
-hgb = metrics[(metrics.model == "hgb") & (metrics.threshold_pct == m["threshold_pct"])]
+family = m.get("model", "lightgbm")
+abl = res[(res.model == family) & (res.features != "-")]
+abl = abl.sort_values(p + "pr_auc").groupby(["split_kind", "features"]).tail(1)   # best params per feature set
+order = abl.groupby("features")[p + "pr_auc_lift"].mean().sort_values().index.tolist()
 fig = go.Figure()
-for i, name in enumerate(sets):                       # fixed categorical order, never cycled
-    rows = hgb[hgb.features == name].set_index("split").reindex(list(split_names))
-    fig.add_trace(go.Bar(x=[split_names[s] for s in rows.index], y=rows.pr_auc, name=name,
-                         marker_color=t["series"][i], marker_line_width=2, marker_line_color=t["surface"],
-                         hovertemplate="%{x}<br>" + name + ": PR-AUC %{y:.3f}<extra></extra>"))
-rate = hgb.event_rate.mean()
-fig.add_hline(y=rate, line_dash="dot", line_color=t["muted"], annotation_text="event rate (no skill)",
-              annotation_font_color=t["muted"])
-fig.update_layout(barmode="group", yaxis_title="PR-AUC", bargap=0.3)
-st.plotly_chart(style(fig, height=420), width="stretch")
-with st.expander("Table view"):
-    st.dataframe(metrics.sort_values(["threshold_pct", "split", "model", "features"]), hide_index=True,
-                 width="stretch")
+for i, kind in enumerate([s for s in SPLITS if s in set(abl.split_kind)]):   # fixed categorical order
+    rows = abl[abl.split_kind == kind].set_index("features").reindex(order)
+    fig.add_trace(go.Bar(x=order, y=rows[p + "pr_auc_lift"], name=SPLITS[kind], marker_color=t["series"][i],
+                         marker_line_width=2, marker_line_color=t["surface"],
+                         hovertemplate="%{x}<br>%{y:.1f}x chance<extra>" + kind + "</extra>"))
+fig.update_layout(barmode="group", yaxis_title=f"{family}: PR-AUC lift over chance", bargap=0.3)
+st.plotly_chart(style(fig, height=400), width="stretch")
+st.caption("Feature groups (ml/data.py): weather = storm ingredients; place = size, density, housing age, tree "
+           "canopy; -canopy = the same without canopy; history = 2020–2023 resilience; recent = outages in the "
+           "previous 24 h.")
 
 st.subheader("What the final model relies on")
 top = importance.head(15).iloc[::-1]
@@ -42,6 +76,11 @@ fig = go.Figure(go.Bar(x=top.importance, y=top.feature, orientation="h", marker_
 fig.update_layout(xaxis_title="drop in PR-AUC when shuffled")
 st.plotly_chart(style(fig, height=460), width="stretch")
 st.caption(
-    f"Final model: {m['features']}, trained on {m['train_year']}, scored on {m['test_year']} "
-    f"({m['test_blocks']:,} blocks, {m['test_events']:,} events). Permutation importance on a sample of the test year."
+    f"Final model ({m.get('config', 'benchmark config')}): {family}, features {m['features']}, trained on "
+    f"{m['train_year']}, scored on {m['test_year']} ({m['test_blocks']:,} blocks, {m['test_events']:,} events). "
+    f"Alert level (top 1% risk): {m.get('alert_precision', float('nan')):.0%} of alerts were real events."
 )
+
+with st.expander("All runs (table view)"):
+    st.dataframe(res.drop(columns=["git_commit"], errors="ignore").sort_values(["split", p + "pr_auc"],
+                 ascending=[True, False]), hide_index=True, width="stretch")

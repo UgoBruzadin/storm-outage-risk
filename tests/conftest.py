@@ -13,7 +13,8 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "app"))          # pages do `from lib import ...`
+sys.path.insert(0, str(ROOT / "app"))          # views do `from lib import ...`
+sys.path.insert(0, str(ROOT))                  # `from ml import ...`
 
 APP_DATA = Path(tempfile.mkdtemp(prefix="app-data-"))
 os.environ["APP_DATA"] = str(APP_DATA)
@@ -47,10 +48,15 @@ def write_fixture():
                         reports=("storm_reports", "sum"))
                    .reset_index().sort_values("customers_out", ascending=False))
     metrics = pd.DataFrame([
-        {"split": s, "model": "hgb", "features": f, "pr_auc": 0.1, "roc_auc": 0.8, "brier": 0.01,
-         "event_rate": 0.01, "n_test": 100, "n_events": 1, "threshold_pct": 5.0}
-        for s in ["time", "county", "random"]
-        for f in ["weather", "weather+place", "weather+place-canopy", "weather+place+history"]
+        {"benchmark": "quick", "threshold_pct": thr, "train_on": "all", "split": label, "split_kind": kind,
+         "model": model, "features": f, "params": "{}", "fit_seconds": 1.0, "git_commit": "abc1234",
+         **{f"{pre}{k}": v for pre in ("", "onset_") for k, v in
+            {"pr_auc": 0.1, "pr_auc_lift": 10.0, "roc_auc": 0.8, "brier": 0.01, "log_loss": 0.05,
+             "precision_top1": 0.1, "recall_top1": 0.1, "event_rate": 0.01, "n_test": 100, "n_events": 1}.items()}}
+        for thr in (1, 5, 10)
+        for kind, label in [("time", "time(train_years=[2024],test_years=[2025])"), ("county", "county(folds=5)")]
+        for model, f in [("prior", "-"), ("climatology", "-"), ("lightgbm", "weather"),
+                         ("lightgbm", "weather+place+history+recent")]
     ])
     importance = pd.DataFrame({"feature": ["gust_max_ms", "canopy_mean_pct"], "importance": [0.05, 0.01],
                                "std": [0.01, 0.005]})
@@ -58,7 +64,8 @@ def write_fixture():
                      "metrics": metrics, "importance": importance}.items():
         df.to_parquet(APP_DATA / f"{name}.parquet", index=False)
     (APP_DATA / "meta.json").write_text(json.dumps({
-        "exported_at": "2026-01-01T00:00:00+00:00", "features": "weather+place+history", "feature_list": [],
+        "exported_at": "2026-01-01T00:00:00+00:00", "features": "weather+place+history+recent", "feature_list": [],
+        "model": "lightgbm", "config": "ml/benchmarks/quick.yaml", "alert_threshold": 0.1, "alert_precision": 0.2,
         "threshold_pct": 5.0, "train_year": 2024, "test_year": 2025, "n_regions": 2,
         "test_events": 2, "test_blocks": 24,
     }))

@@ -14,9 +14,10 @@ fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-ye
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
 build = { cmd = "dbt deps && dbt build", description = "Rebuild the warehouse with dbt: every model + test (~30 s)" }
 build-legacy = { cmd = "python legacy/build_warehouse.py", description = "Old St. Louis hourly SQL pipeline (for notebooks/model_playground.ipynb)" }
-train = { cmd = "python ml/train.py", description = "Train + evaluate outage models (MLflow); args: --threshold 5" }
+benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark config: pixi run benchmark ml/benchmarks/quick.yaml [--dry-run]" }
+train = { cmd = "python -m ml.benchmark ml/benchmarks/quick.yaml", description = "The quick benchmark (baselines vs model families, ~minutes)" }
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
-export-app = { cmd = "python ml/export_app_data.py", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
+export-app = { cmd = "python -m ml.export_app_data", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
 app = { cmd = "streamlit run app/streamlit_app.py", description = "Run the dashboard locally" }
 publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }
 deploy-space = { cmd = "python scripts/publish_hf.py space", description = "Deploy the dashboard as a Hugging Face Docker Space (private by default; needs HF_TOKEN)" }
@@ -32,6 +33,11 @@ ipykernel = ">=7.4.0,<8"
 rasterio = ">=1.5.2,<2"
 rasterstats = ">=0.21.0,<0.22"
 pyarrow = ">=21,!=25.0.0"
+
+[feature.models.dependencies]
+# Benchmark models beyond scikit-learn (default environment only)
+lightgbm = "*"
+xgboost = "*"
 
 [pypi-dependencies]
 # From PyPI, not conda-forge: conda-forge's python-duckdb lags behind (1.5.6),
@@ -77,8 +83,10 @@ DBT_PROFILES_DIR = "dbt"
 [feature.dev.dependencies]
 ruff = "*"
 pytest = "*"
+scikit-learn = ">=1.9.1,<2"   # ml/ tests run in CI too
+pyyaml = "*"
 
 [environments]
-default = { features = ["dev", "dbt"], solve-group = "default" }
+default = { features = ["dev", "dbt", "models"], solve-group = "default" }
 app = { features = ["app"], no-default-feature = true }                  # Docker image
 ci = { features = ["app", "dev", "dbt"], no-default-feature = true }     # GitHub Actions: tests, lint, dbt parse

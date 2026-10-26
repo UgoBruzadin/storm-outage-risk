@@ -34,9 +34,12 @@ Tick boxes as you go — this file is the project's to-do list.
 
 ## 5 — Model
 - [x] WeatherNext-style 6-hour classifier, feature-set ablation, time / county / random splits, MLflow
-- [ ] Full results with all 216 regions → README
+- [x] Benchmark suite: YAML configs, model registry (baselines, logistic, HGB, random forest, LightGBM,
+      XGBoost), feature groups, leaderboards in `ml/results/`
+- [x] "recent" features: outages in the previous block / 24 h (known at the block's start)
+- [ ] Run `full.yaml` (grid + canopy ablation) → results in README
 - [ ] Calibration plot; error analysis per county; threshold 1% vs 5%
-- [ ] LightGBM + a small hyperparameter search (tracked in MLflow)
+- [ ] Optuna search instead of grids, once the grid shows which parameters matter
 
 ## ✅ 6–8 — App, Docker, CI (first version)
 - [x] Streamlit app: overview map, storm replay, scorecard, model page

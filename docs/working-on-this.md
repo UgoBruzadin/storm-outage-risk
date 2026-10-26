@@ -27,12 +27,13 @@ pixi run fetch-storm-events   # NOAA storm reports              (~1 min)
 # 2. warehouse
 pixi run build                # dbt deps + dbt build
 
-# 3. model
-pixi run train                # all feature sets x splits, logged to MLflow; summary -> ml/results/
-pixi run mlflow-ui            # browse runs at http://127.0.0.1:5000
+# 3. model (see ml/README.md)
+pixi run train                # the quick benchmark: baselines vs model families (minutes)
+pixi run benchmark ml/benchmarks/full.yaml   # grid search + ablations (~30-60 min)
+pixi run mlflow-ui            # browse/compare runs at http://127.0.0.1:5000
 
 # 4. dashboard
-pixi run export-app           # final model -> small Parquet files in data/app/
+pixi run export-app           # the benchmark config's `final:` model -> data/app/
 pixi run app                  # http://localhost:8501
 docker compose up --build     # the same app in a container (needs Docker Desktop running)
 
