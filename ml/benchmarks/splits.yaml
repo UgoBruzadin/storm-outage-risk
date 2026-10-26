@@ -1,0 +1,33 @@
+# How much does the choice of test set flatter the model? The final XGBoost settings,
+# scored three ways: next year, unseen counties, and random region-days. Random days
+# put neighbouring counties hit by the same storm on both sides of the split.
+name: splits
+description: >
+  Final XGBoost settings on next year, unseen counties and random region-days,
+  at >= 5% of customers. Ranked by onset PR-AUC.
+
+data:
+  threshold_pct: [5]
+  years: [2024, 2025]
+  train_on: [all]
+
+rank_by: onset_pr_auc
+
+splits:
+  - kind: time
+    train_years: [2024]
+    test_years: [2025]
+  - kind: county
+    folds: 5
+  - kind: random
+    folds: 5
+
+features:
+  - weather
+  - weather+place+history+recent
+
+models:
+  - name: climatology
+  - name: xgboost
+    params: {n_estimators: 400, learning_rate: 0.03, max_depth: 4, min_child_weight: 5,
+             subsample: 0.8, colsample_bytree: 0.8}

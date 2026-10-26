@@ -31,6 +31,8 @@ FEATURE_GROUPS = {
     ],
     # subset of "place", for ablations: "weather+place-canopy"
     "canopy": ["canopy_mean_pct", "canopy_dense_share"],
+    # rain before the block (wet ground); opt-in: no consistent gain (benchmarks/wet_soil.yaml)
+    "wet_soil": ["precip_prev_72h_mm", "precip_prev_7d_mm", "wind_x_wet_soil"],
     # the region's own track record, 2020–2023 (before the train/test years)
     "history": [
         "hist_hours_out_per_customer", "hist_events_per_year", "hist_storm_hit_rate",
@@ -114,4 +116,5 @@ def add_derived(df):
     df["wind_x_precip"] = df["gust_max_ms"] * df["precip_sum_mm"]
     df["wind_squared"] = df["gust_max_ms"] ** 2
     df["shear_x_cape"] = df["shear_0_6km_max_ms"] * df["cape_max_jkg"]
+    df["wind_x_wet_soil"] = df["gust_max_ms"] * df["precip_prev_72h_mm"]
     return df.reset_index(drop=True)

@@ -75,6 +75,17 @@ li { margin: 6px 0; }
 footer { border-top: 1px solid var(--line); margin-top: 64px; padding-top: 20px; font-size: .9rem; color: var(--muted); }
 footer p { color: var(--muted); }
 code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, var(--line) 50%, transparent); padding: 1px 5px; border-radius: 4px; }
+.abstract { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin: 40px 0 0; }
+.abstract h2 { margin: 0 0 8px; font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.abstract p:last-child { margin-bottom: 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 14px 0 0; padding: 0; list-style: none; font-size: .95rem; }
+.pitfall { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 18px 20px; margin: 16px 0; }
+.pitfall h3 { margin: 0 0 8px; }
+.pitfall .tag { display: inline-block; font: 600 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); margin-bottom: 4px; overflow-wrap: anywhere; }
+pre { margin: 12px 0 10px; padding: 12px 14px; overflow-x: auto; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
+pre code { background: none; padding: 0; font-size: .82rem; line-height: 1.55; color: var(--ink); }
+pre .c { color: var(--muted); }
+.fix { font-size: .95rem; }
 @media (max-width: 760px) {
   body { font-size: 16px; }
   .stats { grid-template-columns: repeat(2, 1fr); }
@@ -100,14 +111,39 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
     <div class="stat"><b>24×</b><span>the base rate: hit rate of the model's top-1% alerts on new outages</span></div>
     <div class="stat"><b>57</b><span>automated data tests in the pipeline</span></div>
   </div>
+  <div class="abstract">
+    <h2>Summary</h2>
+    <p>Storm outages are rare, clustered in space and time, and persistent, which makes them easy to predict badly.
+      Using public data for Missouri and Illinois (DOE EAGLE-I outage records, NOAA HRRR weather and storm reports,
+      tree canopy, Census housing), I built a DuckDB + dbt pipeline of 3.5 million county × 6-hour blocks and a
+      benchmark suite of baselines and gradient-boosted trees.</p>
+    <p>Scored only on <strong>new</strong> outages, in a year the model never saw, the riskiest 1% of county-blocks
+      turn into a ≥ 5% outage at <strong>24× the base rate</strong> and catch about a quarter of all such outages.
+      Weather drives the prediction; place adds a little.</p>
+    <p>Most of the work went into the traps between raw data and an honest number: missing rows that look like zeros,
+      a county filed under its neighbour's code, persistence that inflates the score fourfold, and a feature that
+      looked important in only one model. They are written up below, with the code that handles each one.</p>
+    <ul class="toc">
+      <li><a href="#story">How it started</a></li>
+      <li><a href="#findings">What I found</a></li>
+      <li><a href="#pitfalls">Pitfalls, with code</a></li>
+      <li><a href="#built">How it's built</a></li>
+      <li><a href="#limits">Limitations</a></li>
+    </ul>
+  </div>
 </section>
 
-<h2>The question</h2>
+<h2 id="story">How it started</h2>
+<p>This began as a SQL exercise: hourly weather from St. Louis Lambert airport joined to EAGLE-I outage counts, to see
+  whether bad weather lined up with outages in St. Louis. It did, and it raised a better question. When a storm
+  crosses the state, which counties go dark, and why does the same storm take out 2% of one county and 40% of the
+  next? My guess was trees, old dense canopy over overhead lines, and old housing. Testing that guess honestly turned
+  out to be the hard part.</p>
 <p>Utilities stage repair crews before severe weather. To do that well they need to know not only <em>when</em>
-  storms will cause outages, but <em>where</em> — and the same storm takes out 2% of one county and 40% of the next.</p>
+  storms will cause outages, but <em>where</em>.</p>
 <p>This project predicts, for every county and every 6-hour block, whether at least 1%, 5% or 10% of customers lose
   power, from storm ingredients (wind, gusts, wind shear, instability, rain, ice) and from what each place is like:
-  tree canopy, housing age, density, and its own outage history. A related project,
+  tree canopy, housing age, density, and its own outage history. Partway through I found a related project,
   <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>, forecasts county outages from weather
   forecasts and evaluates on random days. This one differs where it matters for an honest answer: place features, splits by
   time and by county, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
@@ -118,7 +154,7 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
     Right: actual peak share of customers out.</figcaption>
 </figure>
 
-<h2>What I found</h2>
+<h2 id="findings">What I found</h2>
 <p>Outages persist: a county that is out now will likely be out in six hours. A model can look accurate by learning
   only that. The useful part is the <strong>onset</strong> — a block whose previous six hours were calm — so every result
   below is scored on new outages. PR-AUC, where a model with no skill scores the event rate.</p>
@@ -148,6 +184,9 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
   <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
     county-blocks the model ranks riskiest, about 1 in 8 become a ≥ 5% outage — 24× the base rate — and together they
     catch about a quarter of all new ≥ 5% outages.</li>
+  <li><strong>The hard test is next year, not new places.</strong> Weather-only XGBoost scores 0.083 on unseen
+    counties and 0.084 on random region-days, but 0.056 on the following year. Storms differ from year to year more
+    than counties differ from each other.</li>
   <li><strong>The algorithm barely matters.</strong> Tuned XGBoost and LightGBM tie (264-run grid search). Up-weighting
     rare events hurt, and shallow trees generalized best to the next year.</li>
   <li><strong>Tree canopy is why I compare across models.</strong> With LightGBM alone, canopy looked important:
@@ -173,7 +212,150 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
   <figcaption>Outage hours per customer per year, 2020–2023.</figcaption>
 </figure>
 
-<h2>How it's built</h2>
+<h2 id="pitfalls">Pitfalls, with code</h2>
+<p>Each of these produced a plausible-looking wrong answer before it was caught. The fixes live in the dbt models
+  and Python modules named on each card, and most are guarded by a test.</p>
+
+<div class="pitfall">
+  <span class="tag">Data · dbt/models/intermediate/int_eaglei__blocks_6h.sql</span>
+  <h3>1. A missing row is not a zero</h3>
+  <p>EAGLE-I only writes a row for a county that has customers out. No row can mean "no outages", or it can mean the
+    collector was down. In one county the two look identical. Across the whole country they don't: somewhere in the
+    U.S. someone is always without power, so a block with few national snapshots means the system was down.</p>
+<pre><code><span class="c">-- national "heartbeat": how many 15-min snapshots exist in each 6-hour block</span>
+SELECT {{ block_6h('snapshot_time') }} AS block_start, count(*) AS n_snapshots
+FROM (SELECT DISTINCT snapshot_time FROM {{ ref('stg_eaglei__outages') }})
+GROUP BY 1
+
+<span class="c">-- then, per county and block (mart_study__region_6h.sql)</span>
+CASE WHEN NOT b.eaglei_ok        THEN NULL   <span class="c">-- system down: unknown</span>
+     WHEN o.region_fips IS NULL  THEN 0      <span class="c">-- system up, no row: a real zero</span>
+     ELSE o.peak_out END AS peak_out</code></pre>
+  <p class="fix">Without this, outage-free blocks and blind blocks get the same label, and the model is trained on
+    holes in the data.</p>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Data · dbt/models/intermediate/int_study__outages_6h.sql</span>
+  <h3>2. Duplicate snapshots double the outage</h3>
+  <p>In early September 2025 every snapshot was recorded twice. Summing counties into regions directly would double
+    every outage in those weeks. The fix is to collapse to one value per county per 15-minute slot first, and only
+    then add counties together.</p>
+<pre><code>WITH per_county_slot AS (
+    SELECT fips_code, snapshot_time, max(customers_out) AS customers_out  <span class="c">-- keep one copy</span>
+    FROM {{ ref('stg_eaglei__outages') }}
+    GROUP BY ALL
+)
+SELECT {{ region_fips('fips_code') }} AS region_fips, snapshot_time,
+       sum(customers_out) AS customers_out                               <span class="c">-- now it's safe to add</span>
+FROM per_county_slot
+GROUP BY ALL</code></pre>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Data · dbt/macros/region_fips.sql</span>
+  <h3>3. One county filed under its neighbour's code</h3>
+  <p>From mid-2020 to 2024, St. Louis County's outages were reported under St. Louis City's FIPS code. Taken at face
+    value, the County (about 594,000 customers) had zero customers out for three straight years, while the City's
+    worst outage grew from 5,533 in 2019 to 83,685 in 2023, nearly 80% of its 107,000 customers. Both are modeled as
+    one region, through a macro used everywhere a county code enters the pipeline.</p>
+<pre><code><span class="c">-- largest outage per year, EAGLE-I as published</span>
+year   St. Louis County (29189)   St. Louis City (29510)
+2019          28,721                     5,533
+2022               0                    21,020
+2023               0                    83,685
+2024               0                    14,527</code></pre>
+<pre><code>{% macro region_fips(column) -%}
+    CASE WHEN {{ column }} IN ('29189', '29510') THEN '29189+29510' ELSE {{ column }} END
+{%- endmacro %}</code></pre>
+</div>
+
+<div class="pitfall">
+  <span class="tag">SQL · dbt/models/marts/mart_study__region_6h.sql</span>
+  <h3>4. <code>least(100, NULL)</code> is 100</h3>
+  <p>The label caps percent-out at 100. In DuckDB, <code>least()</code> skips NULLs, so a blank outage count came
+    back as "100% of customers out", a fake catastrophe in every block with a missing count.</p>
+<pre><code><span class="c">-- wrong: least(100.0, 100.0 * NULL / customers) = 100</span>
+CASE WHEN g.peak_out IS NULL OR g.peak_out &gt; 1.5 * g.customers THEN NULL
+     ELSE least(100.0, 100.0 * g.peak_out / g.customers) END AS peak_pct_out</code></pre>
+  <p class="fix">A dbt test (<code>assert_pct_null_when_peak_null</code>) fails the build if it ever comes back.</p>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Geo · ingest/fetch_tree_canopy.py</span>
+  <h3>5. The raster's "no data" value was a real value</h3>
+  <p>The tree-canopy GeoTIFF tags 0 as "no data", but 0 means "no trees". <code>rasterio.mask</code> honours the tag,
+    so every treeless pixel was dropped and farm counties came out about 45% forest instead of about 2%. The fix
+    reads raw pixels, draws the county shape itself, and masks the real no-data codes (254/255).</p>
+<pre><code>pixels = src.read(1)
+inside = geometry_mask([geometry], out_shape=pixels.shape, transform=src.transform, invert=True)
+values = pixels[inside]
+values = values[values &lt;= 100]           <span class="c"># 254/255 = no data; 0 stays: it means no trees</span></code></pre>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Modeling · ml/data.py</span>
+  <h3>6. Persistence: a model that predicts "still out"</h3>
+  <p>Outages last for hours, so the previous block's outage is a superb predictor of this one. With it, PR-AUC on all
+    blocks jumps to 0.39. Almost none of that is useful, because a utility already knows a county is out. Scored only
+    on <strong>onsets</strong> (blocks whose previous six hours were calm), the same model scores 0.093.</p>
+<pre><code>df["is_onset"] = df["prev_block_pct_out"].notna() &amp; (df["prev_block_pct_out"] &lt; threshold_pct)
+<span class="c"># every benchmark reports both: pr_auc (all blocks) and onset_pr_auc (new outages only)</span></code></pre>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>XGBoost, ≥ 5%, next year</th><th>All blocks</th><th>New outages only</th></tr></thead>
+    <tbody>
+      <tr><td>Weather only</td><td>0.056</td><td>0.056</td></tr>
+      <tr><td>+ place, history, recent outages</td><td>0.391</td><td class="best">0.093</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Evaluation · ml/splits.py</span>
+  <h3>7. The test set decides the story</h3>
+  <p>Splitting region-days at random puts neighbouring counties hit by the same storm on both sides. I expected that
+    to flatter the model most. It didn't: random days and unseen counties score the same. Predicting the
+    <em>next year</em> is what's hard, so that is the headline split.</p>
+<pre><code>if kind == "time":                               <span class="c"># train 2024, test 2025</span>
+    assert max(train_years) &lt; min(test_years)
+elif kind == "county":                           <span class="c"># no county in both train and test</span>
+    GroupKFold(n_splits=folds).split(df, groups=df["region_fips"])</code></pre>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Weather-only XGBoost, ≥ 5%, new outages</th><th>Random days</th><th>Unseen counties</th><th>Next year</th></tr></thead>
+    <tbody>
+      <tr><td>PR-AUC</td><td>0.084</td><td>0.083</td><td class="best">0.056</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Evaluation · ml/metrics.py</span>
+  <h3>8. Ties in "top 1%" flatter the baseline</h3>
+  <p>The climatology baseline gives every block in a county-month the same score. Taking "everything at or above the
+    99th percentile" then flags far more than 1% of blocks, and its recall looks better than it is. Alerts are now
+    exactly the top <em>k</em>, with ties broken at random (seeded).</p>
+<pre><code>k = max(1, int(round(top * len(p))))
+order = np.lexsort((np.random.default_rng(0).random(len(p)), -p))   <span class="c"># by score, ties random</span>
+alert = np.zeros(len(p), dtype=bool); alert[order[:k]] = True</code></pre>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Modeling · ml/benchmarks/onsets.yaml</span>
+  <h3>9. One model's feature importance is an anecdote</h3>
+  <p>With LightGBM, removing tree canopy cost 12–22% of next-year PR-AUC, which would have confirmed my starting
+    guess. The same ablation with XGBoost, and with models trained only on new outages, shrank or reversed the
+    effect. Feature ablations in this project are now always run across both tree models and both splits.</p>
+<pre><code>features:
+  - weather+place
+  - weather+place-canopy        <span class="c"># same run, canopy removed</span>
+models: [lightgbm, xgboost]</code></pre>
+</div>
+
+<h2 id="built">How it's built</h2>
 <div class="pipeline">
   <div class="step"><b>Ingest</b><span>Python scripts download outages, HRRR storm ingredients, storm reports, tree canopy rasters and Census tables.</span></div>
   <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 57 tests, a 3.5M-row modeling table.</span></div>
@@ -183,24 +365,12 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: co
 <p>Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, LightGBM, MLflow, geopandas, rasterio, Streamlit, Plotly,
   Docker, GitHub Actions.</p>
 
-<h3>Data traps found along the way</h3>
-<ul>
-  <li>EAGLE-I only records counties <em>with</em> outages, and sometimes the system itself was down. A national
-    "heartbeat" — any county in the U.S. reporting — separates "no outages" from "no data".</li>
-  <li>St. Louis County's outages were filed under St. Louis City's code from mid-2020 to 2024; the two are modeled as
-    one region.</li>
-  <li>The 2023 file renamed its outage column; early September 2025 recorded every snapshot twice.</li>
-  <li>The tree-canopy raster's "no data" value was 0 — a real value — which made farmland read as 45% forest until
-    it was caught.</li>
-  <li>DuckDB's <code>least(100, NULL)</code> returns 100, which turned blank counts into "100% out"; a regression test
-    now guards it.</li>
-</ul>
-
-<h3>Limitations</h3>
+<h3 id="limits">Limitations</h3>
 <div class="note">
   <p><strong>The weather is short-range, not a 24–48 hour forecast</strong> — the HRRR archive is close to observed
     weather, so the scores are an upper bound for planning a day ahead. The next-year split rests on one test year,
-    there are no confidence intervals yet, and each county has a single weather point.</p>
+    which was also used to choose model settings; there are no confidence intervals yet; and each county has a single
+    weather point. 2018–2023 weather is downloading, which will allow a separate validation year.</p>
 </div>
 
 <footer>
