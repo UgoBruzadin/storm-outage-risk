@@ -62,6 +62,8 @@ SELECT
     w.cape_max_jkg,
     w.precip_sum_mm,
     w.precip_max_1h_mm,
+    w.precip_prev_72h_mm,
+    w.precip_prev_7d_mm,
     w.temp_min_c,
     w.temp_mean_c,
     w.freezing_level_min_m,

@@ -36,6 +36,14 @@ models:
       - name: n_weather_hours
         data_tests:
           - dbt_utils.accepted_range: {min_value: 1, max_value: 6}
+      - name: precip_prev_72h_mm
+        description: Rain in the 72 h before the block; NULL unless all 12 blocks are present.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0}
+      - name: precip_prev_7d_mm
+        description: Rain in the 7 days before the block; NULL unless all 28 blocks are present.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0}
 
   - name: int_study__storm_events_6h
     description: NOAA Storm Events report counts per region per 6-hour block.

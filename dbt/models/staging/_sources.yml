@@ -45,7 +45,7 @@ sources:
         description: One file per region per year (the download may still be filling in).
         config:
           external_location: >-
-            read_csv('data/raw/weather/hrrr/*.csv.gz', union_by_name = true, all_varchar = true)
+            read_csv('data/raw/weather/hrrr/*.csv.gz', all_varchar = true)
 
   - name: storm_events
     description: >
