@@ -6,4 +6,4 @@ extend-exclude = ["dbt/dbt_packages", "dbt/target"]
 select = ["E", "F", "I", "B", "UP"]   # pycodestyle, pyflakes, import order, bugbear, pyupgrade
 
 [lint.per-file-ignores]
-"notebooks/*" = ["E501", "E402"]   # notebooks: long lines fine; imports after the setup cell
+"**/*.ipynb" = ["E501", "E402"]   # notebooks: long lines fine; imports after the setup cell
