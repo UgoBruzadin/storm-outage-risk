@@ -1,0 +1,7 @@
+# The dashboard's dependencies, for hosts that install from requirements.txt
+# (Streamlit Community Cloud). Same versions as the pixi `app` environment.
+streamlit==1.66.1
+plotly==7.1.0
+duckdb==2.0.0
+pandas==3.1.0
+pyarrow==24.0.0

@@ -4,6 +4,9 @@ data/*
 *.duckdb
 *.duckdb.wal
 *.parquet
+# ...except the dashboard's small precomputed files (~8 MB), so a host can serve the app
+!data/app/
+!data/app/*.parquet
 
 # Environments, caches, tool output
 .pixi/*

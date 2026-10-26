@@ -1,6 +1,5 @@
 [server]
 headless = true
-address = "localhost"   # dev: only this computer. The Docker image overrides this.
 
 [browser]
 gatherUsageStats = false

@@ -18,7 +18,7 @@ benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark con
 train = { cmd = "python -m ml.benchmark ml/benchmarks/quick.yaml", description = "The quick benchmark (baselines vs model families, ~minutes)" }
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
 export-app = { cmd = "python -m ml.export_app_data", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
-app = { cmd = "streamlit run app/streamlit_app.py", description = "Run the dashboard locally" }
+app = { cmd = "streamlit run app/streamlit_app.py --server.address=localhost", description = "Run the dashboard locally (this computer only)" }
 publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }
 deploy-space = { cmd = "python scripts/publish_hf.py space", description = "Deploy the dashboard as a Hugging Face Docker Space (private by default; needs HF_TOKEN)" }
 
