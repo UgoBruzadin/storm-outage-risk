@@ -15,6 +15,25 @@ geo + canopy  stg_geo__regions
 KSTL          stg_noaa__kstl_hourly        (legacy St. Louis notebook only)
 ```
 
+## Where the data comes from
+
+Every raw file, who publishes it, and how it gets here. All public and free; everything
+except EAGLE-I is downloaded by a script (`pixi run fetch-<name>`, code in `ingest/`).
+
+| Data | Publisher | What it is | Years / version | Source (URL) | How we get it | Lands in |
+|---|---|---|---|---|---|---|
+| **Power outages** | U.S. DOE / Oak Ridge National Laboratory (EAGLE-I) | customers out per county every 15 min, scraped from utility outage maps | 2014-11 → 2025 | figshare / ORNL releases — cite DOI [10.13139/ORNLNCCS/1975202](https://doi.org/10.13139/ORNLNCCS/1975202) (data) and [10.13139/ORNLNCCS/1975203](https://doi.org/10.13139/ORNLNCCS/1975203) (documentation); `citation_*.txt` ship with the download | **manual download** (one zip per release) | `data/raw/eaglei/eaglei_outages_*.csv` |
+| Customers per county | same (EAGLE-I) | modeled customer count per county (`MCC.csv`) and state coverage over time (`coverage_history.csv`) | ships with the outage data | same download | manual | `data/raw/eaglei/` |
+| **Storm ingredients** | NOAA (HRRR model), served by **Open-Meteo** | hourly wind, gusts, winds aloft, CAPE, precipitation, temperature, freezing level at each region's weather point | 2024–2025 (2020–2023 downloading) | `https://historical-forecast-api.open-meteo.com/v1/forecast` with `models=ncep_hrrr_conus` | `fetch-weather` (rate-limited, resumable) | `data/raw/weather/hrrr/<region>_<year>.csv.gz` |
+| **Storm reports** | NOAA NCEI Storm Events database | spotter / NWS reports of thunderstorm wind, hail, tornadoes, winter storms… with times and places | 2014–2025 | `https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/` | `fetch-storm-events` (newest file per year) | `data/raw/storm_events/` |
+| Zone → county map | NOAA National Weather Service | which counties make up each forecast zone | file `bp16ap26` (16 Apr 2026) | `https://www.weather.gov/gis/ZoneCounty` | `fetch-storm-events` | `data/raw/storm_events/zone_county_*.dbx` |
+| **County shapes** | U.S. Census Bureau (TIGER cartographic boundaries) | county polygons and land area, 1:500k | 2023 | `https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip` | `fetch-counties` | `data/raw/geo/regions_mo_il.*` |
+| **Tree canopy** | USDA Forest Service, distributed by MRLC (NLCD Tree Canopy Cover) | % tree canopy per 30 m pixel; we request 90 m | 2021 (v2021-4) | MRLC map service `https://www.mrlc.gov/geoserver/ows`, coverage `mrlc_download__nlcd_tcc_conus_2021_v2021-4` | `fetch-tree-canopy` (one cut-out per region, summarized) | `data/raw/geo/tree_canopy_2021.csv` |
+| **Housing** | U.S. Census Bureau, American Community Survey | tables B25034 (year built), B25035 (median year built), B01003 (population), B25001 (housing units) | 2020–2024 5-year estimates | `https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/` (the Census API now needs a key; these files don't) | `fetch-acs` | `data/raw/acs/` |
+| Airport weather (legacy) | NOAA NCEI Global Hourly (ISD), AWS Open Data mirror | observations at St. Louis Lambert (KSTL, station 72434013994) | 2014–2025-08 | `https://noaa-global-hourly-pds.s3.amazonaws.com/<year>/72434013994.csv` | `fetch-noaa` | `data/raw/noaa/` |
+
+Each source's quirks, and what we did about them, are in [data-notes.md](data-notes.md).
+
 Two ideas run through everything:
 - **Region** = a county, except St. Louis City (29510) + County (29189), merged into
   `29189+29510` because EAGLE-I files the County's outages under the City in 2020–2024.
@@ -138,6 +157,48 @@ the previous year.
 |---|---|
 | `y` | `peak_pct_out ≥ threshold` (1, 5 or 10) |
 | `is_onset` | previous block known and **below** the threshold → a *new* outage. Rows with an unknown previous block are neither |
+
+---
+
+## How the models are evaluated
+
+### The two validation splits — and why both
+
+A model is only as good as the test that judges it, and there are two different
+questions a user of this model would ask. Each split answers one:
+
+| Split | Train on | Test on | Question it answers | Why it's set up this way |
+|---|---|---|---|---|
+| **time** | all of 2024 | all of 2025 | "Trained on the past, does it work next year?" — how it would be used for real | The only years with HRRR weather downloaded so far. The test year is entirely after the training year, so no storm appears in both. Weakness: one year of storms is a small sample — a quiet or wild 2025 moves the score. More years (2020–2023, downloading) will allow 2020–2023 → 2024–2025 |
+| **county**, 5 folds | 80% of the regions (2024 + 2025) | the other 20% | "Does it work for a place it has never seen?" — the honest test for *place* features (canopy, housing age) | Regions are split into 5 groups (~43 each). Each group is held out once while the model trains on the other 4, so **every region gets tested exactly once**, by a model that never saw it — all 216 regions contribute to the score, not just one random 20%. 5 is the usual trade-off: each model still trains on 80% of the data, and 5 fits per run keep it fast. More folds = more training data per fit but slower; fewer = noisier |
+
+They answer different questions, so they can disagree — and that's informative:
+place features help more on `county` (they're how the model tells an unseen place apart)
+than on `time` (where the model already knows every region from training).
+
+A third split, **random** (5 folds by region-day hash), copies weathernext. One storm hits
+neighboring counties on the same day, so it lands on both sides of the split and scores
+come out optimistic. It's in the code to *demonstrate* that, not to choose models.
+
+Predictions from all folds are pooled and scored once, so `county` produces one number,
+not five. (There are no confidence intervals yet — a bootstrap over storm days is on the
+roadmap; until then, treat differences under ~0.005 PR-AUC as possibly noise.)
+
+### Benchmark configs — what each one compares (`ml/benchmarks/`)
+
+| Config | Question | Runs | What varies | Fixed |
+|---|---|---|---|---|
+| `quick.yaml` | Which **model family** is best, and do features beyond weather help? | 66 | models: prior, climatology, logistic, LightGBM, XGBoost (one setting each); features: weather → +place+history → +recent; outage size 1/5/10% | trained on all blocks |
+| `onsets.yaml` | Should a model of **new outages** be **trained** on new outages only? And does **canopy** help? | 72 | `train_on`: all vs onsets; features incl. `weather+place` vs `weather+place-canopy`; outage size 1/5/10% | LightGBM only (+ climatology baseline) |
+| `full.yaml` | What are the **best hyperparameters**? | 264 | grids: LightGBM (trees, learning rate, leaves, class weight), XGBoost (trees, depth, min child weight, class weight), HGB; plus the canopy ablation; outage size 1/5/10% | trained on all blocks |
+
+All three use the same data, splits and metrics, and **every run is scored twice**: on all
+blocks, and on **new outages** (blocks whose previous 6 hours weren't already an event) —
+leaderboards rank by the second. `train_on` is about which rows the model *learns* from;
+the onset *score* is computed for every run either way.
+
+Results: `ml/results/benchmark_<config>.csv` (every number) and
+`ml/results/leaderboard_<config>.md` (ranked). Metrics are defined in `ml/metrics.py`.
 
 ---
 
