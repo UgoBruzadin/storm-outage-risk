@@ -1,7 +1,7 @@
--- One row per MO+IL analysis region with everything we know about the place:
+-- One row per study-area analysis region with everything we know about the place:
 -- size (customers, land), trees (canopy), and the built environment (ACS).
 --
--- Counties come from the customer file, so all 217 MO+IL counties are here
+-- Counties come from the customer file, so all study-area counties are here
 -- even if one never had an outage. Merging St. Louis City + County means
 -- adding counts up; the median year built can't be merged exactly, so the
 -- region's value is the housing-weighted average of the two county medians.
@@ -18,7 +18,7 @@ WITH counties AS (
         a.median_year_built
     FROM {{ ref('stg_eaglei__customers') }} AS c
     LEFT JOIN {{ ref('stg_acs__housing') }} AS a USING (fips_code)
-    WHERE c.fips_code LIKE '17%' OR c.fips_code LIKE '29%'
+    WHERE left(c.fips_code, 2) IN (SELECT state_fips FROM {{ ref('study_states') }})
 ),
 by_region AS (
     SELECT

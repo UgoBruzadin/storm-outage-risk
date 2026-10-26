@@ -25,4 +25,7 @@ A short log of choices and why. When you change your mind, add a new entry inste
 | 2026-10 | **MLflow** with a local SQLite store (`data/mlflow.db`) | Current tracking tool, nothing to host; the summary CSV in `ml/results/` is the git-tracked record |
 | 2026-10 | **Separate pixi environments**: default (everything), `app` (Docker), `ci` (tests + dbt parse) | Small image (561 MB), fast CI, one lock file |
 | 2026-10 | **Hugging Face, private by default** (`--public` to open up) | User wants everything private for now; the app reads a private dataset with a DuckDB secret |
+| 2026-10 | **Tried 8 states** (MO, IL + AR, IA, IN, KS, KY, TN), then **paused: back to MO + IL**, more years first. Not the whole country | More places and storms for the same storm climate. National was ruled out by the weather quota (~160k Open-Meteo calls for 2 years) and by regime mixing (hurricanes, wildfire shutoffs). None of the added states has independent cities, so St. Louis stays the only merged region |
+| 2026-10 | **The study area lives in one seed**, `dbt/seeds/study_states.csv`, read by dbt and the ingest scripts; models renamed `mo_il` → `study` | Adding a state is one CSV line + re-running fetch/build; no hard-coded state lists |
+| open | **Per-region coverage gaps** (a utility drops out of / joins EAGLE-I for whole years) | Proposed: mark a region-year untracked when < 2% of its blocks have outages but a typical year has > 15% → label unknown. Thresholds to decide |
 | open | **License** | MIT is typical for portfolio code; data keeps its own terms |

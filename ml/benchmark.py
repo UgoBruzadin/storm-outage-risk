@@ -3,6 +3,7 @@
     pixi run benchmark ml/benchmarks/quick.yaml            # run it
     pixi run benchmark ml/benchmarks/quick.yaml --dry-run  # just list the runs
     pixi run benchmark ml/benchmarks/full.yaml --models lightgbm,xgboost
+    pixi run benchmark ml/benchmarks/full.yaml --resume    # skip runs already finished in MLflow
 
 A config (YAML) says what to compare — see ml/benchmarks/quick.yaml:
 
@@ -96,6 +97,26 @@ def evaluate(df, run):
     return {**all_blocks, **{f"onset_{k}": v for k, v in onsets.items()}, "fit_seconds": time.time() - start}
 
 
+def run_key(threshold_pct, train_on, split, model, features, params):
+    """What makes two runs 'the same run' — used by --resume to match MLflow records."""
+    return (str(threshold_pct), str(train_on), str(split), str(model), str(features),
+            tuple(sorted((str(k), str(v)) for k, v in params.items())))
+
+
+def finished_runs(mlflow, experiment, years):
+    """Finished MLflow runs of this experiment (same years), as {run_key: row of scores}."""
+    found = mlflow.search_runs(experiment_names=[experiment], filter_string="attributes.status = 'FINISHED'")
+    done = {}
+    for _, r in found.iterrows():
+        if r.get("params.years") != str(years):
+            continue
+        params = {c[len("params.hp."):]: v for c, v in r.items() if c.startswith("params.hp.") and pd.notna(v)}
+        key = run_key(r["params.threshold_pct"], r["params.train_on"], r["params.split"], r["params.model"],
+                      r["params.features"], params)
+        done.setdefault(key, {c[len("metrics."):]: v for c, v in r.items() if c.startswith("metrics.")})
+    return done
+
+
 def split_label(split):
     extra = ",".join(f"{k}={v}" for k, v in split.items() if k != "kind")
     return f"{split['kind']}({extra})" if extra else split["kind"]
@@ -131,6 +152,8 @@ def main():
     parser.add_argument("config", type=Path)
     parser.add_argument("--dry-run", action="store_true", help="list the runs without training")
     parser.add_argument("--models", help="comma-separated subset of model names to run")
+    parser.add_argument("--resume", action="store_true",
+                        help="reuse finished runs from MLflow (same settings and years); run only the rest")
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
@@ -163,8 +186,22 @@ def main():
     mlflow.set_experiment(experiment)
     commit = git_commit()
 
-    rows = []
-    for i, run in enumerate(runs, 1):
+    rows, todo = [], runs
+    if args.resume:
+        done = finished_runs(mlflow, experiment, config["data"]["years"])
+        todo = []
+        for run in runs:
+            key = run_key(run["threshold_pct"], run["train_on"], split_label(run["split"]), run["model"],
+                          run["features"], run["params"])
+            if key in done:
+                rows.append({"threshold_pct": run["threshold_pct"], "train_on": run["train_on"],
+                             "split": split_label(run["split"]), "model": run["model"], "features": run["features"],
+                             "params": str(run["params"]), **done[key]})
+            else:
+                todo.append(run)
+        print(f"--resume: {len(rows)} runs found in MLflow, {len(todo)} to run")
+
+    for i, run in enumerate(todo, 1):
         label = split_label(run["split"])
         with mlflow.start_run(run_name=f">={run['threshold_pct']}%/{run['train_on']}/{label}/{run['model']}"
                                        f"/{run['features']}"):
@@ -178,7 +215,7 @@ def main():
             mlflow.log_metrics({k: float(v) for k, v in scores.items() if pd.notna(v)})
         rows.append({"threshold_pct": run["threshold_pct"], "train_on": run["train_on"], "split": label,
                      "model": run["model"], "features": run["features"], "params": str(run["params"]), **scores})
-        print(f"[{i}/{len(runs)}] >={run['threshold_pct']}% {run['train_on']:6s} {label[:24]:24s} "
+        print(f"[{i}/{len(todo)}] >={run['threshold_pct']}% {run['train_on']:6s} {label[:24]:24s} "
               f"{run['model']:12s} {run['features']:30s} onset PR-AUC {scores['onset_pr_auc']:.3f} "
               f"({scores['onset_pr_auc_lift']:.1f}x) · all {scores['pr_auc']:.3f}  {scores['fit_seconds']:.0f}s",
               flush=True)

@@ -1,9 +1,9 @@
 version: 2
 
 models:
-  - name: mart_mo_il__region_6h
+  - name: mart_study__region_6h
     description: >
-      Modeling table: every MO+IL region x every 6-hour block with the outage
+      Modeling table: every study-area region x every 6-hour block with the outage
       label, HRRR weather features, place features and storm-report context.
       Storm report columns are context only — never model inputs.
     data_tests:
@@ -22,7 +22,7 @@ models:
         description: True when all 6 hours of HRRR weather exist for the block.
         data_tests: [not_null]
 
-  - name: mart_mo_il__region_resilience
+  - name: mart_study__region_resilience
     description: >
       Resilience scorecard per region from its outage history (default window
       2020–2023, before the model's train/test years — safe to use as features).

@@ -1,4 +1,4 @@
--- The 216 MO+IL analysis regions (counties, with St. Louis City + County
+-- The study-area regions (counties, with St. Louis City + County
 -- merged), from the Census boundary file, plus their 2021 tree canopy.
 -- Sources are read as text (see _sources.yml), so numbers are cast here.
 

@@ -20,8 +20,10 @@ WITH events AS (
         z.fips_code,
         e.*
     FROM {{ ref('stg_noaa__storm_events') }} AS e
+    JOIN {{ ref('study_states') }} AS st            -- zone ids are state abbreviation + zone number
+      ON st.state_fips = e.state_fips
     JOIN {{ ref('stg_noaa__zone_county') }} AS z
-      ON z.zone_id = CASE e.state_fips WHEN '29' THEN 'MO' WHEN '17' THEN 'IL' END || e.cz_fips
+      ON z.zone_id = st.state_abbr || e.cz_fips
     WHERE e.cz_type = 'Z'
 ),
 by_block AS (

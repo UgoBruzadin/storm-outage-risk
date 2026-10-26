@@ -5,11 +5,11 @@ from the last `pixi run build` (HRRR counts grow as more weather years download)
 
 ```
 raw files ──► staging (views)          ──► intermediate (tables)            ──► marts (tables)              ──► ml/
-EAGLE-I       stg_eaglei__outages          int_eaglei__blocks_6h (heartbeat)    mart_mo_il__region_6h           features + label
-MCC.csv       stg_eaglei__customers        int_mo_il__regions                   mart_mo_il__region_resilience
-HRRR          stg_hrrr__hourly             int_mo_il__outages_6h
-Storm Events  stg_noaa__storm_events       int_mo_il__weather_6h
-zone file     stg_noaa__zone_county        int_mo_il__storm_events_6h
+EAGLE-I       stg_eaglei__outages          int_eaglei__blocks_6h (heartbeat)    mart_study__region_6h           features + label
+MCC.csv       stg_eaglei__customers        int_study__regions                   mart_study__region_resilience
+HRRR          stg_hrrr__hourly             int_study__outages_6h
+Storm Events  stg_noaa__storm_events       int_study__weather_6h
+zone file     stg_noaa__zone_county        int_study__storm_events_6h
 ACS           stg_acs__housing
 geo + canopy  stg_geo__regions
 KSTL          stg_noaa__kstl_hourly        (legacy St. Louis notebook only)
@@ -27,7 +27,7 @@ except EAGLE-I is downloaded by a script (`pixi run fetch-<name>`, code in `inge
 | **Storm ingredients** | NOAA (HRRR model), served by **Open-Meteo** | hourly wind, gusts, winds aloft, CAPE, precipitation, temperature, freezing level at each region's weather point | 2024–2025 (2020–2023 downloading) | `https://historical-forecast-api.open-meteo.com/v1/forecast` with `models=ncep_hrrr_conus` | `fetch-weather` (rate-limited, resumable) | `data/raw/weather/hrrr/<region>_<year>.csv.gz` |
 | **Storm reports** | NOAA NCEI Storm Events database | spotter / NWS reports of thunderstorm wind, hail, tornadoes, winter storms… with times and places | 2014–2025 | `https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/` | `fetch-storm-events` (newest file per year) | `data/raw/storm_events/` |
 | Zone → county map | NOAA National Weather Service | which counties make up each forecast zone | file `bp16ap26` (16 Apr 2026) | `https://www.weather.gov/gis/ZoneCounty` | `fetch-storm-events` | `data/raw/storm_events/zone_county_*.dbx` |
-| **County shapes** | U.S. Census Bureau (TIGER cartographic boundaries) | county polygons and land area, 1:500k | 2023 | `https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip` | `fetch-counties` | `data/raw/geo/regions_mo_il.*` |
+| **County shapes** | U.S. Census Bureau (TIGER cartographic boundaries) | county polygons and land area, 1:500k | 2023 | `https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip` | `fetch-counties` | `data/raw/geo/regions_study.*` |
 | **Tree canopy** | USDA Forest Service, distributed by MRLC (NLCD Tree Canopy Cover) | % tree canopy per 30 m pixel; we request 90 m | 2021 (v2021-4) | MRLC map service `https://www.mrlc.gov/geoserver/ows`, coverage `mrlc_download__nlcd_tcc_conus_2021_v2021-4` | `fetch-tree-canopy` (one cut-out per region, summarized) | `data/raw/geo/tree_canopy_2021.csv` |
 | **Housing** | U.S. Census Bureau, American Community Survey | tables B25034 (year built), B25035 (median year built), B01003 (population), B25001 (housing units) | 2020–2024 5-year estimates | `https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/` (the Census API now needs a key; these files don't) | `fetch-acs` | `data/raw/acs/` |
 | Airport weather (legacy) | NOAA NCEI Global Hourly (ISD), AWS Open Data mirror | observations at St. Louis Lambert (KSTL, station 72434013994) | 2014–2025-08 | `https://noaa-global-hourly-pds.s3.amazonaws.com/<year>/72434013994.csv` | `fetch-noaa` | `data/raw/noaa/` |
@@ -59,15 +59,15 @@ Two ideas run through everything:
 
 | Table | One row = | Rows | Built how |
 |---|---|---|---|
-| `int_mo_il__regions` | region | 216 | customers summed per region; ACS joined; density = housing ÷ land km² |
+| `int_study__regions` | region | 216 | customers summed per region; ACS joined; density = housing ÷ land km² |
 | `int_eaglei__blocks_6h` | 6-hour block | 16,316 | **heartbeat**: how many national snapshots exist in the block (max 24). `eaglei_ok` = at least 12 → EAGLE-I was running |
-| `int_mo_il__outages_6h` | region × block *with an outage* | 1.33M | per county per slot (max) → **sum** counties into regions per slot → per block: `peak_out` (max), `mean_out` (avg, missing slots = 0) |
-| `int_mo_il__weather_6h` | region × block | 632k | HRRR hours summarized per block (max wind, total rain, …) |
-| `int_mo_il__storm_events_6h` | region × block with a report | 254k | report counts by type; zone events spread to their counties; multi-block events counted in each block |
+| `int_study__outages_6h` | region × block *with an outage* | 1.33M | per county per slot (max) → **sum** counties into regions per slot → per block: `peak_out` (max), `mean_out` (avg, missing slots = 0) |
+| `int_study__weather_6h` | region × block | 632k | HRRR hours summarized per block (max wind, total rain, …) |
+| `int_study__storm_events_6h` | region × block with a report | 254k | report counts by type; zone events spread to their counties; multi-block events counted in each block |
 
 ## Marts — what the model and the app read
 
-### `mart_mo_il__region_6h` — the modeling table (3.52M rows = 216 regions × 16,316 blocks)
+### `mart_study__region_6h` — the modeling table (3.52M rows = 216 regions × 16,316 blocks)
 
 Built as a **grid**: every region `CROSS JOIN` every block, then `LEFT JOIN` outages,
 weather and storm reports, so blocks with no outage exist (as 0) instead of being missing.
@@ -83,7 +83,7 @@ weather and storm reports, so blocks with no outage exist (as 0) instead of bein
 | weather, place, calendar columns | see Features below |
 | `storm_*` | NOAA storm report counts — **context only, never features** (written after the fact) |
 
-### `mart_mo_il__region_resilience` — the scorecard (216 rows)
+### `mart_study__region_resilience` — the scorecard (216 rows)
 
 From **2020–2023 only** (dbt vars `history_start` / `history_end`), so it can be used as
 features for 2024–2025 without leaking. An **event** = consecutive blocks with ≥ 1% out.
@@ -211,15 +211,15 @@ Results: `ml/results/benchmark_<config>.csv` (every number) and
 | `{{ source() }}` / `{{ ref() }}` | dbt: read a raw file / another model; builds the dependency graph | every model |
 | macros | reusable SQL snippets | `region_fips`, `block_6h` |
 | `time_bucket` / `date_trunc` | round timestamps down | 15-min slots; 6-hour blocks |
-| `GROUP BY ALL` + `max`/`sum`/`avg` | aggregate snapshots into blocks | `int_mo_il__outages_6h`, `int_mo_il__weather_6h` |
+| `GROUP BY ALL` + `max`/`sum`/`avg` | aggregate snapshots into blocks | `int_study__outages_6h`, `int_study__weather_6h` |
 | `count(*) FILTER (WHERE …)` | conditional counts in one pass | weather hours, storm types, scorecard rates |
-| `CROSS JOIN` + `LEFT JOIN` | full grid, then attach what exists (missing → NULL) | `mart_mo_il__region_6h` |
+| `CROSS JOIN` + `LEFT JOIN` | full grid, then attach what exists (missing → NULL) | `mart_study__region_6h` |
 | three-way `CASE` | NULL (unknown) vs 0 (none) vs value | `peak_out` |
 | heartbeat | judge coverage from the whole country | `int_eaglei__blocks_6h` |
 | `generate_series` + `unnest` | make every block / spread a storm over the blocks it spans | blocks, storm events |
-| `UNION ALL BY NAME` | stack county and zone events | `int_mo_il__storm_events_6h` |
+| `UNION ALL BY NAME` | stack county and zone events | `int_study__storm_events_6h` |
 | window functions `lag`, `lead`, `max … ROWS BETWEEN` | look at neighboring blocks per region | `recent` features, scorecard |
-| gaps-and-islands (`lag` + running `sum` of start flags) | group consecutive event blocks into events | `mart_mo_il__region_resilience` |
+| gaps-and-islands (`lag` + running `sum` of start flags) | group consecutive event blocks into events | `mart_study__region_resilience` |
 | `QUALIFY row_number() … = 1` | keep one row per group (filter on a window) | KSTL duplicate reports |
 | `arg_max(x, y)` | the x from the row with the largest y | latest county name (legacy MO/IL build) |
 | `regexp_matches` | pattern search in text | thunder in METAR (KSTL) |

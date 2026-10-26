@@ -10,8 +10,8 @@ st.markdown(
     "An **event** is a run of blocks with ≥ 1% of customers out."
 )
 
-state = st.segmented_control("State", ["Both", "Missouri", "Illinois"], default="Both")
-df = regions if state in (None, "Both") else regions[regions.state == state]
+state = st.selectbox("State", ["All states", *sorted(regions.state.unique())])
+df = regions if state == "All states" else regions[regions.state == state]
 st.dataframe(
     df[["region", "state", "customers", "hours_out_per_customer", "events_per_year", "storm_hit_rate",
         "quiet_event_rate", "repeat_7d_share", "canopy_mean_pct", "share_homes_pre1960", "housing_per_km2"]]

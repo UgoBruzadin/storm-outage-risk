@@ -157,7 +157,7 @@ Why each tool (one line each — have these ready):
 - **App reads precomputed files only:** fast, free to host, can't break when model code changes.
 
 **Do it:** `pixi run dbt docs generate && pixi run dbt docs serve`, open the lineage
-graph, and trace `mart_mo_il__region_6h` back to its raw sources. Then explain each model
+graph, and trace `mart_study__region_6h` back to its raw sources. Then explain each model
 in one sentence without looking at its SQL. Where you can't, read that model.
 
 ---

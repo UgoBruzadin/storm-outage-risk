@@ -1,8 +1,8 @@
 version: 2
 
 models:
-  - name: int_mo_il__regions
-    description: One row per MO+IL region with customers, land, canopy and housing features.
+  - name: int_study__regions
+    description: One row per study-area region with customers, land, canopy and housing features.
     columns:
       - name: region_fips
         data_tests: [unique, not_null]
@@ -21,13 +21,13 @@ models:
         data_tests:
           - dbt_utils.accepted_range: {min_value: 0, max_value: 24}
 
-  - name: int_mo_il__outages_6h
+  - name: int_study__outages_6h
     description: Peak/mean customers out per region per 6-hour block (blocks with outages only).
     data_tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [region_fips, block_start]
 
-  - name: int_mo_il__weather_6h
+  - name: int_study__weather_6h
     description: HRRR storm ingredients summarized per region per 6-hour block.
     data_tests:
       - dbt_utils.unique_combination_of_columns:
@@ -37,7 +37,7 @@ models:
         data_tests:
           - dbt_utils.accepted_range: {min_value: 1, max_value: 6}
 
-  - name: int_mo_il__storm_events_6h
+  - name: int_study__storm_events_6h
     description: NOAA Storm Events report counts per region per 6-hour block.
     data_tests:
       - dbt_utils.unique_combination_of_columns:

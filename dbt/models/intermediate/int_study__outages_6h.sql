@@ -1,4 +1,4 @@
--- Outages per region per 6-hour block, MO + IL — only blocks with at least
+-- Outages per region per 6-hour block, study-area — only blocks with at least
 -- one outage row (the grid in the mart fills in the zeros).
 --
 -- Three steps:
@@ -15,7 +15,7 @@
 WITH per_county_slot AS (
     SELECT fips_code, snapshot_time, max(customers_out) AS customers_out
     FROM {{ ref('stg_eaglei__outages') }}
-    WHERE state IN ('Missouri', 'Illinois')
+    WHERE left(fips_code, 2) IN (SELECT state_fips FROM {{ ref('study_states') }})
     GROUP BY ALL
 ),
 per_region_slot AS (

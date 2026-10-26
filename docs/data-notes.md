@@ -19,6 +19,7 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | **Duplicate snapshots**, early Sept 2025: every snapshot recorded twice (`00:00:00` and `00:00:52`); a few others off the 15-min grid (`:01`, `:16`, `:31`, `:35`) | Blocks with up to 48 "snapshots"; summed regions double-count | `snapshot_time` = rounded to 15 min; one value (max) per county per slot before adding counties |
 | **Customer counts too low** for some counties (Worth Co., MO: 418 in MCC for ~2,000 residents) and **one-off spikes** (Boone Co., MO: 311,925 out of ~122k customers on 2019-12-13) | "300% of customers out" | `peak_suspect` when peak > 1.5x customers → percentage NULL; otherwise capped at 100% |
 | Utility coverage also varies **within** a state (Jefferson Co., MO ~0% outage-hours in 2018, 7% in 2019, 54% from 2020) | Untracked years look calm | History/resilience window and training start in 2020 |
+| **Regions go dark for whole years after 2020** too: Crockett & Obion, TN show outages in ~20–30% of blocks every year, then **0% in 2025**; Wolfe, KY shows 0% in 2020–2021, then ~30–40% | Fake zeros — for Crockett/Obion in the **test year** | Open: per-region coverage flag (see decisions.md) |
 
 ## NOAA Global Hourly (ISD)
 
@@ -40,7 +41,7 @@ Everything surprising found in the raw data, and what the pipeline does about it
 |---|---|---|
 | HRRR via Open-Meteo | Free tier counts ~26 "calls" per region-year (10 variables x 2-week units); 10,000/day | `ingest/fetch_weather.py` paces requests, resumes, retries with backoff |
 | HRRR at one point per county | Storm winds are local: KSTL measured a 23.7 m/s gust on 2023-07-02 while HRRR at the county's point showed 5.8 | Keep Storm Events as an independent "storm happened" signal |
-| NOAA Storm Events | Times in **local standard time all year** (`CZ_TIMEZONE` = `CST-6`); `BEGIN_DATE_TIME` has a 2-digit year | Rebuild timestamps from `BEGIN_YEARMONTH/DAY/TIME`, subtract the offset |
+| NOAA Storm Events | Times in **local standard time all year** (`CZ_TIMEZONE` = `CST-6`, and `EST-5` in parts of IN/KY/TN, `MST-7` in western KS); `BEGIN_DATE_TIME` has a 2-digit year | Rebuild timestamps from `BEGIN_YEARMONTH/DAY/TIME`, subtract each report's own offset |
 | NOAA Storm Events | Winter/wind events are filed by NWS **zone**, not county | NWS zone–county correlation file; zone events spread to every county in the zone |
 | NLCD Tree Canopy (MRLC WCS) | GeoTIFF's nodata tag says **0**, which is a real value (0% canopy); 254 = no data | Read raw pixels, mask by shape ourselves (`rasterio.mask` dropped every 0 → farm counties read 45% instead of ~2%) |
 | Census API | Now requires a key | Key-free table-based summary files (`acsdt5y2024-<table>.dat`) |

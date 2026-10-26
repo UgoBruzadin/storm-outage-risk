@@ -44,13 +44,13 @@ models:
         data_tests: [not_null]
 
   - name: stg_acs__housing
-    description: ACS 2020–2024 5-year housing age, housing units, population per MO+IL county.
+    description: ACS 2020–2024 5-year housing age, housing units, population per study-area county.
     columns:
       - name: fips_code
         data_tests: [unique, not_null]
 
   - name: stg_geo__regions
-    description: 216 MO+IL regions (St. Louis City + County merged) with tree canopy.
+    description: Study-area regions (St. Louis City + County merged) with tree canopy.
     columns:
       - name: region_fips
         data_tests: [unique, not_null]
@@ -66,10 +66,10 @@ models:
           combination_of_columns: [region_fips, hour]
 
   - name: stg_noaa__storm_events
-    description: NOAA Storm Events reports for MO + IL, times converted to UTC.
+    description: NOAA Storm Events reports for study-area, times converted to UTC.
     columns:
       - name: begin_utc
         data_tests: [not_null]
 
   - name: stg_noaa__zone_county
-    description: NWS forecast zone -> county FIPS for MO + IL.
+    description: NWS forecast zone -> county FIPS for study-area.

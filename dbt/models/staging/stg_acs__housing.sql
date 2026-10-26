@@ -1,11 +1,12 @@
--- Census ACS 2020–2024 5-year estimates per county, MO + IL.
+-- Census ACS 2020–2024 5-year estimates per county, study states.
 -- GEO_ID for a county is '0500000US' + 5-digit FIPS. B25034 counts homes by
 -- decade built: E009 = 1950s, E010 = 1940s, E011 = 1939 or earlier.
 
 WITH counties AS (
     SELECT GEO_ID, substr(GEO_ID, 10, 5) AS fips_code
     FROM {{ source('acs', 'year_built') }}
-    WHERE GEO_ID LIKE '0500000US17%' OR GEO_ID LIKE '0500000US29%'
+    WHERE GEO_ID LIKE '0500000US%'
+      AND substr(GEO_ID, 10, 2) IN (SELECT state_fips FROM {{ ref('study_states') }})
 )
 SELECT
     c.fips_code,

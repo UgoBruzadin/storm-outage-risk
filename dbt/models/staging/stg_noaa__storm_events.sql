@@ -1,4 +1,4 @@
--- NOAA Storm Events reports for Missouri (29) and Illinois (17), times in UTC.
+-- NOAA Storm Events reports for the study states (seed study_states), times in UTC.
 --
 -- Times come as local *standard* time all year, with the offset in
 -- CZ_TIMEZONE ('CST-6' = UTC−6), so UTC = local − offset. BEGIN_DATE_TIME
@@ -25,7 +25,7 @@ WITH parsed AS (
         TRY_CAST(MAGNITUDE AS DOUBLE)                                 AS magnitude,
         MAGNITUDE_TYPE                                                AS magnitude_type
     FROM {{ source('storm_events', 'details') }}
-    WHERE STATE_FIPS IN ('17', '29')
+    WHERE lpad(STATE_FIPS, 2, '0') IN (SELECT state_fips FROM {{ ref('study_states') }})
 )
 SELECT
     * EXCLUDE (begin_local, end_local, utc_offset_h),

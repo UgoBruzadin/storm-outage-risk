@@ -1,6 +1,6 @@
 """Load the modeling table and define feature groups.
 
-One row = one region x one 6-hour block, from marts.mart_mo_il__region_6h,
+One row = one region x one 6-hour block, from marts.mart_study__region_6h,
 plus the region's resilience history and a few "recent outage" features.
 
 Feature groups are combined by name in benchmark configs:
@@ -68,7 +68,7 @@ def load(threshold_pct, years, db=DB):
                 *,
                 lag(peak_pct_out) OVER w                                        AS prev_block_pct_out,
                 max(peak_pct_out) OVER (w ROWS BETWEEN 4 PRECEDING AND 1 PRECEDING) AS max_pct_out_prev_24h
-            FROM marts.mart_mo_il__region_6h
+            FROM marts.mart_study__region_6h
             WINDOW w AS (PARTITION BY region_fips ORDER BY block_start)
         )
         SELECT
@@ -80,7 +80,7 @@ def load(threshold_pct, years, db=DB):
             r.repeat_7d_share         AS hist_repeat_7d_share,
             r.history_end
         FROM m
-        JOIN marts.mart_mo_il__region_resilience AS r USING (region_fips)
+        JOIN marts.mart_study__region_resilience AS r USING (region_fips)
         WHERE m.has_weather
           AND m.peak_pct_out IS NOT NULL
           AND year(m.block_start) BETWEEN {min(years)} AND {max(years)}

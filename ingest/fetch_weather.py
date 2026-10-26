@@ -28,7 +28,7 @@ import pandas as pd
 import requests
 
 URL = "https://historical-forecast-api.open-meteo.com/v1/forecast"
-REGIONS_CSV = Path("data/raw/geo/regions_mo_il.csv")
+REGIONS_CSV = Path("data/raw/geo/regions_study.csv")
 OUT_DIR = Path("data/raw/weather/hrrr")
 YEARS = [2024, 2025]
 VARIABLES = [                 # max 10 per call before it counts double

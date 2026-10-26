@@ -1,4 +1,4 @@
--- The modeling table: every MO+IL region x every 6-hour block, Nov 2014 →
+-- The modeling table: every study-area region x every 6-hour block, Nov 2014 →
 -- Dec 2025 (~3.5M rows). One row = "this place, these 6 hours".
 --
 -- Label (what happened):
@@ -33,9 +33,9 @@ WITH grid AS (
         END                                                  AS peak_out,
         CASE WHEN b.eaglei_ok THEN coalesce(o.mean_out, 0) END AS mean_out,
         r.customers
-    FROM {{ ref('int_mo_il__regions') }} AS r
+    FROM {{ ref('int_study__regions') }} AS r
     CROSS JOIN {{ ref('int_eaglei__blocks_6h') }} AS b
-    LEFT JOIN {{ ref('int_mo_il__outages_6h') }} AS o
+    LEFT JOIN {{ ref('int_study__outages_6h') }} AS o
            ON o.region_fips = r.region_fips
           AND o.block_start = b.block_start
 )
@@ -92,6 +92,6 @@ SELECT
     coalesce(s.n_high_wind, 0)                                      AS storm_high_wind,
     coalesce(s.n_winter, 0)                                         AS storm_winter
 FROM grid AS g
-JOIN {{ ref('int_mo_il__regions') }}               AS r USING (region_fips)
-LEFT JOIN {{ ref('int_mo_il__weather_6h') }}       AS w USING (region_fips, block_start)
-LEFT JOIN {{ ref('int_mo_il__storm_events_6h') }}  AS s USING (region_fips, block_start)
+JOIN {{ ref('int_study__regions') }}               AS r USING (region_fips)
+LEFT JOIN {{ ref('int_study__weather_6h') }}       AS w USING (region_fips, block_start)
+LEFT JOIN {{ ref('int_study__storm_events_6h') }}  AS s USING (region_fips, block_start)

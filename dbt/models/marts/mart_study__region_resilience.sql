@@ -1,4 +1,4 @@
--- Resilience scorecard: how each MO+IL region has fared, from its outage
+-- Resilience scorecard: how each study-area region has fared, from its outage
 -- history. Computed over a fixed history window (default 2020–2023) that
 -- ends before the model's train/test years, so these can be model features
 -- without leaking the answer. Change it with:
@@ -30,7 +30,7 @@ WITH blocks AS (
         mean_out,
         peak_pct_out >= 1          AS is_event,
         storm_reports > 0          AS storm
-    FROM {{ ref('mart_mo_il__region_6h') }}
+    FROM {{ ref('mart_study__region_6h') }}
     WHERE peak_pct_out IS NOT NULL
       AND block_start >= TIMESTAMP '{{ history_start }}'
       AND block_start <  TIMESTAMP '{{ history_end }}'
@@ -101,6 +101,6 @@ SELECT
     r.canopy_mean_pct,
     r.share_homes_pre1960,
     r.housing_per_km2
-FROM {{ ref('int_mo_il__regions') }} AS r
+FROM {{ ref('int_study__regions') }} AS r
 LEFT JOIN block_stats AS b USING (region_fips)
 LEFT JOIN event_stats AS e USING (region_fips)

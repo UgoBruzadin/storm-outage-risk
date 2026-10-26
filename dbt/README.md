@@ -4,8 +4,8 @@ The data pipeline as dbt models: raw files in, a tested modeling table out. Run 
 
 ```bash
 pixi run build                                          # dbt deps + dbt build: every model, then its tests
-pixi run dbt build --select mart_mo_il__region_6h+      # one model and everything downstream
-pixi run dbt build --select +mart_mo_il__region_6h      # one model and everything upstream
+pixi run dbt build --select mart_study__region_6h+      # one model and everything downstream
+pixi run dbt build --select +mart_study__region_6h      # one model and everything upstream
 pixi run dbt docs generate && pixi run dbt docs serve   # browsable docs + lineage graph
 ```
 
@@ -40,12 +40,12 @@ Writes to `data/warehouse.duckdb` in schemas `seeds`, `staging`, `intermediate`,
 | `stg_acs__housing` | housing age, units, population per county |
 | `stg_geo__regions` | 216 regions with land area, weather point, tree canopy |
 | `stg_noaa__kstl_hourly` | KSTL airport hourly weather (used by the legacy St. Louis notebook) |
-| `int_mo_il__regions` | one row per region with every place feature |
+| `int_study__regions` | one row per region with every place feature |
 | `int_eaglei__blocks_6h` | every 6-hour block + national snapshot count (the heartbeat) |
-| `int_mo_il__outages_6h` | peak / mean customers out per region per block |
-| `int_mo_il__weather_6h` | storm ingredients per region per block |
-| `int_mo_il__storm_events_6h` | storm report counts per region per block |
-| `mart_mo_il__region_6h` | **the modeling table**: region x block, label + features + context (3.5M rows) |
-| `mart_mo_il__region_resilience` | **the scorecard**: 2020–2023 outage burden, events/yr, storm hit rate, repeats |
+| `int_study__outages_6h` | peak / mean customers out per region per block |
+| `int_study__weather_6h` | storm ingredients per region per block |
+| `int_study__storm_events_6h` | storm report counts per region per block |
+| `mart_study__region_6h` | **the modeling table**: region x block, label + features + context (3.5M rows) |
+| `mart_study__region_resilience` | **the scorecard**: 2020–2023 outage burden, events/yr, storm hit rate, repeats |
 
 The St. Louis hourly prototype (KSTL weather, hourly grid) is in `../legacy/`.

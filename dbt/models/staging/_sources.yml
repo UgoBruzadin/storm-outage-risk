@@ -73,9 +73,9 @@ sources:
     description: Region shapes and place features (ingest/fetch_counties.py, fetch_tree_canopy.py).
     tables:
       - name: regions
-        description: 216 MO+IL analysis regions with land area and a weather point.
+        description: Study-area regions with land area and a weather point.
         config:
-          external_location: "read_csv('data/raw/geo/regions_mo_il.csv', all_varchar = true)"
+          external_location: "read_csv('data/raw/geo/regions_study.csv', all_varchar = true)"
       - name: tree_canopy
         description: USFS/NLCD Tree Canopy Cover 2021, summarized per region.
         config:

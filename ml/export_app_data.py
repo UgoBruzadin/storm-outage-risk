@@ -34,7 +34,7 @@ from ml import data, models
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "app"
 RESULTS = ROOT / "ml" / "results"
-REGIONS_GEO = ROOT / "data" / "raw" / "geo" / "regions_mo_il.parquet"
+REGIONS_GEO = ROOT / "data" / "raw" / "geo" / "regions_study.parquet"
 
 
 def benchmark_thresholds(config):
@@ -83,8 +83,8 @@ def main():
     info = con.sql("""
         SELECT r.*, s.hours_out_per_customer, s.events_per_year, s.storm_hit_rate,
                s.quiet_event_rate, s.median_event_hours, s.repeat_7d_share, s.history_start, s.history_end
-        FROM intermediate.int_mo_il__regions AS r
-        JOIN marts.mart_mo_il__region_resilience AS s USING (region_fips)
+        FROM intermediate.int_study__regions AS r
+        JOIN marts.mart_study__region_resilience AS s USING (region_fips)
     """).df()
     con.close()
     geo = gpd.read_parquet(REGIONS_GEO)[["region_fips", "geometry"]]

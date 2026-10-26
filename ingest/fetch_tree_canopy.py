@@ -26,7 +26,7 @@ from rasterio.features import geometry_mask
 
 WCS = "https://www.mrlc.gov/geoserver/ows"
 COVERAGE = "mrlc_download__nlcd_tcc_conus_2021_v2021-4"
-REGIONS = Path("data/raw/geo/regions_mo_il.parquet")
+REGIONS = Path("data/raw/geo/regions_study.parquet")
 CACHE = Path("data/raw/geo/tcc_2021_tiles")
 OUT = Path("data/raw/geo/tree_canopy_2021.csv")
 
