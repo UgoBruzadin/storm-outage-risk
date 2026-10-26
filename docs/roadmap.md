@@ -37,7 +37,8 @@ Tick boxes as you go — this file is the project's to-do list.
 - [x] Benchmark suite: YAML configs, model registry (baselines, logistic, HGB, random forest, LightGBM,
       XGBoost), feature groups, leaderboards in `ml/results/`
 - [x] "recent" features: outages in the previous block / 24 h (known at the block's start)
-- [ ] Run `full.yaml` (grid + canopy ablation) → results in README
+- [x] Run `full.yaml` (grid + canopy ablation, 264 runs) — `ml/results/leaderboard_full.md`
+- [ ] Results in README (yours to write)
 - [ ] Calibration plot; error analysis per county; threshold 1% vs 5%
 - [ ] Optuna search instead of grids, once the grid shows which parameters matter
 
