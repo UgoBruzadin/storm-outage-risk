@@ -58,8 +58,9 @@ def write_fixture():
         for model, f in [("prior", "-"), ("climatology", "-"), ("lightgbm", "weather"),
                          ("lightgbm", "weather+place+history+recent")]
     ])
-    importance = pd.DataFrame({"feature": ["gust_max_ms", "canopy_mean_pct"], "importance": [0.05, 0.01],
-                               "std": [0.01, 0.005]})
+    importance = pd.DataFrame({"scored_on": ["new outages", "new outages", "all blocks", "all blocks"],
+                               "feature": ["gust_max_ms", "canopy_mean_pct"] * 2,
+                               "importance": [0.05, 0.01, 0.04, 0.02], "std": [0.01, 0.005, 0.01, 0.005]})
     for name, df in {"regions": regions, "predictions": preds, "storms": storms,
                      "metrics": metrics, "importance": importance}.items():
         df.to_parquet(APP_DATA / f"{name}.parquet", index=False)

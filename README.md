@@ -43,8 +43,12 @@ What the numbers say:
 
 - **Weather alone predicts new outages 10–30× better than chance**, and every added
   feature group helps on both splits.
-- **Bigger outages are more predictable relative to their base rate**: the riskiest 1% of
-  calm county-blocks contain 13% of new ≥ 5% outages and 25% of all of them.
+- **Bigger outages are more predictable relative to their base rate.** Of the 1% of calm
+  county-blocks the model ranks riskiest, about 1 in 8 become a ≥ 5% outage (24× the base
+  rate), and together they catch about a quarter of all new ≥ 5% outages.
+- **On new outages the model is a weather model**: its top features are surface wind,
+  shear × instability and wind × rain. Scored on all blocks, the previous block's outage
+  outweighs everything else fifteenfold — persistence, not prediction.
 - **Model family barely matters.** Tuned XGBoost and LightGBM tie; XGBoost trains ~1.6× faster.
 - **Up-weighting rare events hurt** (`scale_pos_weight`), and shallow trees generalized
   better to the next year.

@@ -12,7 +12,7 @@ Writes data/app/:
   regions.parquet      216 regions: name, GeoJSON shape (simplified), place + resilience metrics
   predictions.parquet  test year, every region x 6-hour block: probability, actual outage, weather
   storms.parquet       the biggest test-year outage blocks, for the storm-replay picker
-  importance.parquet   permutation importance of the final model's features
+  importance.parquet   permutation importance of the final model's features, on all blocks and on new outages
   metrics.parquet      every benchmark result in ml/results/benchmark_*.csv
   meta.json            what was trained, on what, and the app's alert level
 
@@ -71,11 +71,16 @@ def main():
     storms.to_parquet(OUT / "storms.parquet", index=False)
 
     # --- importance: how much the score drops when a feature is shuffled -----
-    sample = test.sample(min(40_000, len(test)), random_state=0)
-    imp = permutation_importance(model, sample[features], sample["y"], scoring="average_precision",
-                                 n_repeats=3, random_state=0)
-    (pd.DataFrame({"feature": features, "importance": imp.importances_mean, "std": imp.importances_std})
-       .sort_values("importance", ascending=False)
+    # Computed separately on all blocks and on new outages: on all blocks the previous
+    # block's outage dominates (persistence); on new outages the weather does.
+    parts = []
+    for scored_on, rows in [("all blocks", test), ("new outages", test[test["is_onset"]])]:
+        sample = rows.sample(min(40_000, len(rows)), random_state=0)
+        imp = permutation_importance(model, sample[features], sample["y"], scoring="average_precision",
+                                     n_repeats=3, random_state=0)
+        parts.append(pd.DataFrame({"scored_on": scored_on, "feature": features,
+                                   "importance": imp.importances_mean, "std": imp.importances_std}))
+    (pd.concat(parts).sort_values(["scored_on", "importance"], ascending=[True, False])
        .to_parquet(OUT / "importance.parquet", index=False))
 
     # --- regions: shapes + everything known about each place ------------------

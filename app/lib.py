@@ -97,14 +97,15 @@ def geojson():
     }
 
 
-def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520):
+def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520, zoom=4.8):
     """A county map of one magnitude, single-hue ramp."""
     import plotly.express as px
 
     fig = px.choropleth_map(
         df, geojson=geojson(), locations="region_fips", color=value,
         color_continuous_scale=ramp(colors), range_color=range_color,
-        map_style=theme()["map_style"], center={"lat": 38.9, "lon": -90.6}, zoom=4.8, opacity=0.85,
+        map_style=theme()["map_style"], opacity=0.85,
+        center={"lat": 39.25, "lon": -91.65}, zoom=zoom,   # the middle of Missouri + Illinois
         hover_name="region", hover_data=hover or {value: ":.2f", "region_fips": False},
         labels={value: label},
     )

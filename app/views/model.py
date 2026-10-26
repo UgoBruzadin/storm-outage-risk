@@ -46,7 +46,8 @@ for col, kind in zip(cols, [s for s in SPLITS if s in set(res.split_kind)], stri
         hovertemplate="%{y}<br>PR-AUC %{x:.3f} (%{customdata[1]:.1f}x chance)<br>features: %{customdata[0]}"
                       "<br>ROC-AUC %{customdata[2]:.3f} · precision@top1% %{customdata[3]:.1%}<extra></extra>"))
     fig.add_vline(x=best[p + "event_rate"].iloc[0], line_dash="dot", line_color=t["muted"])
-    fig.update_layout(title=SPLITS[kind], xaxis_title="PR-AUC (dotted = no skill)")
+    fig.update_layout(title=SPLITS[kind], xaxis_title="PR-AUC (dotted = no skill)",
+                      xaxis_range=[0, best[p + "pr_auc"].max() * 1.2])   # room for the value labels
     col.plotly_chart(style(fig, height=320), width="stretch")
 st.caption("Gray bars are baselines: *prior* = the event rate for everyone; *climatology* = each region's "
            "historical rate by month, no weather at all.")
@@ -69,11 +70,14 @@ st.caption("Feature groups (ml/data.py): weather = storm ingredients; place = si
            "previous 24 h.")
 
 st.subheader("What the final model relies on")
+scope = "new outages" if target != "All blocks" else "all blocks"
+if "scored_on" in importance:
+    importance = importance[importance.scored_on == scope]
 top = importance.head(15).iloc[::-1]
 fig = go.Figure(go.Bar(x=top.importance, y=top.feature, orientation="h", marker_color=t["series"][0],
                        error_x=dict(type="data", array=top["std"], color=t["muted"], thickness=1),
                        hovertemplate="%{y}: %{x:.4f}<extra></extra>"))
-fig.update_layout(xaxis_title="drop in PR-AUC when shuffled")
+fig.update_layout(xaxis_title=f"drop in PR-AUC on {scope} when shuffled")
 st.plotly_chart(style(fig, height=460), width="stretch")
 st.caption(
     f"Final model ({m.get('config', 'benchmark config')}): {family}, features {m['features']}, trained on "

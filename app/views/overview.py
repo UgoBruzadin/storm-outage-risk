@@ -34,7 +34,7 @@ config = {
     f"Mean predicted risk ({m['test_year']})": ("prob", "mean probability", None),
 }
 value, label, rng = config[metric or "Outage hours per customer"]
-st.plotly_chart(choropleth(df, value, label, BLUE, rng), width="stretch")
+st.plotly_chart(choropleth(df, value, label, BLUE, rng, height=600, zoom=5.4), width="stretch")
 start = str(regions.history_start.iloc[0])[:4]
 end = int(str(regions.history_end.iloc[0])[:4]) - 1
 st.caption(

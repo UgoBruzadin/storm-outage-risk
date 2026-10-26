@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storm Outage Risk — Missouri &amp; Illinois</title>
+<meta name="description" content="Which counties lose power when a storm hits, and why the same storm hits some places harder. A county-level outage model built on public data.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --line: #e1e0d9; --accent: #2a78d6; --accent-ink: #ffffff; --warm: #eb6834;
+  --shadow: 0 1px 2px rgba(11,11,11,.06), 0 8px 24px rgba(11,11,11,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --line: #2c2c2a; --accent: #3987e5; --accent-ink: #0b0b0b; --warm: #d95926;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --line: #2c2c2a; --accent: #3987e5; --accent-ink: #0b0b0b; --warm: #d95926;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.3);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 0 16px 64px; }
+a { color: var(--accent); }
+h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0 0 12px; }
+h2 { font-size: 1.6rem; margin: 64px 0 16px; }
+h3 { font-size: 1.1rem; margin: 24px 0 8px; }
+p { margin: 0 0 14px; color: var(--ink-2); }
+strong { color: var(--ink); }
+.hero { padding: 72px 0 8px; }
+.lede { font-size: 1.2rem; color: var(--ink-2); max-width: 760px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 8px; }
+.btn {
+  display: inline-block; padding: 11px 18px; border-radius: 8px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--surface);
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 40px 0 0; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+.stat b { display: block; font-size: 1.8rem; color: var(--ink); line-height: 1.1; }
+.stat span { font-size: .9rem; color: var(--muted); }
+figure { margin: 24px 0; }
+figure img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+tr.group td { color: var(--ink); font-weight: 600; text-align: left; background: color-mix(in srgb, var(--line) 35%, transparent); }
+td.best { color: var(--ink); font-weight: 700; }
+tr:last-child td { border-bottom: 0; }
+ul { padding-left: 20px; color: var(--ink-2); }
+li { margin: 6px 0; }
+.pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.step b { display: block; color: var(--ink); margin-bottom: 4px; }
+.step span { font-size: .9rem; color: var(--ink-2); }
+.note { border-left: 3px solid var(--warm); padding: 4px 0 4px 14px; margin: 20px 0; }
+footer { border-top: 1px solid var(--line); margin-top: 64px; padding-top: 20px; font-size: .9rem; color: var(--muted); }
+footer p { color: var(--muted); }
+code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; background: color-mix(in srgb, var(--line) 50%, transparent); padding: 1px 5px; border-radius: 4px; }
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .grid2, .pipeline { grid-template-columns: 1fr; }
+  .hero { padding-top: 40px; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<section class="hero">
+  <h1>⚡ Storm Outage Risk</h1>
+  <p class="lede">Which counties in Missouri and Illinois lose power when a storm hits — and why does the same storm
+    hit some places much harder than others?</p>
+  <div class="buttons">
+    <a class="btn primary" href="https://storm-outage-risk.streamlit.app">Open the live dashboard</a>
+    <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk">Code on GitHub</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>216</b><span>counties modeled</span></div>
+    <div class="stat"><b>3.5M</b><span>county × 6-hour blocks, 2014–2025</span></div>
+    <div class="stat"><b>24×</b><span>the base rate: hit rate of the model's top-1% alerts on new outages</span></div>
+    <div class="stat"><b>57</b><span>automated data tests in the pipeline</span></div>
+  </div>
+</section>
+
+<h2>The question</h2>
+<p>Utilities stage repair crews before severe weather. To do that well they need to know not only <em>when</em>
+  storms will cause outages, but <em>where</em> — and the same storm takes out 2% of one county and 40% of the next.</p>
+<p>This project predicts, for every county and every 6-hour block, whether at least 1%, 5% or 10% of customers lose
+  power, from storm ingredients (wind, gusts, wind shear, instability, rain, ice) and from what each place is like:
+  tree canopy, housing age, density, and its own outage history. It builds on the
+  <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>
+  approach and changes the parts that matter for an honest answer: place features, splits by time and by county
+  instead of random days, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
+
+<figure>
+  <img src="assets/storm-replay.jpg" alt="Two county maps side by side: predicted outage risk (blue) and actual share of customers out (orange) during the March 15, 2025 storm; the highest predicted risk lines up with the worst outages in southeastern Missouri." loading="lazy">
+  <figcaption>Storm replay, 15 March 2025 tornado outbreak — a year the model never saw. Left: predicted risk.
+    Right: actual peak share of customers out.</figcaption>
+</figure>
+
+<h2>What I found</h2>
+<p>Outages persist: a county that is out now will likely be out in six hours. A model can look accurate by learning
+  only that. The useful part is the <strong>onset</strong> — a block whose previous six hours were calm — so every result
+  below is scored on new outages. PR-AUC, where a model with no skill scores the event rate.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Climatology</th><th>Weather only</th><th>+ place + history</th><th>+ recent outages</th></tr></thead>
+  <tbody>
+    <tr class="group"><td colspan="6">Next year — trained on 2024, tested on 2025</td></tr>
+    <tr><td>≥ 1% of customers</td><td>1.97%</td><td>0.028</td><td>0.094</td><td>0.118</td><td class="best">0.134</td></tr>
+    <tr><td>≥ 5%</td><td>0.53%</td><td>0.008</td><td>0.051</td><td>0.061</td><td class="best">0.087</td></tr>
+    <tr><td>≥ 10%</td><td>0.26%</td><td>0.004</td><td>0.030</td><td>0.041</td><td class="best">0.062</td></tr>
+    <tr class="group"><td colspan="6">Unseen counties — 5-fold split by county</td></tr>
+    <tr><td>≥ 1%</td><td>1.86%</td><td>0.018</td><td>0.125</td><td>0.148</td><td class="best">0.156</td></tr>
+    <tr><td>≥ 5%</td><td>0.50%</td><td>0.005</td><td>0.086</td><td>0.101</td><td class="best">0.111</td></tr>
+    <tr><td>≥ 10%</td><td>0.25%</td><td>0.002</td><td>0.064</td><td>0.077</td><td class="best">0.091</td></tr>
+  </tbody>
+</table>
+</div>
+
+<ul>
+  <li><strong>Weather predicts new outages 10–30× better than chance</strong>, and every feature group adds to it on
+    both splits.</li>
+  <li><strong>On new outages the model is a weather model.</strong> Its top features are surface wind, wind shear ×
+    instability, and wind × rain. Scored on all blocks instead, the previous block's outage outweighs everything else
+    fifteenfold — that is persistence, not prediction.</li>
+  <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
+    county-blocks the model ranks riskiest, about 1 in 8 become a ≥ 5% outage — 24× the base rate — and together they
+    catch about a quarter of all new ≥ 5% outages.</li>
+  <li><strong>The algorithm barely matters.</strong> Tuned XGBoost and LightGBM tie (264-run grid search). Up-weighting
+    rare events hurt, and shallow trees generalized best to the next year.</li>
+  <li><strong>Tree canopy helps most for large outages</strong>: removing it costs 12% (≥ 5%) and 22% (≥ 10%) of
+    next-year PR-AUC with every other feature present. Canopy is correlated with rurality and the serving utility, so
+    this is an association, not a cause.</li>
+</ul>
+
+<div class="grid2">
+  <figure>
+    <img src="assets/leaderboard.jpg" alt="Bar charts of PR-AUC on new outages by model: XGBoost and LightGBM near 0.09 (next year) and 0.11 (unseen counties), logistic regression lower, baselines near zero." loading="lazy">
+    <figcaption>Benchmark leaderboard: best run per model, baselines in gray.</figcaption>
+  </figure>
+  <figure>
+    <img src="assets/scorecard.jpg" alt="Table of counties with outage hours per customer, events per year, storm hit rate, and tree canopy." loading="lazy">
+    <figcaption>Resilience scorecard: how often a reported storm turns into an outage, county by county.</figcaption>
+  </figure>
+</div>
+
+<figure>
+  <img src="assets/map.jpg" alt="Map of Missouri and Illinois counties shaded by outage hours per customer per year; the darkest counties are in northwest and southeast Missouri." loading="lazy">
+  <figcaption>Outage hours per customer per year, 2020–2023.</figcaption>
+</figure>
+
+<h2>How it's built</h2>
+<div class="pipeline">
+  <div class="step"><b>Ingest</b><span>Python scripts download outages, HRRR storm ingredients, storm reports, tree canopy rasters and Census tables.</span></div>
+  <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 57 tests, a 3.5M-row modeling table.</span></div>
+  <div class="step"><b>Model</b><span>A YAML-driven benchmark suite: baselines, logistic, XGBoost, LightGBM; three splits; MLflow tracking.</span></div>
+  <div class="step"><b>Serve</b><span>Streamlit dashboard on precomputed Parquet, packaged with Docker; CI on GitHub Actions.</span></div>
+</div>
+<p>Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, LightGBM, MLflow, geopandas, rasterio, Streamlit, Plotly,
+  Docker, GitHub Actions.</p>
+
+<h3>Data traps found along the way</h3>
+<ul>
+  <li>EAGLE-I only records counties <em>with</em> outages, and sometimes the system itself was down. A national
+    "heartbeat" — any county in the U.S. reporting — separates "no outages" from "no data".</li>
+  <li>St. Louis County's outages were filed under St. Louis City's code from mid-2020 to 2024; the two are modeled as
+    one region.</li>
+  <li>The 2023 file renamed its outage column; early September 2025 recorded every snapshot twice.</li>
+  <li>The tree-canopy raster's "no data" value was 0 — a real value — which made farmland read as 45% forest until
+    it was caught.</li>
+  <li>DuckDB's <code>least(100, NULL)</code> returns 100, which turned blank counts into "100% out"; a regression test
+    now guards it.</li>
+</ul>
+
+<h3>Limitations</h3>
+<div class="note">
+  <p><strong>The weather is short-range, not a 24–48 hour forecast</strong> — the HRRR archive is close to observed
+    weather, so the scores are an upper bound for planning a day ahead. The next-year split rests on one test year,
+    there are no confidence intervals yet, and each county has a single weather point.</p>
+</div>
+
+<footer>
+  <p>Data: U.S. DOE / Oak Ridge National Laboratory EAGLE-I power outage data
+    (<a href="https://doi.org/10.13139/ORNLNCCS/1975202">doi:10.13139/ORNLNCCS/1975202</a>); NOAA HRRR via
+    <a href="https://open-meteo.com">Open-Meteo</a>; NOAA NCEI Storm Events; USFS / NLCD Tree Canopy Cover; U.S. Census
+    Bureau ACS and TIGER boundaries. Map tiles © OpenStreetMap contributors, © CARTO.</p>
+  <p>Ugo Bruzadin Nunes · <a href="https://github.com/UgoBruzadin/storm-outage-risk">github.com/UgoBruzadin/storm-outage-risk</a> · MIT License</p>
+</footer>
+
+</main>
+</body>
+</html>
