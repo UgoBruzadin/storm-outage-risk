@@ -1,5 +1,5 @@
 # Baselines vs. model families at three outage sizes (~15 min).
-# Copy this file to try your own ideas — change one thing at a time.
+# New experiments: copy this file and change one thing at a time.
 name: quick
 description: >
   Baselines vs. default model families on 2024 → 2025 and unseen counties, for outages of
@@ -37,11 +37,12 @@ models:
     params: {n_estimators: 400, learning_rate: 0.03, max_depth: 6, min_child_weight: 5,
              subsample: 0.8, colsample_bytree: 0.8}
 
-# what `pixi run export-app` trains for the dashboard (threshold = the first in the list above
-# unless set here)
+# what `pixi run export-app` trains for the dashboard. XGBoost: tied with LightGBM after
+# tuning (ml/results/leaderboard_full.md) and ~1.6x faster to train. Depth 4 generalized best
+# to the next year; up-weighting rare events (scale_pos_weight) hurt.
 final:
-  model: lightgbm
-  params: {n_estimators: 400, learning_rate: 0.03, num_leaves: 31, min_child_samples: 50,
-           subsample: 0.8, subsample_freq: 1, colsample_bytree: 0.8}
+  model: xgboost
+  params: {n_estimators: 400, learning_rate: 0.03, max_depth: 4, min_child_weight: 5,
+           subsample: 0.8, colsample_bytree: 0.8}
   features: weather+place+history+recent
   threshold_pct: 5

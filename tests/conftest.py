@@ -1,4 +1,4 @@
-"""Shared test setup: a tiny fake app dataset, so tests never need the real data.
+"""Shared test setup: a small synthetic test fixture of the app dataset, so tests never need the real data.
 
 APP_DATA must point at it before app/lib.py is first imported (lib reads the
 variable at import time), so it's set at module level here — pytest loads

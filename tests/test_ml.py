@@ -126,3 +126,11 @@ def test_evaluate_reports_onset_scores(frame):
 def test_metrics_without_events_are_nan_not_errors():
     s = score(np.zeros(10), np.linspace(0, 1, 10))
     assert np.isnan(s["pr_auc"]) and s["n_events"] == 0
+
+
+def test_top1_alerts_exactly_one_percent_even_with_ties():
+    y = np.r_[np.zeros(990), np.ones(10)]
+    s = score(y, np.full(1000, 0.01))                  # a baseline: every block tied
+    assert s["recall_top1"] < 1.0                      # was 1.0 when ties made every block an alert
+    ranked = score(y, np.r_[np.zeros(990), np.ones(10)])
+    assert ranked["precision_top1"] == 1.0 and ranked["recall_top1"] == 1.0   # top 10 of 1000 = the 10 events

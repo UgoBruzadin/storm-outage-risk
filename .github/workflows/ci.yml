@@ -1,5 +1,5 @@
 # Runs on every push and pull request. No real data in CI: tests use a tiny
-# fake dataset (tests/conftest.py), and dbt is only parsed, not built.
+# synthetic test fixture (tests/conftest.py), and dbt is only parsed, not built.
 name: CI
 
 on:

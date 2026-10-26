@@ -24,9 +24,9 @@ by_region AS (
     SELECT
         region_fips,
         count(*)                                                    AS n_counties,
-        sum(customers)                                              AS customers,
-        sum(population)                                             AS population,
-        sum(housing_units)                                          AS housing_units,
+        sum(customers)::BIGINT                                      AS customers,       -- sum() of ints is HUGEINT in DuckDB
+        sum(population)::BIGINT                                     AS population,
+        sum(housing_units)::BIGINT                                  AS housing_units,
         sum(homes_pre1960) / sum(homes_total)                       AS share_homes_pre1960,
         round(sum(median_year_built * housing_units) / sum(housing_units)) AS median_year_built
     FROM counties

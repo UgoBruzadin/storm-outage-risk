@@ -107,7 +107,7 @@ def label(df, threshold_pct):
 
 
 def add_derived(df):
-    """Engineered features (separate from load() so tests can use a fake frame)."""
+    """Engineered features (separate from load() so tests can use a synthetic frame)."""
     df = df.copy()
     df["year"] = df["block_start"].dt.year
     df["log_customers"] = np.log10(df["customers"])

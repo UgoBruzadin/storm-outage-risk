@@ -18,7 +18,6 @@ data/
 
 ## Getting the raw data
 
-- **EAGLE-I outages** (~11 GB): manual download of the full dataset from the DOE/ORNL release on figshare (search "EAGLE-I recorded electricity outages"). Unzip into `data/raw/eaglei/`. Keep the `citation_*.txt` files — they're how to credit the data.
+- **EAGLE-I outages** (~11 GB): download the full dataset (DOI [10.13139/ORNLNCCS/1975202](https://doi.org/10.13139/ORNLNCCS/1975202)) and unzip it into `data/raw/eaglei/`, keeping the `citation_*.txt` files.
 - **Everything else**: the `pixi run fetch-*` tasks — see `ingest/README.md`.
 
-Currently `data/raw` is a symlink to the old sandbox repo — see [docs/working-on-this.md](../docs/working-on-this.md#where-the-data-lives).

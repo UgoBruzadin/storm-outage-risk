@@ -1,82 +1,143 @@
 # ⚡ Storm Outage Risk — Missouri & Illinois
 
-> Forecast which counties will lose power in the next 24–48 hours — and explain **why** the same storm hits some places much harder than others.
+> Which counties lose power when a storm hits — and why does the same storm hit some places much harder than others?
 
-**Status: work in progress.** Milestone 0 (repo setup) is done; see the [roadmap](docs/roadmap.md).
+A county-level power-outage model for the 216 counties of Missouri and Illinois, built on
+public data: DOE EAGLE-I outage records, NOAA HRRR storm ingredients and storm reports,
+USFS tree canopy and Census housing data. The pipeline runs locally on DuckDB and dbt;
+models are compared in a benchmark suite tracked with MLflow; results are served in a
+Streamlit dashboard packaged with Docker.
 
-## What it will do
+## What it does
 
-1. **Forecast** — for every county, the probability that more than X% of customers lose power in the next 24–48 hours.
-2. **Explain** — storm strength *and* place: tree canopy, age of the built environment, the utility, past resilience.
-3. **Resilience scorecard** — how often each county loses power, how fast it recovers, how often it fails again soon after.
-4. **Storm replay** — pick a past storm, watch predicted vs actual outages on the map.
+1. **Predicts** for every county and every 6-hour block whether ≥ 1%, 5% or 10% of
+   customers lose power.
+2. **Scores new outages separately** from ongoing ones. Outages persist, so a model can
+   look accurate by predicting "still out"; the hard and useful part is the *onset*.
+3. **Explains** risk with storm ingredients (wind, gusts, shear, instability, rain, ice)
+   *and* place: tree canopy, housing age, density, and each county's outage history.
+4. **Scores resilience**: outage hours per customer, events per year, how often a reported
+   storm turns into an outage, repeat outages.
 
-All from open data, in an interactive Streamlit dashboard.
+## Results
 
-## Why this project
+PR-AUC on **new outages** (onset blocks), XGBoost with storm, place, history and
+recent-outage features. For rare events a model with no skill scores the event rate, shown
+for reference.
 
-Inspired by [weathernext-outage-forecasting](https://github.com/biplovbhandari/weathernext-outage-forecasting), which joins Google's WeatherNext forecasts with outage data on BigQuery. This project takes the same core idea and changes the parts that matter:
+| Outage size | New-outage rate | Climatology baseline | Weather only | + place + history | + recent outages |
+|---|---|---|---|---|---|
+| **Next year** (train 2024 → test 2025) | | | | | |
+| ≥ 1% | 1.97% | 0.028 | 0.094 | 0.118 | **0.134** |
+| ≥ 5% | 0.53% | 0.008 | 0.051 | 0.061 | **0.087** |
+| ≥ 10% | 0.26% | 0.004 | 0.030 | 0.041 | **0.062** |
+| **Unseen counties** (5-fold by county) | | | | | |
+| ≥ 1% | 1.86% | 0.018 | 0.125 | 0.148 | **0.156** |
+| ≥ 5% | 0.50% | 0.005 | 0.086 | 0.101 | **0.111** |
+| ≥ 10% | 0.25% | 0.002 | 0.064 | 0.077 | **0.091** |
 
-- **Free and local** — DuckDB on a laptop instead of a paid cloud warehouse and forecast subscription.
-- **Place matters** — adds county traits (vegetation, housing age, utility, resilience history), which the weather-only approach leaves out.
-- **Honest validation** — split by time *and* by held-out counties, always compared against a simple baseline. A random split by county-day lets one storm leak into both train and test.
-- **Documented data quality** — the raw data has real traps (see [data notes](docs/data-notes.md)), and each fix is explained and tested.
+Source: `ml/results/leaderboard_quick.md` (fixed hyperparameters). A 264-run grid search
+(`ml/results/leaderboard_full.md`) adds up to +0.01.
 
-## Architecture
+What the numbers say:
+
+- **Weather alone predicts new outages 10–30× better than chance**, and every added
+  feature group helps on both splits.
+- **Bigger outages are more predictable relative to their base rate**: the riskiest 1% of
+  calm county-blocks contain 13% of new ≥ 5% outages and 25% of all of them.
+- **Model family barely matters.** Tuned XGBoost and LightGBM tie; XGBoost trains ~1.6× faster.
+- **Up-weighting rare events hurt** (`scale_pos_weight`), and shallow trees generalized
+  better to the next year.
+- **Tree canopy** helps most for large outages: removing it costs 12% (≥ 5%) and 22% (≥ 10%)
+  of next-year PR-AUC with all other features present, and 4–10% on unseen counties.
+
+### Limitations
+
+- **Weather is short-range, not a 24–48 h forecast.** The HRRR archive stitches the first
+  hours of each model run, which is close to observed weather. Scores are an upper bound
+  for planning a day ahead.
+- **One test year.** The next-year split trains on 2024 and tests on 2025; weather for
+  2018–2023 extends this. No confidence intervals yet, so small differences (< 0.005)
+  may be noise, and the grid-search maxima were selected on the test year.
+- **One weather point per county.** Storm winds are local; a county-wide grid would be better.
+- **Canopy is county-wide** and correlated with rurality and the serving utility, so its
+  effect is an association, not a cause.
+- **St. Louis City and County are one region**: EAGLE-I records the County's outages under
+  the City's code from mid-2020 to 2024.
+
+## How it's built
 
 ```
-LOCAL (heavy lifting)                                    CLOUD (free, public)
-raw CSVs ─► SQL / dbt on DuckDB ─► features ─► model      Hugging Face dataset: small Parquet outputs
- (EAGLE-I,   (tested transforms)    (SQL window  (scikit-       ▲
-  NOAA,                              functions)   learn,       │ pixi run publish
-  Census…)                                        MLflow) ─────┘
-                                                               │ hf://…
-                                                  Streamlit app (Docker) on Hugging Face Spaces
+ingest/ (Python)          dbt/ (SQL on DuckDB)                    ml/ (Python)                 app/
+EAGLE-I, HRRR,     ──►  staging → intermediate → marts   ──►  benchmark suite (MLflow)   ──►  Streamlit
+storm reports,          57 tests; 3.5M-row modeling table      YAML configs, 3 splits,        (Docker)
+canopy, Census          + resilience scorecard                  onset + all-block metrics
 ```
-
-The app only reads precomputed results — it never runs the model — so it stays fast, small, and free to host.
-
-## Tech stack
 
 | Layer | Tool |
 |---|---|
-| Environment | [pixi](https://pixi.sh) |
+| Environment | [pixi](https://pixi.sh) — one lock file; `default`, `app` and `ci` environments |
 | Storage / SQL | [DuckDB](https://duckdb.org) |
-| Transformations | dbt (`dbt-duckdb`) — *milestone 1* |
-| Geo | geopandas |
-| ML | scikit-learn / LightGBM, MLflow |
-| Dashboard | Streamlit |
-| Packaging / hosting | Docker, Hugging Face Spaces |
+| Transformations | dbt Core + dbt-duckdb, dbt_utils tests |
+| Geo | geopandas, rasterio |
+| ML | XGBoost, LightGBM, scikit-learn, MLflow |
+| Dashboard | Streamlit, Plotly |
+| Packaging | Docker (linux/amd64), Hugging Face Spaces |
 | Quality | pytest, ruff, GitHub Actions |
+
+Design choices worth knowing:
+
+- **Region × 6-hour block** is the unit; the label is the block's peak % of customers out.
+- **Missing rows are zeros only when EAGLE-I was running.** A national "heartbeat" (any
+  county in the U.S. reporting) separates "no outages" from "no data".
+- **Leakage guards:** history features come from 2020–2023 only; recent-outage features
+  use previous blocks; storm reports are context, never inputs.
+- **Validation:** next year (time) and held-out counties (spatial), always against
+  baselines. A random region-day split is in the code to show how it overstates skill.
+- **The dashboard reads precomputed Parquet only** — it never runs a model.
+
+The data traps found along the way (a renamed column in 2023, duplicated snapshots in
+2025, a raster whose no-data value was a real value, county codes swapped for years, and
+more) are in [docs/data-notes.md](docs/data-notes.md).
 
 ## Quick start
 
 ```bash
-pixi install              # create the environment
-pixi run fetch-noaa       # download NOAA hourly weather (~90 MB)
+pixi install
 # EAGLE-I outages: manual download — see data/README.md
-pixi run build            # build data/warehouse.duckdb (~30 s), prints check numbers
+pixi run fetch-counties && pixi run fetch-tree-canopy && pixi run fetch-acs && pixi run fetch-storm-events
+pixi run fetch-weather 2024 2025      # rate-limited (free tier): ~a day for 216 counties
+pixi run build                        # dbt: every model + test
+pixi run train                        # quick benchmark → ml/results/
+pixi run export-app && pixi run app   # dashboard at http://localhost:8501
 ```
 
-Then open `notebooks/model_playground.ipynb` with the pixi kernel.
+`docker compose up --build` runs the dashboard in a container.
 
 ## Repository layout
 
-| Folder | What lives there |
+| Folder | Contents |
 |---|---|
-| `ingest/` | scripts that download raw data |
-| `sql/` | the current SQL pipeline (moves into `dbt/` in milestone 1) |
-| `scripts/` | small runners (`build_warehouse.py`) |
-| `notebooks/` | exploration and model experiments |
-| `dbt/` | *milestone 1:* SQL models + tests |
-| `ml/` | *milestone 5:* feature building, training, evaluation |
-| `app/` | *milestone 7:* Streamlit dashboard |
-| `tests/` | pytest |
-| `data/` | local data, not in git — see `data/README.md` |
-| `docs/` | [roadmap](docs/roadmap.md), [data dictionary](docs/data-dictionary.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [walkthrough](docs/walkthrough.md), [working on this project](docs/working-on-this.md) |
+| `ingest/` | download scripts, one per source |
+| `dbt/` | SQL models (staging → intermediate → marts), seeds, tests |
+| `ml/` | data loading, splits, model registry, metrics, benchmark runner, configs, results |
+| `app/` | Streamlit dashboard |
+| `notebooks/` | `explore_warehouse` (inspect tables), `benchmark_lab` (try configs interactively) |
+| `tests/` | pytest: benchmark machinery and dashboard pages |
+| `scripts/` | download queue, Hugging Face publishing |
+| `legacy/` | the first St. Louis hourly prototype |
+| `docs/` | [data dictionary](docs/data-dictionary.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [development guide](docs/development.md), [roadmap](docs/roadmap.md) |
 
-## Data sources & credits
+## Data sources
 
-- **Power outages:** U.S. DOE / Oak Ridge National Laboratory, EAGLE-I recorded electricity outages — cite using the files shipped with the download (`citation_*.txt`).
-- **Weather:** NOAA NCEI Global Hourly (Integrated Surface Database), via the AWS Open Data mirror.
-- *Planned:* NOAA Storm Events, USFS/NLCD Tree Canopy Cover, U.S. Census ACS, HIFLD utility service territories.
+- **Power outages:** Tansakul, V. et al. (2023). *EAGLE-I Power Outage Data.* Oak Ridge
+  National Laboratory. https://doi.org/10.13139/ORNLNCCS/1975202
+- **Storm ingredients:** NOAA High-Resolution Rapid Refresh (HRRR), via the
+  [Open-Meteo](https://open-meteo.com) Historical Forecast API.
+- **Storm reports:** NOAA NCEI Storm Events Database; NWS zone–county correlation file.
+- **Tree canopy:** USDA Forest Service / NLCD Tree Canopy Cover 2021, via MRLC.
+- **Housing and population:** U.S. Census Bureau, ACS 2020–2024 5-year estimates.
+- **County boundaries:** U.S. Census Bureau cartographic boundary files (2023).
+- **Airport weather (prototype):** NOAA NCEI Global Hourly (ISD), AWS Open Data.
+
+Full source list with URLs: [docs/data-dictionary.md](docs/data-dictionary.md#where-the-data-comes-from).

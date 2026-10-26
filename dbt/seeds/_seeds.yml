@@ -19,8 +19,8 @@ seeds:
       THE study area — every state in the analysis. The single source of truth: dbt
       models filter by it, and the ingest scripts read this same file. Add or remove a
       state here, then re-run the fetch-* tasks and `pixi run build`.
-      Currently Missouri + Illinois. Tested with the six bordering states too (AR, IA, IN,
-      KS, KY, TN — same storm climate, no independent cities); paused for now, see
+      Missouri + Illinois. The pipeline has also been run with the six bordering states
+      (AR, IA, IN, KS, KY, TN — same storm climate, no independent cities); see
       docs/decisions.md.
     config:
       column_types: {state_fips: varchar, state_abbr: varchar, state_name: varchar}

@@ -120,10 +120,10 @@ WHERE REPORT_TYPE = 'FM-15'   -- regular hourly report; skips daily summaries (S
 QUALIFY row_number() OVER (PARTITION BY hour ORDER BY "DATE") = 1;
 -- Check: 102,035 rows, count(*) = count(DISTINCT hour), 2,084 thunder hours
 
--- SUGGESTION: more weather features you could unpack the same way:
+-- More weather features that unpack the same way:
 --   dewpoint_c    DEW, piece 1, missing '+9999'  -> humidity, fog, icing
 --   pressure_hpa  SLP, piece 1, missing '99999'  -> sudden drops = storms
--- SUGGESTION: an ice flag — cold + wet is a classic outage cause:
+-- An ice flag (cold + wet is a classic outage cause):
 --   (temp_c <= 0 AND precip_mm > 0) AS icing_risk
 
 
@@ -177,7 +177,7 @@ FROM per_snapshot
 GROUP BY ALL;
 -- Check: 364,944 rows
 
--- SUGGESTION: other ways to summarize an hour, each answers a different question:
+-- Other ways to summarize an hour, each answering a different question:
 --   avg(customers_out)   typical level during the hour
 --   count(*)             how many of the 4 snapshots had an outage (persistence)
 

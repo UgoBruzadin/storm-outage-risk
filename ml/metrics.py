@@ -19,8 +19,12 @@ def score(y, p, top=0.01):
         return {"pr_auc": nan, "pr_auc_lift": nan, "roc_auc": nan, "brier": nan, "log_loss": nan,
                 "precision_top1": nan, "recall_top1": nan, "event_rate": float(y.mean()) if len(y) else nan,
                 "n_test": int(len(y)), "n_events": int(y.sum())}
-    cutoff = np.quantile(p, 1 - top)
-    alert = p >= cutoff
+    # exactly the top `top` share of blocks; ties broken at random (seeded), so a model
+    # that gives everyone the same probability doesn't "alert" on every block
+    k = max(1, int(round(top * len(p))))
+    order = np.lexsort((np.random.default_rng(0).random(len(p)), -p))
+    alert = np.zeros(len(p), dtype=bool)
+    alert[order[:k]] = True
     event_rate = y.mean()
     pr_auc = average_precision_score(y, p)
     return {

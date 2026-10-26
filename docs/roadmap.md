@@ -1,11 +1,11 @@
 # Roadmap
 
-Tick boxes as you go — this file is the project's to-do list.
+Status of the project, by milestone. Unchecked items are planned next steps.
 
 ## ✅ 0 — Repository setup
 - [x] Repo layout, pixi environment, `.gitignore` (data and secrets stay out of git)
 - [x] Carry over the SQL pipeline, NOAA downloader, model playground
-- [x] Push to GitHub (private for now; make public when ready to show)
+- [x] GitHub repository
 - [ ] Pick a license (MIT is the usual choice for portfolio code)
 
 ## ✅ 1 — dbt
@@ -38,7 +38,7 @@ Tick boxes as you go — this file is the project's to-do list.
       XGBoost), feature groups, leaderboards in `ml/results/`
 - [x] "recent" features: outages in the previous block / 24 h (known at the block's start)
 - [x] Run `full.yaml` (grid + canopy ablation, 264 runs) — `ml/results/leaderboard_full.md`
-- [ ] Results in README (yours to write)
+- [x] Results in README
 - [ ] Calibration plot; error analysis per county; threshold 1% vs 5%
 - [ ] Optuna search instead of grids, once the grid shows which parameters matter
 

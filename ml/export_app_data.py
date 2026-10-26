@@ -4,8 +4,8 @@ The app never runs a model or touches the 11 GB warehouse — it reads these
 small Parquet files (data/app/), locally or from Hugging Face once published.
 
 Which model? The `final:` section of a benchmark config (default
-ml/benchmarks/quick.yaml) — pick the winner of your benchmark there. It's
-trained on the config's first year and predicts the last one, so every
+ml/benchmarks/quick.yaml), set to the benchmark winner. It's
+trained on every year before the config's last one and predicts that last year, so every
 prediction in the app is for a year the model never saw.
 
 Writes data/app/:
@@ -54,7 +54,7 @@ def main():
     # --- final model: train on the first year, predict the last ---------------
     threshold = final.get("threshold_pct", benchmark_thresholds(config)[0])
     df = data.load(threshold, years)
-    train, test = df[df.year == min(years)], df[df.year == max(years)].copy()
+    train, test = df[df.year < max(years)], df[df.year == max(years)].copy()   # all earlier years -> the last
     model = models.build(final["model"], final.get("params")).fit(train[features], train["y"])
     test["prob"] = model.predict_proba(test[features])[:, 1]
 
@@ -114,7 +114,7 @@ def main():
         "features": final["features"],
         "feature_list": features,
         "threshold_pct": threshold,
-        "train_year": min(years),
+        "train_year": min(years) if len(years) == 2 else f"{min(years)}–{max(years) - 1}",
         "test_year": max(years),
         "n_regions": int(df.region_fips.nunique()),
         "test_events": int(test["y"].sum()),

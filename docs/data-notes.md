@@ -10,16 +10,16 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | Snapshots every 15 minutes, **UTC** | Off by 5–6 h vs local time | Keep everything in UTC |
 | **2023 file names the count column `sum`**, not `customers_out` | 2023 looks like a year with no outages | `union_by_name = true` + `coalesce(customers_out, "sum")` |
 | 2024 file has an extra `total_customers` column | Glob read fails ("schema mismatch") | `union_by_name = true`, then `EXCLUDE` it |
-| Some snapshots have a **blank** `customers_out` (16,837 in the St. Louis counties) | Blank hours become fake zeros | In the grid, only "no row" becomes 0; a row with a blank value stays NULL |
+| Some snapshots have a **blank** `customers_out` (16,837 in the St. Louis counties) | Blank hours become spurious zeros | In the grid, only "no row" becomes 0; a row with a blank value stays NULL |
 | **EAGLE-I itself was down** for 356 hours (no snapshot anywhere in the US) | Down hours look like perfect-power hours | "Heartbeat" table of hours with any national snapshot; no heartbeat → NULL |
-| **St. Louis County's outages filed under St. Louis City's FIPS (29510)**, mid-2020 → 2024; County shows 0 for 2022–2024; back in 2025 | Wrong per-county numbers; a fake "78% of the City out" in July 2023 | Merge City + County into one region `29189+29510`; sum per snapshot, then max per hour |
+| **St. Louis County's outages filed under St. Louis City's FIPS (29510)**, mid-2020 → 2024; County shows 0 for 2022–2024; back in 2025 | Wrong per-county numbers; a spurious "78% of the City out" in July 2023 | Merge City + County into one region `29189+29510`; sum per snapshot, then max per hour |
 | **Coverage grew over time** (Missouri ≈ 79% of customers tracked in 2018 → ≈ 95% from 2019; Jefferson Co. shows ~0% outage-hours in 2018) | Fake upward trend; untracked years look calm | Train on 2020+ by default |
-| `MCC.csv` (customers per county): FIPS stored as text **without leading zeros**; last row is `Grand Total` | Join misses some states; a fake "county" | `lpad(County_FIPS, 5, '0')`; exclude `Grand Total` |
+| `MCC.csv` (customers per county): FIPS stored as text **without leading zeros**; last row is `Grand Total` | Join misses some states; a "county" that isn't one | `lpad(County_FIPS, 5, '0')`; exclude `Grand Total` |
 | Coverage varies by year at the snapshot level too (2017 low everywhere) | — | See `coverage_history.csv` (state-level) |
 | **Duplicate snapshots**, early Sept 2025: every snapshot recorded twice (`00:00:00` and `00:00:52`); a few others off the 15-min grid (`:01`, `:16`, `:31`, `:35`) | Blocks with up to 48 "snapshots"; summed regions double-count | `snapshot_time` = rounded to 15 min; one value (max) per county per slot before adding counties |
 | **Customer counts too low** for some counties (Worth Co., MO: 418 in MCC for ~2,000 residents) and **one-off spikes** (Boone Co., MO: 311,925 out of ~122k customers on 2019-12-13) | "300% of customers out" | `peak_suspect` when peak > 1.5x customers → percentage NULL; otherwise capped at 100% |
 | Utility coverage also varies **within** a state (Jefferson Co., MO ~0% outage-hours in 2018, 7% in 2019, 54% from 2020) | Untracked years look calm | History/resilience window and training start in 2020 |
-| **Regions go dark for whole years after 2020** too: Crockett & Obion, TN show outages in ~20–30% of blocks every year, then **0% in 2025**; Wolfe, KY shows 0% in 2020–2021, then ~30–40% | Fake zeros — for Crockett/Obion in the **test year** | Open: per-region coverage flag (see decisions.md) |
+| **Regions go dark for whole years after 2020** too: Crockett & Obion, TN show outages in ~20–30% of blocks every year, then **0% in 2025**; Wolfe, KY shows 0% in 2020–2021, then ~30–40% | Spurious zeros — for Crockett/Obion in the **test year** | Open: per-region coverage flag (see decisions.md) |
 
 ## NOAA Global Hourly (ISD)
 
@@ -54,7 +54,7 @@ Everything surprising found in the raw data, and what the pipeline does about it
 - Only **one writer** can open a DuckDB file at a time; read-only connections also block writers. Close the UI / restart notebook kernels before `pixi run build`.
 - `WHERE` runs **before** window functions — filter years *after* computing lags, or the first lags come out empty.
 - DuckDB 2.x: the lambda arrow `x -> …` is deprecated (use `lambda x: …`); in Python, read each `execute()` result before running more SQL on the same connection.
-- **DuckDB's `least()` / `greatest()` skip NULLs**: `least(100, NULL)` is 100, not NULL. That turned every blank outage count into "100% out" (tens of thousands of fake events) until a test caught it — check `IS NULL` explicitly.
+- **DuckDB's `least()` / `greatest()` skip NULLs**: `least(100, NULL)` is 100, not NULL. That turned every blank outage count into "100% out" (tens of thousands of spurious events) until a test caught it — check `IS NULL` explicitly.
 - **dbt-duckdb `external_location` goes through Python `str.format()`**: curly braces (`read_csv(types = {...})`) break it. Read as text and cast in staging.
 - conda-forge `mlflow` pulls protobuf 7, which dbt-common rejects; Streamlit excludes pyarrow 25.0.0 (the installer silently fell back to Streamlit 1.8). Both come from PyPI in `pixi.toml`.
 

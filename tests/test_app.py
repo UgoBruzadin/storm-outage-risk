@@ -1,4 +1,4 @@
-"""Every dashboard page must render from the (fake) app dataset without errors.
+"""Every dashboard page must render from the synthetic test fixture without errors.
 
 Streamlit's AppTest runs a page script headlessly and records exceptions,
 so this catches broken imports, renamed columns, or a chart call that
