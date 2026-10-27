@@ -43,3 +43,13 @@ def test_ramp_is_a_valid_plotly_colorscale():
     scale = ramp(BLUE)
     assert scale[0][0] == 0 and scale[-1][0] == 1
     assert [c for _, c in scale] == BLUE
+
+
+def test_entry_point_reloads_lib_and_renders():
+    """streamlit_app.py runs (it reloads lib when lib.py or the data changed) and the default page renders."""
+    import lib
+    lib.loaded_stamp = None                            # as if lib was loaded before a push
+    at = AppTest.from_file(str(ROOT / "app" / "streamlit_app.py"), default_timeout=60).run()
+    assert not at.exception, [e.value for e in at.exception]
+    import sys
+    assert sys.modules["lib"].loaded_stamp is not None
