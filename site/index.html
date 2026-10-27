@@ -100,33 +100,41 @@ pre .c { color: var(--muted); }
 
 <section class="hero">
   <h1>⚡ Storm Outage Risk</h1>
-  <p class="lede">Which counties in Missouri and Illinois lose power when a storm hits — and why does the same storm
-    hit some places much harder than others?</p>
+  <p class="lede">When a storm moves through, which counties will lose power? This model ranks every county by how
+    likely the storm is to cause outages there, which tells utilities and emergency managers where repair crews will
+    be needed.</p>
   <div class="buttons">
     <a class="btn primary" href="https://storm-outage-risk.streamlit.app">Open the live dashboard</a>
     <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk">Code on GitHub</a>
   </div>
   <div class="stats">
-    <div class="stat"><b>216</b><span>counties modeled</span></div>
-    <div class="stat"><b>3.5M</b><span>county × 6-hour blocks, 2014–2025</span></div>
-    <div class="stat"><b>26×</b><span>the base rate: hit rate of the model's top-1% alerts on new outages</span></div>
-    <div class="stat"><b>47</b><span>automated data tests in the pipeline</span></div>
+    <div class="stat"><b>216</b><span>counties covered across Missouri and Illinois</span></div>
+    <div class="stat"><b>6 years</b><span>of storms and outages (2020–2025), in 6-hour steps</span></div>
+    <div class="stat"><b>26×</b><span>more likely than average: counties flagged as top-1% risk had a major outage
+      (5%+ of customers)</span></div>
+    <div class="stat"><b>1 in 4</b><span>major new outages caught by those top alerts</span></div>
   </div>
   <div class="abstract">
     <h2>Summary</h2>
-    <p>Storm outages are rare, clustered in space and time, and persistent, which makes them easy to predict badly.
-      Using public data for Missouri and Illinois (DOE EAGLE-I outage records, NOAA HRRR weather and storm reports,
-      tree canopy, Census housing), I built a DuckDB + dbt pipeline of 3.5 million county × 6-hour blocks and a
-      benchmark suite of baselines and gradient-boosted trees.</p>
-    <p>Trained on 2020–2024, with settings chosen on 2024 and tested once on 2025, the model scores new outages
-      only. Its riskiest 1% of county-blocks turn into a ≥ 5% outage at <strong>26× the base rate</strong> and catch
-      26% of all such outages. Weather drives the prediction; county size and tree canopy add a little. Official
-      forecasts known at the start of each block (NWS warnings in force, SPC outlooks) score well below the model,
-      which sees the block's own weather, and add 15% to it as inputs.</p>
-    <p>Most of the work went into the traps between raw data and an honest number: missing rows that look like zeros,
-      a county filed under its neighbour's code, persistence that inflates the score fourfold, a feature that looked
-      important in only one model, and a pipeline that gave slightly different answers on every run. They are written
-      up below, with the code that handles each one.</p>
+    <p><strong>The problem.</strong> Before severe weather, utilities send repair crews to wait near where they expect
+      damage. Forecasts say when a storm will arrive, but not where it will do the most damage. The same storm can cut
+      power to 2% of one county and 40% of the next.</p>
+    <p><strong>What I built.</strong> A model that estimates, for every county and every 6-hour period, the chance
+      that a significant share of customers lose power. It combines public weather data (wind, gusts, rain, ice, storm
+      instability) with what each place is like (size, tree cover, housing age, density) and whether it already had
+      outages in the past day.</p>
+    <p><strong>How well it works.</strong> I tested it on 2025, a year it never trained on. The 1% of county-periods it
+      ranked riskiest were 26× more likely than average to have a major new outage, and they caught about a quarter of
+      all of them. Weather does most of the work; local factors add a little. The model beats National Weather Service
+      warnings and Storm Prediction Center outlooks used alone, and adding those forecasts to the model improves it by
+      another 15%.</p>
+    <p><strong>One caveat.</strong> The model currently sees the weather as it actually happened, not as it was
+      forecast, so these scores are the best case for planning ahead. Feeding it forecasts made hours in advance is
+      the next step.</p>
+    <p><strong>Where the effort went.</strong> Mostly into making the numbers trustworthy. Public data hides traps:
+      gaps that look like "no outages", and one county's outages reported under its neighbour's code. There's also a
+      model that looks great just by predicting outages that are already underway. Each trap is written up below, with
+      the code that fixes it.</p>
     <ul class="toc">
       <li><a href="#story">How it started</a></li>
       <li><a href="#findings">What I found</a></li>
@@ -144,8 +152,6 @@ pre .c { color: var(--muted); }
   crosses the state, which counties go dark, and why does the same storm take out 2% of one county and 40% of the
   next? My guess was trees, old dense canopy over overhead lines, and old housing. Testing that guess honestly turned
   out to be the hard part.</p>
-<p>Utilities stage repair crews before severe weather. To do that well they need to know not only <em>when</em>
-  storms will cause outages, but <em>where</em>.</p>
 <p>This project predicts, for every county and every 6-hour block, whether at least 1%, 5% or 10% of customers lose
   power, from storm ingredients (wind, gusts, wind shear, instability, rain, ice) and from what each place is like:
   tree canopy, housing age, density, and its own outage history. Partway through I found a related project,
@@ -160,13 +166,15 @@ pre .c { color: var(--muted); }
 </figure>
 
 <h2 id="findings">What I found</h2>
-<p>Outages persist: a county that is out now will likely be out in six hours. A model can look accurate by learning
-  only that. The useful part is the <strong>onset</strong> — a block whose previous six hours were calm — so every result
-  below is scored on new outages. PR-AUC, where a model with no skill scores the event rate.</p>
+<p>Outages last: a county that is out now will likely still be out in six hours, and a model can look accurate by
+  learning only that. The useful part is the <strong>new outage</strong>, one that starts after six calm hours, so
+  every result below is scored on new outages only.</p>
+<p>Scores are <strong>PR-AUC</strong>: how well the model puts real outages ahead of false alarms. Random guessing
+  scores the outage rate itself (0.005 for 5% outages), so the final model's 0.106 is about 20× better than chance.</p>
 
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Climatology</th><th>Weather only</th><th>+ place</th><th>+ recent outages</th></tr></thead>
+  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Historical average</th><th>Weather only</th><th>+ place</th><th>+ recent outages</th></tr></thead>
   <tbody>
     <tr class="group"><td colspan="6">Next year — trained on 2020–2024, tested on 2025</td></tr>
     <tr><td>≥ 1% of customers</td><td>1.97%</td><td>0.032</td><td>0.116</td><td>0.145</td><td class="best">0.153</td></tr>
@@ -190,11 +198,11 @@ pre .c { color: var(--muted); }
   <li><strong>Place helps for known counties, not new ones.</strong> County size, housing and canopy add 25–34% on the
     next year but almost nothing on unseen counties: the model learns which counties are fragile more than why.</li>
   <li><strong>On new outages the model is a weather model.</strong> Its top features are surface wind, the block's
-    minimum temperature (ice and cold-season storms), county size and wind × rain. Scored on all blocks instead, the
-    previous block's outage is the top feature, seven times any weather or place feature: persistence, not
-    prediction.</li>
+    minimum temperature (ice and cold-season storms), county size and wind × rain. Scored on every period instead, the
+    previous period's outage is the top feature, seven times any weather or place feature: it is predicting outages
+    already underway.</li>
   <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
-    county-blocks the model ranks riskiest, about 1 in 7 become a ≥ 5% outage (26× the base rate), and together they
+    county-periods the model ranks riskiest, about 1 in 7 become a ≥ 5% outage (26× the average), and together they
     catch 26% of all new ≥ 5% outages.</li>
   <li><strong>Tuning barely matters.</strong> The top ten settings on 2024 sit within ±1.2% of each other, the same as
     the spread across random seeds. Up-weighting rare events hurt.</li>
@@ -259,7 +267,7 @@ pre .c { color: var(--muted); }
 <p>A model is only worth something next to what people already use. Three comparisons, each scored the same way as
   everything else on this page: new outages of at least 5% of customers, PR-AUC, same data.</p>
 <figure>
-  <img src="assets/results.jpg" alt="Horizontal bar charts of PR-AUC on new outages of at least 5% of customers, for the next year and for unseen counties. Climatology, NWS warnings, the SPC outlook, warnings plus outlook and weathernext's setup score between 0.004 and 0.058; this project's weather-only model scores about 0.07 and the final model 0.106 next year and 0.086 on unseen counties." loading="lazy">
+  <img src="assets/results.jpg" alt="Horizontal bar charts of PR-AUC on new outages of at least 5% of customers, for the next year and for unseen counties. The historical average, NWS warnings, the SPC outlook, warnings plus outlook and weathernext's setup score between 0.004 and 0.058; this project's weather-only model scores about 0.07 and the final model 0.106 next year and 0.086 on unseen counties." loading="lazy">
 </figure>
 
 <h3>Against the official forecasts</h3>
@@ -274,7 +282,7 @@ pre .c { color: var(--muted); }
 <table>
   <thead><tr><th>New ≥ 5% outages</th><th>Known</th><th>Next year</th><th>Unseen counties</th><th>Top-1% hit rate, next year</th></tr></thead>
   <tbody>
-    <tr><td>Climatology (county × month)</td><td>in advance</td><td>0.009</td><td>0.004</td><td>1.7%</td></tr>
+    <tr><td>Historical average (county × month)</td><td>in advance</td><td>0.009</td><td>0.004</td><td>1.7%</td></tr>
     <tr><td>NWS warnings in force at block start</td><td>in advance</td><td>0.024</td><td>0.020</td><td>5.9%</td></tr>
     <tr><td>SPC Day 1 outlook</td><td>in advance</td><td>0.033</td><td>0.023</td><td>8.6%</td></tr>
     <tr><td>Warnings + outlook</td><td>in advance</td><td>0.044</td><td>0.039</td><td>9.2%</td></tr>
@@ -417,10 +425,10 @@ values = values[values &lt;= 100]           <span class="c"># 254/255 = no data;
 
 <div class="pitfall">
   <span class="tag">Modeling · ml/data.py</span>
-  <h3>6. Persistence: a model that predicts "still out"</h3>
+  <h3>6. A model that predicts outages already underway</h3>
   <p>Outages last for hours, so the previous block's outage is a superb predictor of this one. With it, PR-AUC on all
     blocks jumps to 0.42. Almost none of that is useful, because a utility already knows a county is out. Scored only
-    on <strong>onsets</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
+    on <strong>new outages</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
 <pre><code>df["is_onset"] = df["prev_block_pct_out"].notna() &amp; (df["prev_block_pct_out"] &lt; threshold_pct)
 <span class="c"># every benchmark reports both: pr_auc (all blocks) and onset_pr_auc (new outages only)</span></code></pre>
   <div class="table-wrap">
@@ -461,7 +469,7 @@ elif kind == "county":                           <span class="c"># no county in 
 <div class="pitfall">
   <span class="tag">Evaluation · ml/metrics.py</span>
   <h3>8. Ties in "top 1%" flatter the baseline</h3>
-  <p>The climatology baseline gives every block in a county-month the same score. Taking "everything at or above the
+  <p>The historical-average baseline gives every block in a county-month the same score. Taking "everything at or above the
     99th percentile" then flags far more than 1% of blocks, and its recall looks better than it is. Alerts are now
     exactly the top <em>k</em>, with ties broken at random (seeded).</p>
 <pre><code>k = max(1, int(round(top * len(p))))

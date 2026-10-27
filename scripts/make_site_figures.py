@@ -173,7 +173,7 @@ def results():
 
     official, final, wn = scores("official"), scores("final_2025"), scores("weathernext")
     pick = [  # (label, frame, model, features, this project's)
-        ("Climatology", official, "climatology", "-", False),
+        ("Historical average", official, "climatology", "-", False),
         ("NWS warnings", official, "nws_warnings", "-", False),
         ("SPC outlook", official, "spc_outlook", "-", False),
         ("Warnings + outlook", official, "official", "-", False),
