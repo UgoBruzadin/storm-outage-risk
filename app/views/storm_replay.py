@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from lib import BLUE, ORANGE, choropleth, meta, style, table, theme
+from lib import d3_component, meta, shapes_order, style, table, theme
 
 m = meta()
 storms = table("storms")
@@ -26,20 +26,22 @@ block = st.selectbox("Storm (6-hour block)", list(labels), format_func=labels.ge
 
 now = preds[preds.block_start == block].merge(regions, on="region_fips")
 now["pct"] = now["peak_pct_out"]
-left, right = st.columns(2)
-with left:
-    st.subheader("Predicted risk")
-    # scale to this block's highest risk: probabilities stay low even in big storms (events are rare)
-    st.plotly_chart(choropleth(now, "prob", "probability", BLUE, (0, max(2 * alert, now.prob.max())), height=480,
-                               hover={"prob": ":.0%", "pct": ":.1f", "region_fips": False}, zoom=4.75,
-                               legend="bottom"),
-                    width="stretch")
-with right:
-    st.subheader("Actual peak % out")
-    st.plotly_chart(choropleth(now, "pct", "% customers out", ORANGE, (0, max(10, now.pct.max())), height=480,
-                               hover={"pct": ":.1f", "prob": ":.0%", "region_fips": False}, zoom=4.75,
-                               legend="bottom"),
-                    width="stretch")
+
+# the storm as it unfolded: 12 hours before the chosen block to 18 hours after, played period by period
+order = shapes_order()
+blocks = [b for b in pd.date_range(pd.Timestamp(block) - pd.Timedelta(hours=12), periods=6, freq="6h")
+          if (preds.block_start == b).any()]
+frames = []
+for b in blocks:
+    f = preds[preds.block_start == b].set_index("region_fips").reindex(order)
+    frames.append({
+        "start": pd.Timestamp(b).tz_localize("UTC").isoformat(),
+        "prob": [None if pd.isna(v) else round(float(v), 3) for v in f.prob],
+        "pct": [None if pd.isna(v) else round(float(v), 1) for v in f.peak_pct_out],
+        "out_mo": int(f[f.index.str.startswith("29")].peak_out.sum()),
+        "out_il": int(f[f.index.str.startswith("17")].peak_out.sum()),
+    })
+d3_component("storm", {"frames": frames, "selected": blocks.index(pd.Timestamp(block))}, height=540)
 
 # the storm's timeline across the whole study area: two measures, two charts (never a dual axis)
 window = preds[(preds.block_start >= pd.Timestamp(block) - pd.Timedelta(days=2)) &

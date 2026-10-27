@@ -1,0 +1,50 @@
+<!-- Accuracy by county: share of new outages caught, or actual vs expected, revealed county by county.
+     DATA: counties, states, new[], caught[], expected[] (county order), min_events -->
+<div class="controls" style="margin:0 0 8px">
+  <button class="button on" data-view="caught" type="button">Outages caught</button>
+  <button class="button" data-view="ratio" type="button">Expected vs actual</button>
+</div>
+<svg id="map" viewBox="0 0 900 560" role="img" aria-label="Model accuracy by county"></svg>
+<script>
+const judged = DATA.new.map(n => n >= DATA.min_events);
+const share = DATA.new.map((n, j) => (judged[j] ? DATA.caught[j] / n : null));
+const logRatio = DATA.new.map((n, j) => (judged[j] && DATA.expected[j] > 0
+  ? Math.log2(Math.min(4, Math.max(0.25, n / DATA.expected[j]))) : null));
+const svg = d3.select("#map");
+svg.append("defs").append("pattern").attr("id", "hatch").attr("width", 6).attr("height", 6)
+  .attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)")
+  .append("line").attr("y2", 6).attr("stroke", "var(--other)").attr("stroke-width", 1.5);
+const counties = countyMap(svg.append("g").attr("transform", "translate(170,0)"), 640, 550);
+const legendBox = svg.append("g");
+const views = {
+  caught: { values: share, scale: d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, 1]),
+            legend: [ramp("blue"), [0, 1], [0, 0.5, 1], pct, "share of new outages flagged"] },
+  ratio: { values: logRatio, scale: d3.scaleSequential(d3.interpolateRgbBasis(ramp("diverging"))).domain([-2, 2]),
+           legend: [ramp("diverging"), [-2, 2], [-2, -1, 0, 1, 2], v => ["¼×", "½×", "1×", "2×", "4×"][v + 2],
+                    "actual ÷ expected"] },
+};
+let view = "caught";
+const fill = (d, j) => (judged[j] ? views[view].scale(views[view].values[j]) : "url(#hatch)");
+function draw(animate) {
+  legendBox.selectAll("*").remove();
+  legend(legendBox, 10, 60, 140, ...views[view].legend);
+  legendBox.append("text").attr("class", "legend").attr("x", 10).attr("y", 120).attr("fill", "var(--muted)")
+    .style("font-size", "12px").text(`hatched: < ${DATA.min_events} new outages`);
+  const v = views[view].values;
+  counties.transition().delay((d, j) => (animate && !REDUCE ? 100 + (judged[j] ? ((v[j] - (view === "ratio" ? -2 : 0)) / (view === "ratio" ? 4 : 1)) * 1400 : 1500) : 0))
+    .duration(animate && !REDUCE ? 500 : 0).attr("opacity", 1).attr("fill", fill);
+}
+counties.attr("fill", "var(--surface)").attr("opacity", REDUCE ? 1 : 0)
+  .on("pointermove", (e, d) => {
+    const j = FEATURES.indexOf(d), name = `<b>${d.properties.name}, ${abbr(d.properties.state)}</b>`;
+    if (!judged[j]) return showTip(e, `${name}${DATA.new[j]} new outages: too few to judge`);
+    showTip(e, name + (view === "caught" ? `${DATA.caught[j]} of ${DATA.new[j]} new outages flagged`
+      : `${DATA.new[j]} new outages, model expected ${DATA.expected[j].toFixed(1)}`));
+  }).on("pointerleave", hideTip);
+d3.selectAll("[data-view]").on("click", function () {
+  view = this.dataset.view;
+  d3.selectAll("[data-view]").classed("on", function () { return this.dataset.view === view; });
+  draw(true);
+});
+draw(true);
+</script>

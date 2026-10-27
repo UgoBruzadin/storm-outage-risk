@@ -209,8 +209,10 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <section class="slide" id="persist" data-title="Already out">
   <p class="kicker">Trap 2</p>
   <h2>The easy way to look smart.</h2>
-  <p class="lead">Most outages last for hours, so "it's out now, it'll still be out" scores well and predicts nothing.
-    Counting those inflates the score fourfold. Everything here is scored on <strong>new</strong> outages only.</p>
+  <p class="lead">Most outages last for hours, so "it's out now, it'll still be out" scores very well. That's a real
+    forecast, of how long outages last, but it answers a different question from "which calm county goes dark
+    next?", and mixing the two inflates the score fourfold. Everything here is scored on <strong>new</strong>
+    outages only.</p>
   <svg id="persistence" role="img" aria-label="Score on every period versus on new outages only"></svg>
   <p class="note">Score: PR-AUC, how well real outages are ranked ahead of false alarms. Random guessing scores the
     outage rate itself, about 0.005.</p>

@@ -1,10 +1,9 @@
 import numpy as np
-import plotly.graph_objects as go
 import streamlit as st
-from lib import BLUE, DARK, geojson, meta, ramp, style, table, theme
+from lib import d3_component, meta, shapes_order, table
 
 MIN_EVENTS = 3          # fewer new outages than this: too few to judge a county
-m, t = meta(), theme()
+m = meta()
 regions = table("regions")
 preds = table("predictions")
 size = f"≥ {m['threshold_pct']:g}%"
@@ -33,52 +32,16 @@ c2.metric("Caught by a flag", f"{df.caught.sum() / df.new_outages.sum():.0%}")
 c3.metric("Flags that were real", f"{df.caught.sum() / df.alerts.sum():.0%}")
 c4.metric(f"Counties with ≥ {MIN_EVENTS} new outages", f"{int(judged.sum())} of {len(df)}")
 
-view = st.segmented_control("Map", ["Outages caught", "Expected vs actual"], default="Outages caught")
-
-
-def county_map(values, colorscale, zmin, zmax, colorbar, hover):
-    """Judged counties colored; the rest in a flat gray so a single miss never paints a county."""
-    gray = t["grid"]
-    fig = go.Figure()
-    fig.add_trace(go.Choroplethmap(
-        geojson=geojson(), locations=df.loc[~judged, "region_fips"], z=np.zeros((~judged).sum()),
-        colorscale=[[0, gray], [1, gray]], showscale=False, marker_line_width=0.5,
-        marker_line_color=t["surface"], customdata=df.loc[~judged, ["region", "new_outages"]],
-        hovertemplate="%{customdata[0]}<br>%{customdata[1]:.0f} new outages: too few to judge<extra></extra>"))
-    fig.add_trace(go.Choroplethmap(
-        geojson=geojson(), locations=df.loc[judged, "region_fips"], z=values[judged],
-        colorscale=colorscale, zmin=zmin, zmax=zmax, marker_opacity=0.9, marker_line_width=0.5,
-        marker_line_color=t["surface"], colorbar=colorbar,
-        customdata=df.loc[judged, ["region", "new_outages", "caught", "expected"]], hovertemplate=hover))
-    fig.update_layout(map=dict(style=t["map_style"], center={"lat": 39.3, "lon": -90.9}, zoom=5.5))
-    return style(fig, height=600)
-
-
-if view == "Expected vs actual":
-    # log2 so "twice as many" and "half as many" sit equally far from the gray midpoint
-    neutral = "#383835" if t is DARK else "#f0efec"
-    diverging = [[0, BLUE[5]], [0.25, BLUE[2]], [0.5, neutral], [0.75, "#f2925f"], [1, "#9c3c16"]]
-    fig = county_map(np.log2(df["ratio"].clip(0.25, 4)), diverging, -2, 2,
-                     dict(title="actual ÷ expected", thickness=10, len=0.6,
-                          tickvals=[-2, -1, 0, 1, 2], ticktext=["¼×", "½×", "1×", "2×", "4×"]),
-                     "%{customdata[0]}<br>%{customdata[1]:.0f} new outages, model expected "
-                     "%{customdata[3]:.1f}<extra></extra>")
-    st.plotly_chart(fig, width="stretch")
-    st.caption(
-        "Actual new outages ÷ the number the model expected (the sum of its probabilities over the county's calm "
-        "blocks). Orange: more outages than expected, the model underrated the county. Blue: fewer, it overrated "
-        f"it. Gray: fewer than {MIN_EVENTS} new outages, too few to judge."
-    )
-else:
-    fig = county_map(df["share_caught"], ramp(BLUE), 0, 1,
-                     dict(title="share caught", thickness=10, len=0.6, tickformat=".0%"),
-                     "%{customdata[0]}<br>%{customdata[2]:.0f} of %{customdata[1]:.0f} new outages "
-                     "flagged<extra></extra>")
-    st.plotly_chart(fig, width="stretch")
-    st.caption(
-        "Share of each county's new outages that fell in a block the model flagged. Darker: more caught. "
-        f"Gray: fewer than {MIN_EVENTS} new outages, too few to judge."
-    )
+order = shapes_order()
+cells = df.set_index("region_fips").reindex(order)
+d3_component("accuracy", {"new": [int(v) for v in cells.new_outages], "caught": [int(v) for v in cells.caught],
+                          "expected": [round(float(v), 2) for v in cells.expected], "min_events": MIN_EVENTS},
+             height=600)
+st.caption(
+    "Outages caught: the share of each county's new outages that fell in a block the model flagged; darker = more. "
+    "Expected vs actual: actual new outages ÷ the number the model expected (the sum of its probabilities); orange "
+    f"counties had more than expected, blue fewer. Hatched: fewer than {MIN_EVENTS} new outages, too few to judge."
+)
 
 st.subheader("Where the model was most wrong")
 worst = (df[judged].assign(off=lambda d: np.log2(d["ratio"]).abs(), caught_pct=lambda d: 100 * d["share_caught"])

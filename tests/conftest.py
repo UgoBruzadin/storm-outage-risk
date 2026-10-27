@@ -38,7 +38,8 @@ def write_fixture():
     })
     blocks = pd.date_range("2025-05-15", periods=12, freq="6h")
     preds = pd.DataFrame([
-        {"region_fips": f, "block_start": b, "prob": 0.1 * i % 1, "y": int(i == 4), "peak_out": 100 * i,
+        {"region_fips": f, "block_start": b, "prob": 0.1 * i % 1, "y": int(i == 4), "is_onset": i != 5,
+         "peak_out": 100 * i,
          "peak_pct_out": 0.5 * i, "gust_max_ms": 10.0 + i, "cape_max_jkg": 500.0, "precip_sum_mm": 2.0,
          "shear_0_6km_max_ms": 15.0, "storm_reports": int(i == 4), "storm_max_wind_kt": None, "storm_tornado": 0}
         for f in ["17001", "29001"] for i, b in enumerate(blocks)
@@ -61,15 +62,21 @@ def write_fixture():
     importance = pd.DataFrame({"scored_on": ["new outages", "new outages", "all blocks", "all blocks"],
                                "feature": ["gust_max_ms", "canopy_mean_pct"] * 2,
                                "importance": [0.05, 0.01, 0.04, 0.02], "std": [0.01, 0.005, 0.01, 0.005]})
+    yearly = pd.DataFrame([{"region_fips": f, "year": y, "hours_out_per_customer": 2.0 + k, "events": 10 + k,
+                             "worst_pct_out": 5.0 * k}
+                            for f in ["17001", "29001"] for k, y in enumerate(range(2020, 2026))])
     for name, df in {"regions": regions, "predictions": preds, "storms": storms,
-                     "metrics": metrics, "importance": importance}.items():
+                     "metrics": metrics, "importance": importance, "yearly": yearly}.items():
         df.to_parquet(APP_DATA / f"{name}.parquet", index=False)
     (APP_DATA / "meta.json").write_text(json.dumps({
         "exported_at": "2026-01-01T00:00:00+00:00", "features": "weather+place+history+recent", "feature_list": [],
         "model": "lightgbm", "config": "ml/benchmarks/quick.yaml", "alert_threshold": 0.1, "alert_precision": 0.2,
         "threshold_pct": 5.0, "train_year": 2024, "test_year": 2025, "n_regions": 2,
-        "test_events": 2, "test_blocks": 24,
+        "test_events": 2, "test_blocks": 24, "onset_alert_threshold": 0.3,
     }))
+    (APP_DATA / "states.json").write_text(json.dumps([
+        {"name": s, "type": "Feature", "geometry": json.loads(square(x, y))}
+        for s, x, y in [("Illinois", -91, 39), ("Missouri", -92, 38)]]))
 
 
 write_fixture()

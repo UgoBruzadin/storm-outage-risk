@@ -1,0 +1,30 @@
+/* Shared by the dashboard's D3 components: the dashboard's palette, light and dark. */
+:root {
+  --bg: #ffffff; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --line: #e1e0d9; --idle: #e4e3dc; --other: #c3c2b7; --accent: #2a78d6;
+}
+:root[data-theme="dark"] {
+  --bg: #0e1117; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --line: #2c2c2a; --idle: #2c2c2a; --other: #55554f; --accent: #3987e5;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: transparent; color: var(--ink); font: 15px/1.5 "Source Sans Pro", system-ui, -apple-system, sans-serif; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+.county { stroke: var(--surface); stroke-width: .5; }
+.state { fill: none; stroke: var(--ink-2); stroke-width: 1; pointer-events: none; }
+.legend text { fill: var(--muted); font-size: 12px; }
+.panel h3 { font-size: 1.05rem; font-weight: 600; margin: 0 0 4px; }
+.panel svg { max-height: 430px; width: auto; max-width: 100%; }
+.controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.button { font: 600 .9rem inherit; font-family: inherit; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 999px; padding: 6px 15px; cursor: pointer; }
+.button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.steps { display: flex; gap: 5px; }
+.steps button { width: 28px; height: 6px; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; padding: 0; }
+.steps button.on { background: var(--ink-2); }
+.when { font-weight: 600; font-variant-numeric: tabular-nums; }
+.totals { color: var(--ink-2); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: .85rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .15); opacity: 0; transition: opacity .12s; }
+.tip b { display: block; }

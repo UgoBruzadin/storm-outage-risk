@@ -80,10 +80,50 @@ def table(name):
 
 @st.cache_data(show_spinner=False)
 def meta():
-    path = f"{APP_DATA}/meta.json"
+    return json.loads(_read_text("meta.json"))
+
+
+def _read_text(name):
+    path = f"{APP_DATA}/{name}"
     if path.startswith("hf://"):
-        return json.loads(connection().sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0])
-    return json.loads(Path(path).read_text())
+        return connection().sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0]
+    return Path(path).read_text()
+
+
+@st.cache_data(show_spinner=False)
+def shapes():
+    """County and state shapes for the D3 components: coordinates rounded to ~100 m."""
+    def rounded(coords):
+        if isinstance(coords[0], list):
+            return [rounded(c) for c in coords]
+        return [round(coords[0], 3), round(coords[1], 3)]
+
+    counties = []
+    for r in table("regions").itertuples():
+        geometry = json.loads(r.geojson)
+        geometry["coordinates"] = rounded(geometry["coordinates"])
+        counties.append({"id": r.region_fips, "name": r.region, "state": r.state, "geometry": geometry})
+    return {"counties": counties, "states": json.loads(_read_text("states.json"))}
+
+
+def shapes_order():
+    """Region ids in the order the D3 components expect values."""
+    return [c["id"] for c in shapes()["counties"]]
+
+
+def d3_component(name, payload, height):
+    """Render app/components/<name>.html (D3, shared base.js and style.css) with `payload` as DATA."""
+    import streamlit.components.v1 as components
+
+    folder = Path(__file__).parent / "components"
+    markup = (folder / f"{name}.html").read_text()
+    data = json.dumps({**shapes(), **payload}, separators=(",", ":"))
+    head = ('<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>\n'
+            f"<script>const DATA = {data};\nconst THEME = {json.dumps('dark' if theme() is DARK else 'light')};\n"
+            f"{(folder / 'base.js').read_text()}</script>\n")
+    html = (f"<!doctype html><html><head><meta charset='utf-8'><style>{(folder / 'style.css').read_text()}</style>"
+            f"</head><body><div class='tip'></div>{markup.replace('<script>', head + '<script>', 1)}</body></html>")
+    components.html(html, height=height)
 
 
 @st.cache_data(show_spinner=False)

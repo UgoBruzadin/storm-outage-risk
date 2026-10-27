@@ -11,6 +11,7 @@ prediction in the app is for a year the model never saw.
 Writes data/app/:
   regions.parquet      216 regions: name, GeoJSON shape (simplified), place + resilience metrics
   yearly.parquet       each region's year, 2020–2025: outage hours per customer, events, worst outage
+  states.json          Missouri and Illinois outlines (GeoJSON) for the dashboard's maps
   predictions.parquet  test year, every region x 6-hour block: probability, actual outage, new-outage flag, weather
   storms.parquet       the biggest test-year outage blocks, for the storm-replay picker
   importance.parquet   permutation importance of the final model's features, on all blocks and on new outages
@@ -114,6 +115,10 @@ def main():
     geo["geometry"] = geo.geometry.simplify(0.005, preserve_topology=True)   # ~500 m: plenty for a state map
     geo["geojson"] = [json.dumps(g.__geo_interface__) for g in geo.geometry]
     info.merge(geo[["region_fips", "geojson"]], on="region_fips").to_parquet(OUT / "regions.parquet", index=False)
+    # state outlines for the dashboard's maps: dissolved at full detail, then simplified
+    outlines = gpd.read_parquet(REGIONS_GEO).dissolve("state").geometry.simplify(0.005, preserve_topology=True)
+    (OUT / "states.json").write_text(json.dumps(
+        [{"name": name, "type": "Feature", "geometry": geom.__geo_interface__} for name, geom in outlines.items()]))
 
     # --- every benchmark result -------------------------------------------------
     benchmarks = [pd.read_csv(p) for p in sorted(RESULTS.glob("benchmark_*.csv"))]

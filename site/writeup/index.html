@@ -429,8 +429,10 @@ values = values[values &lt;= 100]           <span class="c"># 254/255 = no data;
   <span class="tag">Modeling · ml/data.py</span>
   <h3>6. A model that predicts outages already underway</h3>
   <p>Outages last for hours, so the previous block's outage is a superb predictor of this one. With it, PR-AUC on all
-    blocks jumps to 0.42. Almost none of that is useful, because a utility already knows a county is out. Scored only
-    on <strong>new outages</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
+    blocks jumps to 0.42. That is a real forecast, of whether an outage will continue, but it answers a different
+    question from this project's: which calm county goes dark next. Mixing the two inflates the score fourfold and
+    hides how well the model does on the question that matters for staging crews. Scored only on <strong>new
+    outages</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
 <pre><code>df["is_onset"] = df["prev_block_pct_out"].notna() &amp; (df["prev_block_pct_out"] &lt; threshold_pct)
 <span class="c"># every benchmark reports both: pr_auc (all blocks) and onset_pr_auc (new outages only)</span></code></pre>
   <div class="table-wrap">

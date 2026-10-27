@@ -1,0 +1,58 @@
+<!-- Storm replay: predicted risk and actual outages, playing through the storm's 6-hour periods.
+     DATA: counties, states, frames [{start, prob[], pct[], out_mo, out_il}] (values in county order) -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+  <div class="panel"><h3>Predicted risk</h3><svg id="pred" viewBox="0 0 460 470" role="img" aria-label="Predicted outage risk by county"></svg></div>
+  <div class="panel"><h3>What happened: share of customers out</h3><svg id="actual" viewBox="0 0 460 470" role="img" aria-label="Actual share of customers out by county"></svg></div>
+</div>
+<div class="controls">
+  <button class="button" id="play" type="button">▶ Play</button>
+  <div class="steps"></div>
+  <span class="when"></span>
+  <span class="totals"></span>
+</div>
+<script>
+const frames = DATA.frames;
+const pc = countyMap(d3.select("#pred"), 460, 410);
+const ac = countyMap(d3.select("#actual"), 460, 410);
+const maxP = Math.max(0.1, d3.max(frames.flatMap(f => f.prob)));
+const maxO = Math.max(10, d3.max(frames.flatMap(f => f.pct)));
+const colorP = d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, maxP]);
+const colorO = d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, maxO]);
+const ticks = (max, step) => d3.range(0, max + 1e-9, step);
+legend(d3.select("#pred"), 80, 445, 300, ramp("blue"), [0, maxP], ticks(maxP, maxP > 0.5 ? 0.2 : 0.1), pct, "probability of ≥ 5% out");
+legend(d3.select("#actual"), 80, 445, 300, ramp("orange"), [0, maxO], ticks(maxO, maxO > 50 ? 20 : 10), d => d + "%", "share of customers out");
+
+const when = s => new Date(s).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric",
+  hour: "numeric", timeZoneName: "short" });
+const buttons = d3.select(".steps").selectAll("button").data(frames).join("button").attr("type", "button")
+  .attr("aria-label", d => when(d.start)).on("click", (e, d) => { stop(); show(frames.indexOf(d)); });
+let i = 0, timer = null, stopAt = frames.length - 1;
+function show(k, animate = true) {
+  i = k;
+  const f = frames[k], dur = animate && !REDUCE ? 600 : 0;
+  pc.transition().duration(dur).attr("fill", (d, j) => (f.prob[j] == null ? css("--idle") : colorP(f.prob[j])));
+  ac.transition().duration(dur).attr("fill", (d, j) => (f.pct[j] == null ? css("--idle") : colorO(f.pct[j])));
+  buttons.classed("on", (d, j) => j === k);
+  d3.select(".when").text(when(f.start) + ", 6 hours");
+  d3.select(".totals").text(`Missouri ${fmt(f.out_mo)} out · Illinois ${fmt(f.out_il)} out`);
+}
+const tipHtml = (d, j) => {
+  const f = frames[i];
+  return `<b>${d.properties.name}, ${abbr(d.properties.state)}</b>` +
+    `Predicted ${f.prob[j] == null ? "–" : pct(f.prob[j])} · actual ${f.pct[j] == null ? "unknown" : f.pct[j] + "% out"}`;
+};
+[pc, ac].forEach(sel => sel.on("pointermove", (e, d) => showTip(e, tipHtml(d, FEATURES.indexOf(d)))).on("pointerleave", hideTip));
+const button = document.querySelector("#play");
+function stop() { clearInterval(timer); timer = null; button.textContent = "▶ Play"; }
+function play(until = frames.length - 1) {
+  if (timer) { stop(); return; }
+  stopAt = until;
+  if (i >= stopAt) show(0);
+  button.textContent = "❚❚ Pause";
+  timer = setInterval(() => { if (i >= stopAt) { stop(); return; } show(i + 1); }, 1400);
+}
+button.addEventListener("click", () => play());
+// on load: build up to the chosen period and stop there; Play then runs the whole storm
+if (REDUCE) show(DATA.selected, false);
+else { show(0, false); setTimeout(() => play(DATA.selected), 500); }
+</script>

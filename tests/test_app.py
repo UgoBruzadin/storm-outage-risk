@@ -8,7 +8,7 @@ import pytest
 from conftest import ROOT
 from streamlit.testing.v1 import AppTest
 
-PAGES = ["overview", "storm_replay", "scorecard", "model"]
+PAGES = ["overview", "storm_replay", "accuracy", "scorecard", "model"]
 
 
 @pytest.mark.parametrize("page", PAGES)
@@ -17,9 +17,25 @@ def test_page_renders(page):
     assert not at.exception, [e.value for e in at.exception]
 
 
-def test_storm_replay_shows_both_maps():
+def test_storm_replay_shows_the_animation_and_timelines():
     at = AppTest.from_file(str(ROOT / "app" / "views" / "storm_replay.py"), default_timeout=60).run()
-    assert len(at.get("plotly_chart")) == 4          # predicted map, actual map, two timelines
+    assert len(at.get("plotly_chart")) == 2          # the two timelines; the maps are the D3 component
+
+
+def test_d3_component_page_is_complete():
+    """The assembled component carries D3, its data, the shared code and its own script, once each."""
+    import lib
+    captured = {}
+    lib_components = __import__("streamlit.components.v1", fromlist=["html"])
+    original = lib_components.html
+    lib_components.html = lambda html, height: captured.update(html=html, height=height)
+    try:
+        lib.d3_component("storm", {"frames": [], "selected": 0}, height=500)
+    finally:
+        lib_components.html = original
+    html = captured["html"]
+    assert html.count("d3.min.js") == 1 and html.count("const DATA =") == 1 and html.count("function countyMap") == 1
+    assert '"states"' in html and "const frames = DATA.frames" in html and captured["height"] == 500
 
 
 def test_ramp_is_a_valid_plotly_colorscale():
