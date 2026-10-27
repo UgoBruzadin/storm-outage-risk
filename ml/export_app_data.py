@@ -10,6 +10,7 @@ prediction in the app is for a year the model never saw.
 
 Writes data/app/:
   regions.parquet      216 regions: name, GeoJSON shape (simplified), place + resilience metrics
+  yearly.parquet       each region's year, 2020–2025: outage hours per customer, events, worst outage
   predictions.parquet  test year, every region x 6-hour block: probability, actual outage, new-outage flag, weather
   storms.parquet       the biggest test-year outage blocks, for the storm-replay picker
   importance.parquet   permutation importance of the final model's features, on all blocks and on new outages
@@ -92,7 +93,23 @@ def main():
         FROM intermediate.int_study__regions AS r
         JOIN marts.mart_study__region_resilience AS s USING (region_fips)
     """).df()
+    # each region's year, for the scorecard's county view: burden, events and worst outage
+    yearly = con.sql("""
+        WITH b AS (
+            SELECT region_fips, year(block_start) AS year, customers, mean_out, peak_pct_out,
+                   peak_pct_out >= 1 AS is_event,
+                   lag(peak_pct_out >= 1) OVER (PARTITION BY region_fips ORDER BY block_start) AS prev_event
+            FROM marts.mart_study__region_6h
+            WHERE peak_pct_out IS NOT NULL AND year(block_start) BETWEEN 2020 AND 2025
+        )
+        SELECT region_fips, year,
+               sum(mean_out) * 6 / any_value(customers) / (count(*) * 6 / 8766.0)  AS hours_out_per_customer,
+               count(*) FILTER (WHERE is_event AND NOT coalesce(prev_event, false))  AS events,
+               max(peak_pct_out)                                                     AS worst_pct_out
+        FROM b GROUP BY ALL ORDER BY region_fips, year
+    """).df()
     con.close()
+    yearly.to_parquet(OUT / "yearly.parquet", index=False)
     geo = gpd.read_parquet(REGIONS_GEO)[["region_fips", "geometry"]]
     geo["geometry"] = geo.geometry.simplify(0.005, preserve_topology=True)   # ~500 m: plenty for a state map
     geo["geojson"] = [json.dumps(g.__geo_interface__) for g in geo.geometry]

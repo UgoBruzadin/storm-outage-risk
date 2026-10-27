@@ -587,9 +587,9 @@ function trees(data, animate) {
   const m = { l: narrow ? 44 : 60, r: 16, t: 28, b: 46 };
   const svg = d3.select("#scatter").attr("viewBox", `0 0 ${W} ${H}`);
   document.querySelector("#trees-lead").innerHTML = `I expected tree-heavy counties to fail more often in storms. ` +
-    `Overall there's almost no link (r = ${c.r.all.toFixed(2)}). Split by state, it runs in opposite directions: ` +
+    `Overall the link is weak (r = ${c.r.all.toFixed(2)}), and it comes from one state: ` +
     `<strong>${signed(c.r.Missouri)} in Missouri</strong>, <strong>${signed(c.r.Illinois)} in Illinois</strong>. ` +
-    `Something else that differs between the states, such as the utility or the terrain, matters more.`;
+    `Missouri's most wooded counties are the remote Ozarks, so terrain and access for repair crews come with the trees.`;
   const pts = c.pct.map((p, j) => ({ p, h: c.hit[j], state: data.counties[j].state, name: data.counties[j].name }));
   const x = d3.scaleLinear().domain([0, 75]).range([m.l, W - m.r]);
   const y = d3.scaleLinear().domain([0, d3.max(pts, d => d.h) * 1.08]).range([H - m.b, m.t]).nice();
@@ -602,7 +602,7 @@ function trees(data, animate) {
   svg.append("text").attr("class", "label muted").attr("x", W - m.r).attr("y", H - 6).attr("text-anchor", "end")
     .text("tree canopy cover");
   svg.append("text").attr("class", "label muted").attr("x", m.l).attr("y", m.t - 12)
-    .text(narrow ? "storm hit rate, 2020–2023" : "storm hit rate: share of storm periods that caused an outage, 2020–2023");
+    .text(narrow ? "storm hit rate, 2020–2025" : "storm hit rate: share of storm periods that caused an outage, 2020–2025");
   const stateColor = d => (d.state === "Missouri" ? "var(--mo)" : "var(--il)");
   const dotsSel = svg.selectAll("circle").data(pts).join("circle").attr("cx", d => x(d.p)).attr("cy", d => y(d.h))
     .attr("r", narrow ? 4 : 5.5).attr("stroke", "var(--surface)").attr("stroke-width", 1.2)

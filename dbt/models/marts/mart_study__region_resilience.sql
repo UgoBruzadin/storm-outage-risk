@@ -1,8 +1,9 @@
 -- Resilience scorecard: how each study-area region has fared, from its outage
--- history. Computed over a fixed history window (default 2020–2023) that
--- ends before the model's train/test years, so these can be model features
--- without leaking the answer. Change it with:
---   pixi run dbt build --vars '{history_start: "2020-01-01", history_end: "2026-01-01"}'
+-- history, over 2020–2025 (the years with full EAGLE-I coverage and weather).
+-- For display only: the model's history features come from
+-- mart_study__region_history_asof, which never looks past a row's own year.
+-- Change the window with:
+--   pixi run dbt build --vars '{history_start: "2020-01-01", history_end: "2024-01-01"}'
 --
 -- An "event" is a run of consecutive 6-hour blocks with >= 1% of customers
 -- out (gaps-and-islands: a new event starts whenever the previous block
@@ -20,7 +21,7 @@
 -- Blocks with unknown outages (EAGLE-I down, blank or suspect counts) are skipped.
 
 {% set history_start = var('history_start', '2020-01-01') %}
-{% set history_end = var('history_end', '2024-01-01') %}
+{% set history_end = var('history_end', '2026-01-01') %}
 
 WITH blocks AS (
     SELECT

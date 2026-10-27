@@ -35,8 +35,8 @@ models:
 
   - name: mart_study__region_resilience
     description: >
-      Resilience scorecard per region from its outage history (default window
-      2020–2023, before the model's train/test years — safe to use as features).
+      Resilience scorecard per region from its outage history, 2020–2025 by default.
+      Display only; the model's history features come from mart_study__region_history_asof.
     columns:
       - name: region_fips
         data_tests: [unique, not_null]

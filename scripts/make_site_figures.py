@@ -2,10 +2,10 @@
 
   storm-replay.jpg    predicted risk vs actual outages, biggest 2025 storm block
   accuracy.jpg        per county, 2025: share of new outages caught, and actual vs expected
-  map.jpg             outage hours per customer per year, 2020–2023 scorecard
+  map.jpg             outage hours per customer per year, 2020–2025 scorecard
   results.jpg         onset PR-AUC of the model, its ablations and the comparisons
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
-  canopy-scatter.jpg  canopy vs storm hit rate (2020–2023 scorecard), one dot per region
+  canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
 
 Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
@@ -162,7 +162,7 @@ def burden_map(gdf):
     vmax = float(np.ceil(gdf.hours_out_per_customer.quantile(0.98)))
     county_map(ax, gdf, "hours_out_per_customer", BLUE, 0, vmax)
     colorbar(fig, cax, BLUE, 0, vmax, "Outage hours per customer per year")
-    fig.suptitle("Outage burden by county, 2020–2023", x=ax.get_position().x0, ha="left", fontsize=14,
+    fig.suptitle("Outage burden by county, 2020–2025", x=ax.get_position().x0, ha="left", fontsize=14,
                  fontweight="bold", y=0.97)
     save(fig, "map.jpg")
 
@@ -244,10 +244,10 @@ def canopy_scatter(gdf):
     ax.set_ylabel("Storm hit rate (%)")
     ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2,
               handletextpad=0.3, columnspacing=1.2)
-    fig.suptitle(f"More trees, not clearly more outages (r = {r:.2f})", x=0.125, y=1.0, ha="left",
+    fig.suptitle(f"Trees and outages: linked in Missouri, not in Illinois (r = {r:.2f})", x=0.125, y=1.0, ha="left",
                  fontsize=14, fontweight="bold")
     fig.text(0.01, -0.02, "One dot per county. Storm hit rate: share of blocks with a NOAA storm report that had "
-             "≥ 1% of customers out, 2020–2023.", color=MUTED, fontsize=8.5)
+             "≥ 1% of customers out, 2020–2025.", color=MUTED, fontsize=8.5)
     save(fig, "canopy-scatter.jpg")
 
 

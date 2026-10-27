@@ -97,7 +97,7 @@ the block started; the model's HRRR weather covers the block itself.
   only.
 - **One weather point per county.** Storm winds are local; a county-wide grid would be better.
 - **Canopy is county-wide** and correlated with rurality and the serving utility (its link
-  to outages runs opposite ways in Missouri and Illinois), so its effect is an association,
+  to outages comes almost entirely from Missouri's Ozark counties), so its effect is an association,
   not a cause.
 - **EAGLE-I coverage is patchier before 2020**, which limits how far back training can go.
 - **St. Louis City and County are one region**: EAGLE-I records the County's outages under
