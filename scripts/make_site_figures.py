@@ -6,12 +6,14 @@
   results.jpg         onset PR-AUC of the model, its ablations and the comparisons
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2023 scorecard), one dot per region
+  site/story/data.json  everything the scroll-through story draws (shapes, storm, results)
 
 Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
 Usage: pixi run python scripts/make_site_figures.py
 Then bump the ?v= on the image links in site/index.html, or browsers keep showing the old files.
 """
 import json
+import subprocess
 from pathlib import Path
 
 import duckdb
@@ -249,6 +251,103 @@ def canopy_scatter(gdf):
     save(fig, "canopy-scatter.jpg")
 
 
+def story_data(gdf, preds, meta):
+    """One JSON for site/story/: county shapes (lon/lat, simplified), the March 2025 storm,
+    the heartbeat example, headline results, per-county accuracy and canopy."""
+    shapes = gpd.read_parquet(ROOT / "data" / "raw" / "geo" / "regions_study.parquet")
+    # state outlines from the full-detail shapes: dissolving simplified counties leaves slivers
+    # along shared borders, which then draw as stray lines
+    outlines = shapes.dissolve("state").geometry.simplify(0.01, preserve_topology=True)
+    shapes["geometry"] = shapes.geometry.simplify(0.01, preserve_topology=True)
+
+    def rounded(geom):
+        g = json.loads(gpd.GeoSeries([geom]).to_json())["features"][0]["geometry"]
+        def walk(c):
+            return [walk(x) for x in c] if isinstance(c[0], list) else [round(c[0], 3), round(c[1], 3)]
+        g["coordinates"] = walk(g["coordinates"])
+        return g
+
+    order = shapes.region_fips.tolist()
+    counties = [{"id": r.region_fips, "name": r.region, "state": r.state, "geometry": rounded(r.geometry)}
+                for r in shapes.itertuples()]
+    states = [{"name": name, "geometry": rounded(geom)} for name, geom in outlines.items()]
+
+    # the storm: seven 6-hour periods across 14–15 March 2025, values in county order
+    blocks = pd.date_range("2025-03-14 06:00", "2025-03-15 18:00", freq="6h")
+    storm = []
+    for b in blocks:
+        now = preds[preds.block_start == b].set_index("region_fips").reindex(order)
+        storm.append({
+            "start": b.isoformat() + "Z",
+            "prob": [None if pd.isna(v) else round(float(v), 3) for v in now.prob],
+            "pct": [None if pd.isna(v) else round(float(v), 1) for v in now.peak_pct_out],
+            "out_mo": int(now[now.index.str.startswith("29")].peak_out.sum()),
+            "out_il": int(now[now.index.str.startswith("17")].peak_out.sum()),
+        })
+
+    con = duckdb.connect(str(ROOT / "data" / "warehouse.duckdb"), read_only=True)
+    heartbeat = con.sql("""
+        SELECT block_start, n_snapshots FROM intermediate.int_eaglei__blocks_6h
+        WHERE block_start BETWEEN '2024-05-21' AND '2024-05-27' ORDER BY 1
+    """).df()
+    n_periods = con.sql("SELECT count(*) FROM marts.mart_study__region_6h").fetchall()[0][0]
+    con.close()
+    tests = subprocess.run(["dbt", "ls", "--resource-type", "test", "--quiet"], cwd=ROOT, capture_output=True,
+                           text=True).stdout.split()
+
+    def scores(name):
+        d = pd.read_csv(RESULTS / f"benchmark_{name}.csv")
+        d["split"] = d["split"].str.split("(").str[0]
+        return d[(d.threshold_pct == 5) & (d.split == "time")]
+
+    official, final, wn = scores("official"), scores("final_2025"), scores("weathernext")
+    pick = lambda d, model, features: d[(d.model == model) & (d.features == features)].iloc[0]  # noqa: E731
+    best = pick(final, "xgboost", "weather+place+recent")
+    weather = pick(final, "xgboost", "weather")
+    compare = [
+        {"label": "Historical average", "value": pick(official, "climatology", "-").onset_pr_auc, "ours": False},
+        {"label": "NWS warnings", "value": pick(official, "nws_warnings", "-").onset_pr_auc, "ours": False},
+        {"label": "SPC outlook", "value": pick(official, "spc_outlook", "-").onset_pr_auc, "ours": False},
+        {"label": "Warnings + outlook", "value": pick(official, "official", "-").onset_pr_auc, "ours": False},
+        {"label": "weathernext's setup", "value": pick(wn, "xgboost", "weathernext").onset_pr_auc, "ours": False},
+        {"label": "Weather only", "value": weather.onset_pr_auc, "ours": True},
+        {"label": "This model", "value": best.onset_pr_auc, "ours": True},
+    ]
+
+    onsets = preds[preds.is_onset].assign(flagged=lambda d: d.prob >= meta["onset_alert_threshold"])
+    onsets["caught"] = onsets.flagged & (onsets.y == 1)
+    acc = onsets.groupby("region_fips").agg(new=("y", "sum"), expected=("prob", "sum"), caught=("caught", "sum"))
+    acc = acc.reindex(order)
+    canopy = gdf.set_index("region_fips").reindex(order)
+
+    data = {
+        "counties": counties, "states": states,
+        "storm": storm,
+        "heartbeat": [{"start": r.block_start.isoformat() + "Z", "n": int(r.n_snapshots)}
+                      for r in heartbeat.itertuples()],
+        "pipeline": {"periods": int(n_periods), "counties": len(order), "tests": len(tests)},
+        "persistence": {"all": round(float(best.pr_auc), 3), "new": round(float(best.onset_pr_auc), 3)},
+        "alerts": {"base_rate": round(float(best.onset_event_rate), 4),
+                   "hit_rate": round(float(best.onset_precision_top1), 3),
+                   "caught": round(float(best.onset_recall_top1), 3),
+                   "new_outages": int(onsets.y.sum())},
+        "compare": [dict(c, value=round(float(c["value"]), 3)) for c in compare],
+        "accuracy": {"min_events": MIN_EVENTS,
+                     "new": [int(v) for v in acc.new.fillna(0)],
+                     "caught": [int(v) for v in acc.caught.fillna(0)],
+                     "expected": [round(float(v), 2) for v in acc.expected.fillna(0)]},
+        "canopy": {"pct": [round(float(v), 1) for v in canopy.canopy_mean_pct],
+                   "hit": [round(float(v), 4) for v in canopy.storm_hit_rate],
+                   "r": {state: round(float(np.corrcoef(g.canopy_mean_pct, g.storm_hit_rate)[0, 1]), 2)
+                         for state, g in canopy.groupby("state")} | {
+                       "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)}},
+    }
+    out = ROOT / "site" / "story" / "data.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps(data, separators=(",", ":")))
+    return out
+
+
 if __name__ == "__main__":
     gdf = load()
     preds = pd.read_parquet(APP / "predictions.parquet")
@@ -259,4 +358,6 @@ if __name__ == "__main__":
     results()
     canopy_map(gdf)
     canopy_scatter(gdf)
-    print("wrote", ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))
+    story = story_data(gdf, preds, meta)
+    print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
+          ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))
