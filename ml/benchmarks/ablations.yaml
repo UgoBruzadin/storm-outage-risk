@@ -1,0 +1,32 @@
+# With five years of storms, do tree canopy and antecedent rain earn their place?
+# Decided on the 2024 validation year (and on unseen counties within 2020–2024), with
+# XGBoost only: canopy's effect differed between LightGBM and XGBoost before, so a small
+# effect here is XGBoost's, not a general one. 2025 is not loaded.
+name: ablations
+description: >
+  Canopy removed and antecedent rain added, against weather+place+recent, with XGBoost, at >= 5% and 10% of customers, on 2020–2023 → 2024 and unseen counties (2020–2024).
+  Ranked by onset PR-AUC.
+
+data:
+  threshold_pct: [5, 10]
+  years: [2020, 2021, 2022, 2023, 2024]
+  train_on: all
+
+rank_by: onset_pr_auc
+
+splits:
+  - kind: time
+    train_years: [2020, 2021, 2022, 2023]
+    test_years: [2024]
+  - kind: county
+    folds: 5
+
+features:
+  - weather+place+recent
+  - weather+place+recent-canopy
+  - weather+place+recent+wet_soil
+
+models:
+  - name: xgboost             # final settings (tune.yaml)
+    params: {n_estimators: 800, learning_rate: 0.03, max_depth: 4, min_child_weight: 20,
+             subsample: 0.8, colsample_bytree: 0.8}

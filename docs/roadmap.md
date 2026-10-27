@@ -6,7 +6,7 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 - [x] Repo layout, pixi environment, `.gitignore` (data and secrets stay out of git)
 - [x] Carry over the SQL pipeline, NOAA downloader, model playground
 - [x] GitHub repository
-- [ ] Pick a license (MIT is the usual choice for portfolio code)
+- [x] License: MIT
 
 ## ✅ 1 — dbt
 - [x] dbt Core 1.12 + dbt-duckdb; sources, seed, macros, staging/intermediate/marts
@@ -18,7 +18,8 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 - [x] Outages for 216 regions, 6-hour blocks, national heartbeat QC
 - [x] NOAA Storm Events (county + zone events) per block
 - [x] HRRR storm ingredients per region via Open-Meteo — 2024–2025
-- [ ] Backfill HRRR 2020–2023 (`pixi run fetch-weather 2020 2021 2022 2023`, ~3–4 days of the free quota) → train on more years
+- [x] Backfill HRRR 2020–2023 → train on 2020–2024, validate on 2024, test on 2025
+- [ ] Finish HRRR 2018–2019 (downloading)
 - [ ] True 24–48 h lead-time forecasts (Open-Meteo Previous Runs / Single Runs APIs, 2024+) for a lead-time evaluation
 
 ## ✅ 3 — County traits (geo features)

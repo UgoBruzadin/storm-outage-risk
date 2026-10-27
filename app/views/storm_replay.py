@@ -30,13 +30,15 @@ left, right = st.columns(2)
 with left:
     st.subheader("Predicted risk")
     # scale to this block's highest risk: probabilities stay low even in big storms (events are rare)
-    st.plotly_chart(choropleth(now, "prob", "probability", BLUE, (0, max(2 * alert, now.prob.max())), height=440,
-                               hover={"prob": ":.0%", "pct": ":.1f", "region_fips": False}),
+    st.plotly_chart(choropleth(now, "prob", "probability", BLUE, (0, max(2 * alert, now.prob.max())), height=480,
+                               hover={"prob": ":.0%", "pct": ":.1f", "region_fips": False}, zoom=4.75,
+                               legend="bottom"),
                     width="stretch")
 with right:
     st.subheader("Actual peak % out")
-    st.plotly_chart(choropleth(now, "pct", "% customers out", ORANGE, (0, max(10, now.pct.max())), height=440,
-                               hover={"pct": ":.1f", "prob": ":.0%", "region_fips": False}),
+    st.plotly_chart(choropleth(now, "pct", "% customers out", ORANGE, (0, max(10, now.pct.max())), height=480,
+                               hover={"pct": ":.1f", "prob": ":.0%", "region_fips": False}, zoom=4.75,
+                               legend="bottom"),
                     width="stretch")
 
 # the storm's timeline across the whole study area: two measures, two charts (never a dual axis)

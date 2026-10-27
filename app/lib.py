@@ -97,8 +97,9 @@ def geojson():
     }
 
 
-def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520, zoom=4.8):
-    """A county map of one magnitude, single-hue ramp."""
+def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520, zoom=4.8,
+               legend="right"):
+    """A county map of one magnitude, single-hue ramp. legend="bottom" frees the width for narrow columns."""
     import plotly.express as px
 
     fig = px.choropleth_map(
@@ -110,5 +111,10 @@ def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, heig
         labels={value: label},
     )
     fig.update_traces(marker_line_width=0.5, marker_line_color=theme()["surface"])
-    fig.update_layout(coloraxis_colorbar=dict(title=label, thickness=10, len=0.6))
+    if legend == "bottom":
+        bar = dict(title=dict(text=label, side="top"), orientation="h", thickness=10, len=0.7,
+                   x=0.5, xanchor="center", y=-0.02, yanchor="top")
+    else:
+        bar = dict(title=label, thickness=10, len=0.6)
+    fig.update_layout(coloraxis_colorbar=bar)
     return style(fig, height=height)

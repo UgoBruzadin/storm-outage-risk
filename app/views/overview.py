@@ -9,8 +9,8 @@ st.title("⚡ Storm Outage Risk — Missouri & Illinois")
 st.markdown(
     "Which counties lose power when storms hit — and **why some places are hit much harder** "
     "by the same weather? A model trained on {train} predicts every 6-hour block of {test} for "
-    "{n} regions, from storm ingredients (wind, shear, instability, rain, ice) plus what we know "
-    "about each place (tree canopy, housing age, density, past resilience).".format(
+    "{n} regions, from storm ingredients (wind, shear, instability, rain, ice), what we know about "
+    "each place (size, tree canopy, housing age, density) and outages in the previous 24 hours.".format(
         train=m["train_year"], test=m["test_year"], n=m["n_regions"])
 )
 
@@ -38,7 +38,7 @@ st.plotly_chart(choropleth(df, value, label, BLUE, rng, height=600, zoom=5.4), w
 start = str(regions.history_start.iloc[0])[:4]
 end = int(str(regions.history_end.iloc[0])[:4]) - 1
 st.caption(
-    f"Outage hours per customer and storm hit rate come from {start}–{end} (before the model's years). "
+    f"Outage hours per customer and storm hit rate are the {start}–{end} scorecard (see Resilience scorecard). "
     "Storm hit rate = share of 6-hour blocks with a NOAA storm report in which ≥ 1% of customers lost power. "
     "St. Louis City and County are one region: EAGLE-I mixes their records in 2020–2024."
 )

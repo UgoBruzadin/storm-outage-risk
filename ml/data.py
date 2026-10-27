@@ -42,9 +42,9 @@ FEATURE_GROUPS = {
         "temp_min_c", "temp_mean_c", "hail_hours", "block_hour_utc", "day_of_week", "month",
         "wn_wind_x_precip", "wn_wind_squared", "shear_x_cape",
     ],
-    # rain before the block (wet ground); opt-in: no consistent gain (benchmarks/wet_soil.yaml)
+    # rain before the block (wet ground); opt-in: mixed across seeds (benchmarks/seeds_ablate.yaml)
     "wet_soil": ["precip_prev_72h_mm", "precip_prev_7d_mm", "wind_x_wet_soil"],
-    # the region's own track record, 2020–2023 (before the train/test years)
+    # the region's own track record over the 3 years before the row's year (as of Jan 1)
     "history": [
         "hist_hours_out_per_customer", "hist_events_per_year", "hist_storm_hit_rate",
         "hist_quiet_event_rate", "hist_repeat_7d_share",
@@ -86,17 +86,23 @@ def load(threshold_pct, years, db=DB):
         )
         SELECT
             m.*,
-            r.hours_out_per_customer  AS hist_hours_out_per_customer,
-            r.events_per_year         AS hist_events_per_year,
-            r.storm_hit_rate          AS hist_storm_hit_rate,
-            r.quiet_event_rate        AS hist_quiet_event_rate,
-            r.repeat_7d_share         AS hist_repeat_7d_share,
-            r.history_end
+            h.hours_out_per_customer  AS hist_hours_out_per_customer,
+            h.events_per_year         AS hist_events_per_year,
+            h.storm_hit_rate          AS hist_storm_hit_rate,
+            h.quiet_event_rate        AS hist_quiet_event_rate,
+            h.repeat_7d_share         AS hist_repeat_7d_share,
+            h.history_end
         FROM m
-        JOIN marts.mart_study__region_resilience AS r USING (region_fips)
+        -- the track record as of Jan 1 of the row's own year (3 years before it only)
+        LEFT JOIN marts.mart_study__region_history_asof AS h
+               ON h.region_fips = m.region_fips AND h.as_of_year = year(m.block_start)
         WHERE m.has_weather
           AND m.peak_pct_out IS NOT NULL
           AND year(m.block_start) BETWEEN {min(years)} AND {max(years)}
+        -- a fixed row order: DuckDB's parallel scan returns rows in varying order, and
+        -- row subsampling in the tree models depends on it, so without this the same
+        -- run gives slightly different scores (~1%) each time
+        ORDER BY m.region_fips, m.block_start
     """).df()
     con.close()
     df = add_derived(df)
@@ -104,13 +110,12 @@ def load(threshold_pct, years, db=DB):
 
 
 def check_history(df, features):
-    """History features summarize a fixed window of outages; using them on rows inside that
-    window would feed the model the outcomes it is asked to predict."""
+    """History features summarize past outages; a row's history must end before the row's own
+    year starts, or the model is fed the outcomes it is asked to predict."""
     if set(features) & set(FEATURE_GROUPS["history"]):
-        first = pd.Timestamp(f"{int(df['year'].min())}-01-01")
-        if (df["history_end"] > first).any():
-            raise ValueError(f"history features cover outages up to {df['history_end'].max():%Y-%m-%d}, after "
-                             f"the first year here ({first.year}): drop +history or move the history window")
+        year_start = pd.to_datetime(df["year"].astype(str) + "-01-01")
+        if (pd.to_datetime(df["history_end"]) > year_start).any():
+            raise ValueError("history features include outages from the row's own year or later")
 
 
 def label(df, threshold_pct):

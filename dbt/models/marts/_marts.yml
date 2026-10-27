@@ -22,6 +22,17 @@ models:
         description: True when all 6 hours of HRRR weather exist for the block.
         data_tests: [not_null]
 
+  - name: mart_study__region_history_asof
+    description: >
+      Each region's outage track record as of January 1 of each year, from the 3 years
+      before it only. The model's history features (joined on region and year).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [as_of_year, region_fips]
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "history_end = make_date(as_of_year, 1, 1)"
+
   - name: mart_study__region_resilience
     description: >
       Resilience scorecard per region from its outage history (default window

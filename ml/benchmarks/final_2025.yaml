@@ -1,0 +1,45 @@
+# The reported results: settings chosen on the 2024 validation year (tune.yaml), then
+# trained on 2020–2024 and tested once on 2025. Unseen counties: 5 folds by region over
+# 2020–2025. The dashboard's model (`final:`) comes from here.
+name: final_2025
+description: >
+  Final XGBoost settings (chosen on 2024) trained on 2020–2024, tested on 2025, and on
+  unseen counties, at >= 1%, 5% and 10% of customers. Ranked by onset PR-AUC.
+
+data:
+  threshold_pct: [1, 5, 10]
+  years: [2020, 2021, 2022, 2023, 2024, 2025]
+  train_on: all
+
+rank_by: onset_pr_auc
+
+splits:
+  - kind: time
+    train_years: [2020, 2021, 2022, 2023, 2024]
+    test_years: [2025]
+  - kind: county
+    folds: 5
+
+features:
+  - weather
+  - weather+place
+  - weather+place+history          # as-of history: not chosen on 2024, reported for reference
+  - weather+place+recent
+  - weather+place+recent+wet_soil  # antecedent rain: mixed across seeds (seeds_ablate.yaml), for reference
+  - weather+place+history+recent
+
+models:
+  - name: climatology
+  - name: xgboost
+    params: {n_estimators: 800, learning_rate: 0.03, max_depth: 4, min_child_weight: 20,
+             subsample: 0.8, colsample_bytree: 0.8}
+
+# what `pixi run export-app` trains for the dashboard: the 2024 validation winner. Settings
+# and features were checked over 5 seeds (seeds_tune.yaml, seeds_ablate.yaml): canopy stays
+# (removing it hurt with every seed in 3 of 4 settings); antecedent rain was mixed and left out.
+final:
+  model: xgboost
+  params: {n_estimators: 800, learning_rate: 0.03, max_depth: 4, min_child_weight: 20,
+           subsample: 0.8, colsample_bytree: 0.8}
+  features: weather+place+recent
+  threshold_pct: 5

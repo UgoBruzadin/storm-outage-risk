@@ -21,42 +21,45 @@ Streamlit dashboard packaged with Docker.
 
 ## Results
 
-PR-AUC on **new outages** (onset blocks), XGBoost with storm, place, history and
-recent-outage features. For rare events a model with no skill scores the event rate, shown
-for reference.
+PR-AUC on **new outages** (onset blocks), XGBoost (800 trees, depth 4) trained on
+2020–2024, with settings chosen on 2024 and checked over five seeds, tested once on 2025.
+For rare events a model with no skill scores the event rate, shown for reference.
 
-| Outage size | New-outage rate | Climatology baseline | Weather only | + place + history | + recent outages |
+| Outage size | New-outage rate | Climatology baseline | Weather only | + place | + recent outages |
 |---|---|---|---|---|---|
-| **Next year** (train 2024 → test 2025) | | | | | |
-| ≥ 1% | 1.97% | 0.028 | 0.094 | 0.118 | **0.134** |
-| ≥ 5% | 0.53% | 0.008 | 0.051 | 0.061 | **0.087** |
-| ≥ 10% | 0.26% | 0.004 | 0.030 | 0.041 | **0.062** |
-| **Unseen counties** (5-fold by county) | | | | | |
-| ≥ 1% | 1.86% | 0.018 | 0.125 | 0.148 | **0.156** |
-| ≥ 5% | 0.50% | 0.005 | 0.086 | 0.101 | **0.111** |
-| ≥ 10% | 0.25% | 0.002 | 0.064 | 0.077 | **0.091** |
+| **Next year** (train 2020–2024 → test 2025) | | | | | |
+| ≥ 1% | 1.97% | 0.032 | 0.116 | 0.145 | **0.153** |
+| ≥ 5% | 0.53% | 0.009 | 0.068 | 0.091 | **0.106** |
+| ≥ 10% | 0.26% | 0.005 | 0.047 | 0.062 | **0.083** |
+| **Unseen counties** (5-fold by county, 2020–2025) | | | | | |
+| ≥ 1% | 1.73% | 0.016 | 0.109 | 0.110 | **0.122** |
+| ≥ 5% | 0.46% | 0.004 | 0.070 | 0.071 | **0.086** |
+| ≥ 10% | 0.22% | 0.002 | 0.054 | 0.054 | **0.068** |
 
-Source: `ml/results/leaderboard_quick.md` (fixed hyperparameters). A 264-run grid search
-(`ml/results/leaderboard_full.md`) adds up to +0.01.
+Source: `ml/results/leaderboard_final_2025.md`; settings from `tune.yaml` and
+`seeds_tune.yaml`, feature choices from `seeds_ablate.yaml`.
 
 What the numbers say:
 
-- **Weather alone predicts new outages 10–30× better than chance**, and every added
-  feature group helps on both splits.
-- **Bigger outages are more predictable relative to their base rate.** Of the 1% of calm
-  county-blocks the model ranks riskiest, about 1 in 8 become a ≥ 5% outage (24× the base
-  rate), and together they catch about a quarter of all new ≥ 5% outages.
-- **On new outages the model is a weather model**: its top features are surface wind,
-  shear × instability and wind × rain. Scored on all blocks, the previous block's outage
-  outweighs everything else fifteenfold — persistence, not prediction.
-- **Model family barely matters.** Tuned XGBoost and LightGBM tie; XGBoost trains ~1.6× faster.
-- **Up-weighting rare events hurt** (`scale_pos_weight`), and shallow trees generalized
-  better to the next year.
-- **Tree canopy shows why the comparison spans several models.** With LightGBM alone,
-  removing canopy cost 12% (≥ 5%) and 22% (≥ 10%) of next-year PR-AUC — it looked like a
-  strong feature. The same ablation with XGBoost, and with models trained only on new
-  outages (`ml/results/leaderboard_onsets.md`), shrank the effect to a few percent and
-  sometimes reversed it. Across models, canopy's effect is weak and inconsistent.
+- **Weather alone predicts new outages 6–24× better than chance**, more so for bigger outages.
+- **More years of storms helped more than any feature**: training on 2020–2024 instead of
+  2024 alone lifted every score by 17–28% on the same 2025 test (`years_2020.yaml`,
+  `years_2024.yaml`).
+- **Place helps for known counties, not new ones**: +25–34% on the next year, about zero
+  on unseen counties.
+- **Of the 1% of calm county-blocks the model ranks riskiest, about 1 in 7 become a ≥ 5%
+  outage** (26× the base rate), catching 26% of all new ≥ 5% outages.
+- **On new outages the model is a weather model**: surface wind, minimum temperature,
+  county size and wind × rain lead. Scored on all blocks, the previous block's outage is
+  seven times any weather or place feature — persistence, not prediction.
+- **Tuning barely matters**: the top ten settings on 2024 sit within ±1.2%, about the
+  seed-to-seed spread. Up-weighting rare events hurt.
+- **Tree canopy: small but real, once tested properly.** With LightGBM on one year it looked
+  strong (−12 to −22% without it); with XGBoost it shrank or reversed. Over five seeds and
+  five years, removing it lowers the score with every seed in three of four settings
+  (−2 to −3%).
+- **Left out:** rain in the days before a storm (mixed across seeds) and as-of outage history
+  (no gain on the validation year).
 
 ### How it compares
 
@@ -67,33 +70,36 @@ the block started; the model's HRRR weather covers the block itself.
 | Approach | Known | PR-AUC |
 |---|---|---|
 | NWS warnings in force at block start (event rate per combination) | in advance | 0.024 |
-| SPC Day 1 outlook (event rate per risk level) | in advance | 0.032 |
-| Warnings + outlook | in advance | 0.035 |
-| weathernext-outage-forecasting's setup, reproduced on this data | during the block | 0.032 |
-| This model | during the block | 0.089 |
-| This model with warnings + outlook as features | during the block | **0.115** |
+| SPC Day 1 outlook (event rate per risk level) | in advance | 0.033 |
+| Warnings + outlook | in advance | 0.044 |
+| weathernext-outage-forecasting's setup, reproduced on this data | during the block | 0.053 |
+| This model | during the block | 0.106 |
+| This model with warnings + outlook as features | during the block | **0.122** |
 
-- **Official forecasts add to the model**: +29% next year, +14% on unseen counties.
+- **The model scores 2.4× the official forecasts** and gains another 15% (16% on unseen
+  counties) when given them as inputs.
 - **Warnings are counted only if in force at the block's start.** Counting any warning that
-  touched the block nearly doubled their score (0.044), because most severe thunderstorm and
+  touched the block nearly doubled their score, because most severe thunderstorm and
   tornado warnings are issued as the storm, and often the outage, arrives.
 - **Not a fair race yet**: the model sees the block's weather, the forecasts didn't. Matching
   lead times needs weather forecasts issued before the block (roadmap).
 - The weathernext row reproduces that project's method (weather-only features, class-weighted
   boosted tree, 80/20 county-date hash split) with HRRR in place of WeatherNext. On its own
-  split it scores 0.072, and its precision at a 0.5 cut-off is 3%.
+  split it scores 0.059, and its precision at a 0.5 cut-off is 2%.
 
 ### Limitations
 
 - **Weather is short-range, not a 24–48 h forecast.** The HRRR archive stitches the first
   hours of each model run, which is close to observed weather. Scores are an upper bound
   for planning a day ahead.
-- **One test year.** The next-year split trains on 2024 and tests on 2025; weather for
-  2018–2023 extends this. No confidence intervals yet, so small differences (< 0.005)
-  may be noise, and the grid-search maxima were selected on the test year.
+- **One test year.** Settings were chosen on 2024 and 2025 was scored once, but a single
+  test year gives no confidence interval; the seed spread (about ±1%) measures model noise
+  only.
 - **One weather point per county.** Storm winds are local; a county-wide grid would be better.
-- **Canopy is county-wide** and correlated with rurality and the serving utility, so its
-  effect is an association, not a cause.
+- **Canopy is county-wide** and correlated with rurality and the serving utility (its link
+  to outages runs opposite ways in Missouri and Illinois), so its effect is an association,
+  not a cause.
+- **EAGLE-I coverage is patchier before 2020**, which limits how far back training can go.
 - **St. Louis City and County are one region**: EAGLE-I records the County's outages under
   the City's code from mid-2020 to 2024.
 
@@ -102,7 +108,7 @@ the block started; the model's HRRR weather covers the block itself.
 ```
 ingest/ (Python)          dbt/ (SQL on DuckDB)                    ml/ (Python)                 app/
 EAGLE-I, HRRR,     ──►  staging → intermediate → marts   ──►  benchmark suite (MLflow)   ──►  Streamlit
-storm reports,          57 tests; 3.5M-row modeling table      YAML configs, 3 splits,        (Docker)
+storm reports,          47 tests; 3.5M-row modeling table      YAML configs, 3 splits,        (Docker)
 canopy, Census          + resilience scorecard                  onset + all-block metrics
 ```
 

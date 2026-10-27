@@ -6,14 +6,14 @@ m = meta()
 results = table("metrics")
 importance = table("importance")
 t = theme()
-BASELINES = {"prior", "climatology"}
-SPLITS = {"time": "Next year (train 2024 → test 2025)", "county": "Unseen counties (5-fold by region)",
+BASELINES = {"prior", "climatology", "nws_warnings", "spc_outlook", "official"}
+SPLITS = {"time": "Next year (test 2025)", "county": "Unseen counties (5-fold by region)",
           "random": "Random region-days (leaky, for comparison)"}
 
 st.title("📈 Model benchmark")
 st.markdown(
     "Predicting whether a region loses power at scale in a 6-hour block from HRRR storm ingredients plus "
-    "place, history and recent-outage features. Scores are **PR-AUC**; for rare events, no skill = the event "
+    "place and recent-outage features. Scores are **PR-AUC**; for rare events, no skill = the event "
     "rate, so **lift** "
     "(PR-AUC ÷ event rate) compares fairly. **New outages** = blocks whose previous 6 hours weren't already an "
     "event: outages persist, so scoring every block rewards \"it's out, it'll stay out\". "
@@ -22,7 +22,8 @@ st.markdown(
 
 benchmarks = sorted(results.benchmark.unique())
 c1, c2, c3, c4 = st.columns(4)
-bench = c1.segmented_control("Benchmark", benchmarks, default="quick" if "quick" in benchmarks else benchmarks[0])
+bench = c1.segmented_control("Benchmark", benchmarks,
+                             default="final_2025" if "final_2025" in benchmarks else benchmarks[0])
 res = results[results.benchmark == (bench or benchmarks[0])]
 sizes = sorted(res.threshold_pct.unique())
 size = c2.segmented_control("Outage size (% of customers)", sizes, default=5 if 5 in sizes else sizes[0],
@@ -50,7 +51,9 @@ for col, kind in zip(cols, [s for s in SPLITS if s in set(res.split_kind)], stri
                       xaxis_range=[0, best[p + "pr_auc"].max() * 1.2])   # room for the value labels
     col.plotly_chart(style(fig, height=320), width="stretch")
 st.caption("Gray bars are baselines: *prior* = the event rate for everyone; *climatology* = each region's "
-           "historical rate by month, no weather at all.")
+           "historical rate by month, no weather at all; *nws_warnings*, *spc_outlook*, *official* = the "
+           "historical rate for each combination of NWS warnings in force and SPC outlook risk level at the "
+           "block's start. Training years differ by benchmark: final_2025 trains on 2020–2024, quick on 2024.")
 
 st.subheader("Does knowing the place help?")
 family = m.get("model", "lightgbm")
@@ -66,8 +69,9 @@ for i, kind in enumerate([s for s in SPLITS if s in set(abl.split_kind)]):   # f
 fig.update_layout(barmode="group", yaxis_title=f"{family}: PR-AUC lift over chance", bargap=0.3)
 st.plotly_chart(style(fig, height=400), width="stretch")
 st.caption("Feature groups (ml/data.py): weather = storm ingredients; place = size, density, housing age, tree "
-           "canopy; -canopy = the same without canopy; history = 2020–2023 resilience; recent = outages in the "
-           "previous 24 h.")
+           "canopy; -canopy = the same without canopy; history = the region's outage record over the 3 years before "
+           "the block's year; recent = outages in the previous 24 h; wet_soil = rain in the 72 h / 7 days before "
+           "the block; warnings, outlook = NWS warnings and SPC outlook at the block's start.")
 
 st.subheader("What the final model relies on")
 scope = "new outages" if target != "All blocks" else "all blocks"

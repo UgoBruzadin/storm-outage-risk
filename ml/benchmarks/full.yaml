@@ -63,8 +63,4 @@ models:
       max_leaf_nodes: [31, 63]
       l2_regularization: 1.0
 
-final:
-  model: lightgbm
-  params: {n_estimators: 800, learning_rate: 0.02, num_leaves: 15, min_child_samples: 50,
-           subsample: 0.8, subsample_freq: 1, colsample_bytree: 0.8}
-  features: weather+place+history+recent
+# The dashboard's model (`final:`) lives in ml/benchmarks/final_2025.yaml.

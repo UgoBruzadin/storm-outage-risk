@@ -56,6 +56,7 @@ strong { color: var(--ink); }
 figure { margin: 24px 0; }
 figure img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
 figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
+figure.narrow { max-width: 560px; margin-left: auto; margin-right: auto; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: .95rem; font-variant-numeric: tabular-nums; }
@@ -108,8 +109,8 @@ pre .c { color: var(--muted); }
   <div class="stats">
     <div class="stat"><b>216</b><span>counties modeled</span></div>
     <div class="stat"><b>3.5M</b><span>county × 6-hour blocks, 2014–2025</span></div>
-    <div class="stat"><b>24×</b><span>the base rate: hit rate of the model's top-1% alerts on new outages</span></div>
-    <div class="stat"><b>57</b><span>automated data tests in the pipeline</span></div>
+    <div class="stat"><b>26×</b><span>the base rate: hit rate of the model's top-1% alerts on new outages</span></div>
+    <div class="stat"><b>47</b><span>automated data tests in the pipeline</span></div>
   </div>
   <div class="abstract">
     <h2>Summary</h2>
@@ -117,14 +118,15 @@ pre .c { color: var(--muted); }
       Using public data for Missouri and Illinois (DOE EAGLE-I outage records, NOAA HRRR weather and storm reports,
       tree canopy, Census housing), I built a DuckDB + dbt pipeline of 3.5 million county × 6-hour blocks and a
       benchmark suite of baselines and gradient-boosted trees.</p>
-    <p>Scored only on <strong>new</strong> outages, in a year the model never saw, the riskiest 1% of county-blocks
-      turn into a ≥ 5% outage at <strong>24× the base rate</strong> and catch about a quarter of all such outages.
-      Weather drives the prediction; place adds a little. Official forecasts known at the start of each block (NWS
-      warnings in force, SPC outlooks) score well below the model, which sees the block's own weather, and add 29% to
-      it as inputs.</p>
+    <p>Trained on 2020–2024, with settings chosen on 2024 and tested once on 2025, the model scores new outages
+      only. Its riskiest 1% of county-blocks turn into a ≥ 5% outage at <strong>26× the base rate</strong> and catch
+      26% of all such outages. Weather drives the prediction; county size and tree canopy add a little. Official
+      forecasts known at the start of each block (NWS warnings in force, SPC outlooks) score well below the model,
+      which sees the block's own weather, and add 15% to it as inputs.</p>
     <p>Most of the work went into the traps between raw data and an honest number: missing rows that look like zeros,
-      a county filed under its neighbour's code, persistence that inflates the score fourfold, and a feature that
-      looked important in only one model. They are written up below, with the code that handles each one.</p>
+      a county filed under its neighbour's code, persistence that inflates the score fourfold, a feature that looked
+      important in only one model, and a pipeline that gave slightly different answers on every run. They are written
+      up below, with the code that handles each one.</p>
     <ul class="toc">
       <li><a href="#story">How it started</a></li>
       <li><a href="#findings">What I found</a></li>
@@ -152,9 +154,9 @@ pre .c { color: var(--muted); }
   time and by county, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
 
 <figure>
-  <img src="assets/storm-replay.jpg" alt="Two county maps side by side: predicted outage risk (blue) and actual share of customers out (orange) during the March 15, 2025 storm; the highest predicted risk lines up with the worst outages in southeastern Missouri." loading="lazy">
-  <figcaption>Storm replay, 15 March 2025 tornado outbreak — a year the model never saw. Left: predicted risk.
-    Right: actual peak share of customers out.</figcaption>
+  <img src="assets/storm-replay.jpg" alt="Two county maps of Missouri and Illinois for 15 March 2025, 00 to 06 UTC: predicted outage risk in blue, highest across south-central and eastern Missouri, and the actual peak share of customers out in orange, worst in southeastern Missouri." loading="lazy">
+  <figcaption>The biggest outage block of 2025, during the 14–15 March tornado outbreak. The model had never seen
+    2025; its highest risk falls on the band of Missouri counties that lost the most power.</figcaption>
 </figure>
 
 <h2 id="findings">What I found</h2>
@@ -164,60 +166,101 @@ pre .c { color: var(--muted); }
 
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Climatology</th><th>Weather only</th><th>+ place + history</th><th>+ recent outages</th></tr></thead>
+  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Climatology</th><th>Weather only</th><th>+ place</th><th>+ recent outages</th></tr></thead>
   <tbody>
-    <tr class="group"><td colspan="6">Next year — trained on 2024, tested on 2025</td></tr>
-    <tr><td>≥ 1% of customers</td><td>1.97%</td><td>0.028</td><td>0.094</td><td>0.118</td><td class="best">0.134</td></tr>
-    <tr><td>≥ 5%</td><td>0.53%</td><td>0.008</td><td>0.051</td><td>0.061</td><td class="best">0.087</td></tr>
-    <tr><td>≥ 10%</td><td>0.26%</td><td>0.004</td><td>0.030</td><td>0.041</td><td class="best">0.062</td></tr>
-    <tr class="group"><td colspan="6">Unseen counties — 5-fold split by county</td></tr>
-    <tr><td>≥ 1%</td><td>1.86%</td><td>0.018</td><td>0.125</td><td>0.148</td><td class="best">0.156</td></tr>
-    <tr><td>≥ 5%</td><td>0.50%</td><td>0.005</td><td>0.086</td><td>0.101</td><td class="best">0.111</td></tr>
-    <tr><td>≥ 10%</td><td>0.25%</td><td>0.002</td><td>0.064</td><td>0.077</td><td class="best">0.091</td></tr>
+    <tr class="group"><td colspan="6">Next year — trained on 2020–2024, tested on 2025</td></tr>
+    <tr><td>≥ 1% of customers</td><td>1.97%</td><td>0.032</td><td>0.116</td><td>0.145</td><td class="best">0.153</td></tr>
+    <tr><td>≥ 5%</td><td>0.53%</td><td>0.009</td><td>0.068</td><td>0.091</td><td class="best">0.106</td></tr>
+    <tr><td>≥ 10%</td><td>0.26%</td><td>0.005</td><td>0.047</td><td>0.062</td><td class="best">0.083</td></tr>
+    <tr class="group"><td colspan="6">Unseen counties — 5-fold split by county, 2020–2025</td></tr>
+    <tr><td>≥ 1%</td><td>1.73%</td><td>0.016</td><td>0.109</td><td>0.110</td><td class="best">0.122</td></tr>
+    <tr><td>≥ 5%</td><td>0.46%</td><td>0.004</td><td>0.070</td><td>0.071</td><td class="best">0.086</td></tr>
+    <tr><td>≥ 10%</td><td>0.22%</td><td>0.002</td><td>0.054</td><td>0.054</td><td class="best">0.068</td></tr>
   </tbody>
 </table>
 </div>
+<p class="fix">XGBoost, 800 trees of depth 4. Settings were chosen on 2024 (trained on 2020–2023) and checked over
+  five random seeds; 2025 was scored once.</p>
 
 <ul>
-  <li><strong>Weather predicts new outages 10–30× better than chance</strong>, and every feature group adds to it on
-    both splits.</li>
-  <li><strong>On new outages the model is a weather model.</strong> Its top features are surface wind, wind shear ×
-    instability, and wind × rain. Scored on all blocks instead, the previous block's outage outweighs everything else
-    fifteenfold — that is persistence, not prediction.</li>
+  <li><strong>Weather predicts new outages 6–24× better than chance</strong>, and the advantage grows with outage
+    size.</li>
+  <li><strong>More years of storms helped more than any feature.</strong> Training on 2020–2024 instead of 2024 alone
+    lifted every score by 17–28% on the same 2025 test.</li>
+  <li><strong>Place helps for known counties, not new ones.</strong> County size, housing and canopy add 25–34% on the
+    next year but almost nothing on unseen counties: the model learns which counties are fragile more than why.</li>
+  <li><strong>On new outages the model is a weather model.</strong> Its top features are surface wind, the block's
+    minimum temperature (ice and cold-season storms), county size and wind × rain. Scored on all blocks instead, the
+    previous block's outage is the top feature, seven times any weather or place feature: persistence, not
+    prediction.</li>
   <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
-    county-blocks the model ranks riskiest, about 1 in 8 become a ≥ 5% outage — 24× the base rate — and together they
-    catch about a quarter of all new ≥ 5% outages.</li>
-  <li><strong>The hard test is next year, not new places.</strong> Weather-only XGBoost scores 0.083 on unseen
-    counties and 0.084 on random region-days, but 0.056 on the following year. Storms differ from year to year more
-    than counties differ from each other.</li>
-  <li><strong>The algorithm barely matters.</strong> Tuned XGBoost and LightGBM tie (264-run grid search). Up-weighting
-    rare events hurt, and shallow trees generalized best to the next year.</li>
-  <li><strong>Tree canopy is why I compare across models.</strong> With LightGBM alone, canopy looked important:
-    removing it cost 12% (≥ 5%) and 22% (≥ 10%) of next-year PR-AUC. Repeating the same ablation with XGBoost, and
-    with models trained only on new outages, the effect shrank to a few percent and sometimes reversed. From one model
-    I would have called canopy a strong feature; across models it is weak and inconsistent. It is also correlated with
-    rurality and the serving utility, so even where it helps, it is an association, not a cause.</li>
+    county-blocks the model ranks riskiest, about 1 in 7 become a ≥ 5% outage (26× the base rate), and together they
+    catch 26% of all new ≥ 5% outages.</li>
+  <li><strong>Tuning barely matters.</strong> The top ten settings on 2024 sit within ±1.2% of each other, the same as
+    the spread across random seeds. Up-weighting rare events hurt.</li>
+  <li><strong>Tree canopy is why I compare across models and seeds.</strong> With LightGBM on one year of data,
+    removing canopy cost 12–22% of PR-AUC; with XGBoost the effect shrank or reversed. With five years and five seeds
+    it settled: removing canopy lowers the score with every seed in three of four settings, by 2–3%. A small, real
+    effect, and still an association, not a cause.</li>
+  <li><strong>Two ideas didn't make it.</strong> Rain in the days before a storm (wet ground uproots trees) helped in
+    some settings and hurt in others across seeds, and each county's outage history over the previous three years
+    added nothing on the validation year. Both are left out of the final model.</li>
 </ul>
 
+<h3>Where the trees are</h3>
 <div class="grid2">
   <figure>
-    <img src="assets/leaderboard.jpg" alt="Bar charts of PR-AUC on new outages by model: XGBoost and LightGBM near 0.09 (next year) and 0.11 (unseen counties), logistic regression lower, baselines near zero." loading="lazy">
-    <figcaption>Benchmark leaderboard: best run per model, baselines in gray.</figcaption>
+    <img src="assets/canopy-map.jpg" alt="Map of Missouri and Illinois counties shaded green by average tree canopy: the Ozark counties of southern Missouri are darkest, near 70%, while central Illinois farm counties such as Champaign are near 2%." loading="lazy">
+    <figcaption>Average tree canopy per county (USFS / NLCD 2021): Ozark forest near 70%, central Illinois farmland
+      near 2%.</figcaption>
   </figure>
   <figure>
-    <img src="assets/scorecard.jpg" alt="Table of counties with outage hours per customer, events per year, storm hit rate, and tree canopy." loading="lazy">
-    <figcaption>Resilience scorecard: how often a reported storm turns into an outage, county by county.</figcaption>
+    <img src="assets/canopy-scatter.jpg" alt="Scatter plot of tree canopy against storm hit rate, one dot per county, colored by state: no overall trend (r = 0.08), with Missouri counties rising with canopy and Illinois counties falling." loading="lazy">
+    <figcaption>Canopy against how often a reported storm becomes an outage. No overall link (r = 0.08), but
+      opposite ones within each state: +0.39 in Missouri, −0.25 in Illinois. Something that differs between the
+      states (utility, terrain, access for repair crews) matters more than the trees alone.</figcaption>
   </figure>
 </div>
 
+<h3>Where it works, and where it doesn't</h3>
 <figure>
-  <img src="assets/map.jpg" alt="Map of Missouri and Illinois counties shaded by outage hours per customer per year; the darkest counties are in northwest and southeast Missouri." loading="lazy">
-  <figcaption>Outage hours per customer per year, 2020–2023.</figcaption>
+  <img src="assets/accuracy.jpg" alt="Two county maps for 2025. Left: share of each county's new outages that the model flagged, mostly between 10% and 50%. Right: actual new outages divided by the number the model expected, orange where it underrated a county and blue where it overrated one; hatched counties had fewer than three new outages." loading="lazy">
+  <figcaption>Per county, 2025. Left: the share of new outages that fell in a block the model flagged. Right: actual
+    new outages against the number the model expected. Orange counties had more outages than expected. Most of
+    northern Illinois had too few outages to judge (hatched). The same view is on the dashboard's Accuracy tab.</figcaption>
 </figure>
+
+<h3>The resilience scorecard</h3>
+<figure class="narrow">
+  <img src="assets/map.jpg" alt="Map of Missouri and Illinois counties shaded by outage hours per customer per year, 2020 to 2023; the darkest counties are in northwest Missouri, the southeastern Missouri Ozarks and parts of central Illinois." loading="lazy">
+  <figcaption>Outage hours per customer per year, 2020–2023. The median county loses about 5 hours a year; the worst
+    lose more than 16.</figcaption>
+</figure>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>County</th><th>State</th><th>Customers</th><th>Outage h / customer / yr</th><th>Events / yr</th><th>Storm hit rate</th><th>Tree canopy</th></tr></thead>
+  <tbody>
+    <tr><td>Andrew</td><td>Missouri</td><td>3,774</td><td>20.2</td><td>40</td><td>7%</td><td>14%</td></tr>
+    <tr><td>Holt</td><td>Missouri</td><td>1,600</td><td>19.0</td><td>35</td><td>11%</td><td>9%</td></tr>
+    <tr><td>Putnam</td><td>Illinois</td><td>2,501</td><td>18.1</td><td>31</td><td>19%</td><td>17%</td></tr>
+    <tr><td>Shannon</td><td>Missouri</td><td>3,195</td><td>17.8</td><td>51</td><td>11%</td><td>68%</td></tr>
+    <tr><td>Reynolds</td><td>Missouri</td><td>4,024</td><td>17.4</td><td>80</td><td>32%</td><td>71%</td></tr>
+    <tr><td>Buchanan</td><td>Missouri</td><td>22,707</td><td>17.1</td><td>41</td><td>19%</td><td>18%</td></tr>
+    <tr><td>Edgar</td><td>Illinois</td><td>8,690</td><td>16.9</td><td>25</td><td>18%</td><td>7%</td></tr>
+    <tr><td>De Witt</td><td>Illinois</td><td>6,665</td><td>16.3</td><td>29</td><td>18%</td><td>5%</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="fix">The eight counties with the most outage hours per customer, 2020–2023. An event is a run of 6-hour
+  blocks with ≥ 1% of customers out; storm hit rate is the share of blocks with a NOAA storm report that became one.
+  All 216 counties are on the dashboard's Resilience scorecard.</p>
 
 <h2 id="compare">How it compares</h2>
 <p>A model is only worth something next to what people already use. Three comparisons, each scored the same way as
   everything else on this page: new outages of at least 5% of customers, PR-AUC, same data.</p>
+<figure>
+  <img src="assets/results.jpg" alt="Horizontal bar charts of PR-AUC on new outages of at least 5% of customers, for the next year and for unseen counties. Climatology, NWS warnings, the SPC outlook, warnings plus outlook and weathernext's setup score between 0.004 and 0.058; this project's weather-only model scores about 0.07 and the final model 0.106 next year and 0.086 on unseen counties." loading="lazy">
+</figure>
 
 <h3>Against the official forecasts</h3>
 <p>A utility watching a storm already has NWS warnings (severe thunderstorm, tornado, high wind, winter) and SPC's Day 1
@@ -231,23 +274,26 @@ pre .c { color: var(--muted); }
 <table>
   <thead><tr><th>New ≥ 5% outages</th><th>Known</th><th>Next year</th><th>Unseen counties</th><th>Top-1% hit rate, next year</th></tr></thead>
   <tbody>
-    <tr><td>Climatology (county × month)</td><td>in advance</td><td>0.008</td><td>0.005</td><td>1.8%</td></tr>
-    <tr><td>NWS warnings in force at block start</td><td>in advance</td><td>0.024</td><td>0.027</td><td>5.8%</td></tr>
-    <tr><td>SPC Day 1 outlook</td><td>in advance</td><td>0.032</td><td>0.031</td><td>8.6%</td></tr>
-    <tr><td>Warnings + outlook</td><td>in advance</td><td>0.035</td><td>0.050</td><td>7.0%</td></tr>
-    <tr><td>This model</td><td>during the block</td><td>0.089</td><td>0.104</td><td>12.7%</td></tr>
-    <tr><td>This model + warnings + outlook as features</td><td>during the block</td><td class="best">0.115</td><td class="best">0.119</td><td class="best">14.2%</td></tr>
+    <tr><td>Climatology (county × month)</td><td>in advance</td><td>0.009</td><td>0.004</td><td>1.7%</td></tr>
+    <tr><td>NWS warnings in force at block start</td><td>in advance</td><td>0.024</td><td>0.020</td><td>5.9%</td></tr>
+    <tr><td>SPC Day 1 outlook</td><td>in advance</td><td>0.033</td><td>0.023</td><td>8.6%</td></tr>
+    <tr><td>Warnings + outlook</td><td>in advance</td><td>0.044</td><td>0.039</td><td>9.2%</td></tr>
+    <tr><td>This model</td><td>during the block</td><td>0.106</td><td>0.086</td><td>13.9%</td></tr>
+    <tr><td>This model + warnings + outlook as features</td><td>during the block</td><td class="best">0.122</td><td class="best">0.100</td><td class="best">14.5%</td></tr>
   </tbody>
 </table>
 </div>
 <ul>
-  <li><strong>Official forecasts add to the model.</strong> Given the warnings and outlook as inputs, it gains 29% on
-    the next year and 14% on unseen counties. Forecasters know things a single HRRR point per county misses, such as
-    a high-wind or ice-storm warning issued hours ahead.</li>
-  <li><strong>Counting warnings honestly matters.</strong> Counting any warning that touched the block made warnings
-    look nearly twice as good (0.044). Of 1,445 new ≥ 5% outages in 2025, 335 had a severe thunderstorm or tornado
-    warning somewhere in the block but only 65 had one in force at its start; the rest were issued as the storm, and
-    often the outage, arrived.</li>
+  <li><strong>The model scores 2.4× the official forecasts</strong> on the next year and 2.2× on unseen counties, at
+    every outage size.</li>
+  <li><strong>Official forecasts still add to the model.</strong> Given the warnings and outlook as inputs, it gains
+    15% on the next year and 16% on unseen counties. Forecasters know things a single HRRR point per county misses,
+    such as a high-wind or ice-storm warning issued hours ahead. Trained on 2024 alone the gain was 29%: with more
+    years of storms, the model learns more of it on its own.</li>
+  <li><strong>Counting warnings honestly matters.</strong> A first version that counted any warning touching the
+    block made warnings look nearly twice as good. Of 1,445 new ≥ 5% outages in 2025, 335 had a severe thunderstorm
+    or tornado warning somewhere in the block but only 65 had one in force at its start; the rest were issued as the
+    storm, and often the outage, arrived.</li>
   <li><strong>The fair race is still open.</strong> Matching the outlook's lead time means feeding the model weather
     forecasts made hours before the block. That is the next step on the roadmap.</li>
 </ul>
@@ -260,17 +306,17 @@ pre .c { color: var(--muted); }
 <table>
   <thead><tr><th>New ≥ 5% outages, PR-AUC</th><th>Random days (their split)</th><th>Unseen counties</th><th>Next year</th></tr></thead>
   <tbody>
-    <tr><td>Their setup: boosted tree</td><td>0.072</td><td>0.072</td><td>0.032</td></tr>
-    <tr><td>Their setup: logistic regression</td><td>0.040</td><td>0.040</td><td>0.045</td></tr>
-    <tr><td>This model</td><td class="best">0.105</td><td class="best">0.103</td><td class="best">0.093</td></tr>
+    <tr><td>Their setup: boosted tree</td><td>0.059</td><td>0.058</td><td>0.053</td></tr>
+    <tr><td>Their setup: logistic regression</td><td>0.031</td><td>0.031</td><td>0.046</td></tr>
+    <tr><td>This model</td><td class="best">0.093</td><td class="best">0.086</td><td class="best">0.106</td></tr>
   </tbody>
 </table>
 </div>
 <ul>
-  <li><strong>The gap opens on the next year.</strong> The deeper, class-weighted tree loses more than half its score
-    on a year it never saw; the shallower model with place and history features holds up.</li>
-  <li><strong>Their headline metrics hide it.</strong> On random days their setup reports ROC-AUC 0.78 and, at a 0.5
-    cut-off, 60% recall, which reads well, but only 3% of those alerts are real (F1 0.06). Class weighting buys recall
+  <li><strong>1.5–2× their score on every split.</strong> Place and recent-outage features, and shallower trees
+    without class weights, make the difference; the gap is widest on the next year.</li>
+  <li><strong>Their headline metrics hide it.</strong> On random days their setup reports ROC-AUC 0.77 and, at a 0.5
+    cut-off, 60% recall, which reads well, but only 2% of those alerts are real (F1 0.04). Class weighting buys recall
     by flooding the alert list.</li>
   <li><strong>Not their model.</strong> They use Google's WeatherNext forecasts at 24–48 h lead in Alabama; this
     reproduces the method, not their inputs or region.</li>
@@ -373,16 +419,16 @@ values = values[values &lt;= 100]           <span class="c"># 254/255 = no data;
   <span class="tag">Modeling · ml/data.py</span>
   <h3>6. Persistence: a model that predicts "still out"</h3>
   <p>Outages last for hours, so the previous block's outage is a superb predictor of this one. With it, PR-AUC on all
-    blocks jumps to 0.39. Almost none of that is useful, because a utility already knows a county is out. Scored only
-    on <strong>onsets</strong> (blocks whose previous six hours were calm), the same model scores 0.093.</p>
+    blocks jumps to 0.42. Almost none of that is useful, because a utility already knows a county is out. Scored only
+    on <strong>onsets</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
 <pre><code>df["is_onset"] = df["prev_block_pct_out"].notna() &amp; (df["prev_block_pct_out"] &lt; threshold_pct)
 <span class="c"># every benchmark reports both: pr_auc (all blocks) and onset_pr_auc (new outages only)</span></code></pre>
   <div class="table-wrap">
   <table>
     <thead><tr><th>XGBoost, ≥ 5%, next year</th><th>All blocks</th><th>New outages only</th></tr></thead>
     <tbody>
-      <tr><td>Weather only</td><td>0.056</td><td>0.056</td></tr>
-      <tr><td>+ place, history, recent outages</td><td>0.391</td><td class="best">0.093</td></tr>
+      <tr><td>Weather only</td><td>0.062</td><td>0.068</td></tr>
+      <tr><td>+ place, recent outages</td><td>0.420</td><td class="best">0.106</td></tr>
     </tbody>
   </table>
   </div>
@@ -390,19 +436,23 @@ values = values[values &lt;= 100]           <span class="c"># 254/255 = no data;
 
 <div class="pitfall">
   <span class="tag">Evaluation · ml/splits.py</span>
-  <h3>7. The test set decides the story</h3>
-  <p>Splitting region-days at random puts neighbouring counties hit by the same storm on both sides. I expected that
-    to flatter the model most. It didn't: random days and unseen counties score the same. Predicting the
-    <em>next year</em> is what's hard, so that is the headline split.</p>
-<pre><code>if kind == "time":                               <span class="c"># train 2024, test 2025</span>
+  <h3>7. The hardest test changed when the data did</h3>
+  <p>Splitting region-days at random puts neighbouring counties hit by the same storm on both sides, which I expected
+    to flatter the model most. It didn't. Trained on 2024 alone, the <em>next year</em> was the hard test: 0.056 for
+    weather only, against 0.083 on unseen counties. With five training years that gap closed, and counties the model
+    has never seen became the hardest test. Year-to-year differences were mostly a shortage of storms; a new place
+    stays genuinely hard. Every result is reported on both.</p>
+<pre><code>if kind == "time":                               <span class="c"># train 2020–2024, test 2025</span>
     assert max(train_years) &lt; min(test_years)
 elif kind == "county":                           <span class="c"># no county in both train and test</span>
     GroupKFold(n_splits=folds).split(df, groups=df["region_fips"])</code></pre>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Weather-only XGBoost, ≥ 5%, new outages</th><th>Random days</th><th>Unseen counties</th><th>Next year</th></tr></thead>
+    <thead><tr><th>XGBoost, ≥ 5%, new outages, PR-AUC</th><th>Random days</th><th>Unseen counties</th><th>Next year</th></tr></thead>
     <tbody>
-      <tr><td>PR-AUC</td><td>0.084</td><td>0.083</td><td class="best">0.056</td></tr>
+      <tr><td>Weather only, trained on 2024</td><td>0.084</td><td>0.083</td><td>0.056</td></tr>
+      <tr><td>Weather only, trained on 2020–2024</td><td>0.069</td><td>0.070</td><td>0.068</td></tr>
+      <tr><td>Final model, trained on 2020–2024</td><td>0.093</td><td>0.086</td><td>0.106</td></tr>
     </tbody>
   </table>
   </div>
@@ -420,22 +470,40 @@ alert = np.zeros(len(p), dtype=bool); alert[order[:k]] = True</code></pre>
 </div>
 
 <div class="pitfall">
-  <span class="tag">Modeling · ml/benchmarks/onsets.yaml</span>
-  <h3>9. One model's feature importance is an anecdote</h3>
-  <p>With LightGBM, removing tree canopy cost 12–22% of next-year PR-AUC, which would have confirmed my starting
-    guess. The same ablation with XGBoost, and with models trained only on new outages, shrank or reversed the
-    effect. Feature ablations in this project are now always run across both tree models and both splits.</p>
+  <span class="tag">Modeling · ml/benchmarks/seeds_ablate.yaml</span>
+  <h3>9. One run's feature importance is an anecdote</h3>
+  <p>With LightGBM on one year of data, removing tree canopy cost 12–22% of next-year PR-AUC, which would have
+    confirmed my starting guess. XGBoost shrank or reversed the effect. Later, rain in the days before a storm looked
+    like a 2–4% gain in a single run. Both were then repeated with five random seeds: canopy's effect held (lower
+    score without it, with every seed, in three of four settings) and rain's didn't (better in some settings, worse
+    in others). Feature decisions are now made on the seed average, against the seed-to-seed spread.</p>
 <pre><code>features:
-  - weather+place
-  - weather+place-canopy        <span class="c"># same run, canopy removed</span>
-models: [lightgbm, xgboost]</code></pre>
+  - weather+place+recent
+  - weather+place+recent-canopy      <span class="c"># canopy removed</span>
+  - weather+place+recent+wet_soil    <span class="c"># antecedent rain added</span>
+models:
+  - name: xgboost
+    params: {..., random_state: [0, 1, 2, 3, 4]}   <span class="c"># every run, five times</span></code></pre>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Modeling · ml/data.py</span>
+  <h3>10. Same code, same data, different answer</h3>
+  <p>The same model on the same rows scored 0.1053, 0.1059 and 0.1065 in three runs. DuckDB scans tables in parallel
+    and returns rows in a different order each time; XGBoost samples 80% of rows per tree by position, so a different
+    order meant a slightly different model. The ~1% wobble was as large as the feature effects being judged. One line
+    fixed it, and every reported result was rerun.</p>
+<pre><code>SELECT ...
+FROM m
+WHERE m.has_weather AND m.peak_pct_out IS NOT NULL
+ORDER BY m.region_fips, m.block_start    <span class="c">-- a fixed order: row subsampling depends on it</span></code></pre>
 </div>
 
 <h2 id="built">How it's built</h2>
 <div class="pipeline">
   <div class="step"><b>Ingest</b><span>Python scripts download outages, HRRR storm ingredients, storm reports, NWS warnings, SPC outlooks, tree canopy rasters and Census tables.</span></div>
-  <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 57 tests, a 3.5M-row modeling table.</span></div>
-  <div class="step"><b>Model</b><span>A YAML-driven benchmark suite: baselines, logistic, XGBoost, LightGBM; three splits; MLflow tracking.</span></div>
+  <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 47 tests, a 3.5M-row modeling table.</span></div>
+  <div class="step"><b>Model</b><span>A YAML-driven benchmark suite: baselines, logistic, XGBoost, LightGBM; three splits; a validation year; seed repeats; MLflow tracking.</span></div>
   <div class="step"><b>Serve</b><span>Streamlit dashboard on precomputed Parquet, packaged with Docker; CI on GitHub Actions.</span></div>
 </div>
 <p>Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, LightGBM, MLflow, geopandas, rasterio, Streamlit, Plotly,
@@ -445,9 +513,10 @@ models: [lightgbm, xgboost]</code></pre>
 <div class="note">
   <p><strong>The weather is short-range, not a 24–48 hour forecast</strong> — the HRRR archive is close to observed
     weather, so the scores are an upper bound for planning a day ahead, and the model sees each block's weather while
-    the official forecasts it is compared with were issued before the block. The next-year split rests on one test year,
-    which was also used to choose model settings; there are no confidence intervals yet; and each county has a single
-    weather point. 2018–2023 weather is downloading, which will allow a separate validation year.</p>
+    the official forecasts it is compared with were issued before the block. The final test is a single year (2025);
+    the spread across seeds shows model noise (about ±1%) but not year-to-year variation, so there are no confidence
+    intervals yet. Each county has a single weather point. EAGLE-I coverage is patchier before 2020, which limits how
+    far back training can go; 2018–2019 weather is downloading.</p>
 </div>
 
 <footer>

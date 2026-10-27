@@ -19,7 +19,7 @@ A log of design choices and the reasons for them. A changed decision gets a new 
 | 2026-10 | **Unit = region x 6-hour block (00/06/12/18 UTC)**, label = peak % out ≥ 5% | 6 h smooths 15-min noise and matches crew planning |
 | 2026-10 | **Analysis area = all 216 MO + IL regions** (St. Louis City + County merged) | Place features need many places: with 7 regions, canopy is just a region ID |
 | 2026-10 | **Coverage QC from the national heartbeat** (≥ 12 of 24 snapshots in a block), not per-county row counts | A county's own row count can't tell "no outages" from "no data" |
-| 2026-10 | **Resilience metrics from 2020–2023 only**, used as features for 2024–2025 models | Known before the train/test years → no leakage; dbt var to change the window |
+| 2026-10 | **Resilience metrics from 2020–2023 only**, used as features for 2024–2025 models (superseded below by as-of history) | Known before the train/test years → no leakage; dbt var to change the window |
 | 2026-10 | **Storm Events are context, never model inputs** | Reports are written after the fact; using them would leak the answer |
 | 2026-10 | **Three splits reported**: time (2024 → 2025), held-out counties (5-fold by region), random region-days | Time = next year; county = new places (the honest test for place features); random = the common random-day evaluation, kept to show its optimism |
 | 2026-10 | **MLflow** with a local SQLite store (`data/mlflow.db`) | Current tracking tool, nothing to host; the summary CSV in `ml/results/` is the git-tracked record |
@@ -27,5 +27,12 @@ A log of design choices and the reasons for them. A changed decision gets a new 
 | 2026-10 | **Hugging Face, private by default** (`--public` to open up) | Publishing is opt-in; a private dataset works too (the app reads it with a DuckDB secret) |
 | 2026-10 | **Tried 8 states** (MO, IL + AR, IA, IN, KS, KY, TN), then **paused: back to MO + IL**, more years first. Not the whole country | More places and storms for the same storm climate. National was ruled out by the weather quota (~160k Open-Meteo calls for 2 years) and by regime mixing (hurricanes, wildfire shutoffs). None of the added states has independent cities, so St. Louis stays the only merged region |
 | 2026-10 | **The study area lives in one seed**, `dbt/seeds/study_states.csv`, read by dbt and the ingest scripts; models renamed `mo_il` → `study` | Adding a state is one CSV line + re-running fetch/build; no hard-coded state lists |
+| 2026-10 | **Train on 2020–2024, choose settings on 2024, test once on 2025** | Four more years of storms lifted onset PR-AUC 13–30%; a validation year removes the "tuned on the test year" weakness |
+| 2026-10 | **History features "as of" each year** (3 years before Jan 1 of the row's year), replacing the fixed 2020–2023 window for the model | A fixed window overlaps the new training years. The scorecard keeps 2020–2023 for display |
+| 2026-10 | **Final model without history features** | No gain on the 2024 validation year (0.080 vs 0.081 onset PR-AUC) |
+| 2026-10 | **Fixed row order in `ml/data.load`** | DuckDB returned rows in varying order and row subsampling depends on it: identical runs differed by ~1%, as much as the effects being judged. All reported configs were rerun |
+| 2026-10 | **Feature and setting decisions averaged over 5 seeds** (`seeds_tune.yaml`, `seeds_ablate.yaml`) | Single runs can't separate effects of ~1–2% from seed noise (±0.0007 onset PR-AUC) |
+| 2026-10 | **Final model keeps canopy, leaves out antecedent rain** (`wet_soil`) | Over 5 seeds on the 2024 validation year, removing canopy lowered onset PR-AUC with every seed in 3 of 4 settings (−2.3 to −2.8%). Rain helped on unseen counties at ≥ 5% (5 of 5 seeds) but hurt next year at ≥ 10% (1 of 5): mixed, not adopted |
+| 2026-10 | **Final XGBoost: 800 trees, learning rate 0.03, depth 4, min child weight 20** | Best on the 2024 validation year (`tune.yaml`); larger leaves helped across the grid |
 | open | **Per-region coverage gaps** (a utility drops out of / joins EAGLE-I for whole years) | Proposed: mark a region-year untracked when < 2% of its blocks have outages but a typical year has > 15% → label unknown. Thresholds to decide |
 | open | **License** | MIT is typical for portfolio code; data keeps its own terms |

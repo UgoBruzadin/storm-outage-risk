@@ -1,0 +1,29 @@
+# Choose XGBoost settings on a VALIDATION year: train 2020–2023, score 2024.
+# 2025 is not loaded at all, so the final test (final_2025.yaml) stays untouched.
+# History features are as of Jan 1 of each row's year (mart_study__region_history_asof).
+name: tune
+description: >
+  XGBoost grid on 2020–2023 → 2024 (validation), with and without as-of history,
+  >= 5% of customers. Ranked by onset PR-AUC.
+
+data:
+  threshold_pct: [5]
+  years: [2020, 2021, 2022, 2023, 2024]
+  train_on: all
+
+rank_by: onset_pr_auc
+
+splits:
+  - kind: time
+    train_years: [2020, 2021, 2022, 2023]
+    test_years: [2024]
+
+features:
+  - weather+place+recent
+  - weather+place+history+recent
+
+models:
+  - name: climatology
+  - name: xgboost
+    params: {n_estimators: [400, 800], learning_rate: [0.03, 0.06], max_depth: [4, 6, 8],
+             min_child_weight: [5, 20], subsample: 0.8, colsample_bytree: 0.8}

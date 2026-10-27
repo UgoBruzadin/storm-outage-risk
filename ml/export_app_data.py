@@ -4,13 +4,13 @@ The app never runs a model or touches the 11 GB warehouse — it reads these
 small Parquet files (data/app/), locally or from Hugging Face once published.
 
 Which model? The `final:` section of a benchmark config (default
-ml/benchmarks/quick.yaml), set to the benchmark winner. It's
+ml/benchmarks/final_2025.yaml), set to the validation-year winner. It's
 trained on every year before the config's last one and predicts that last year, so every
 prediction in the app is for a year the model never saw.
 
 Writes data/app/:
   regions.parquet      216 regions: name, GeoJSON shape (simplified), place + resilience metrics
-  predictions.parquet  test year, every region x 6-hour block: probability, actual outage, weather
+  predictions.parquet  test year, every region x 6-hour block: probability, actual outage, new-outage flag, weather
   storms.parquet       the biggest test-year outage blocks, for the storm-replay picker
   importance.parquet   permutation importance of the final model's features, on all blocks and on new outages
   metrics.parquet      every benchmark result in ml/results/benchmark_*.csv
@@ -44,7 +44,7 @@ def benchmark_thresholds(config):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=Path, default=ROOT / "ml" / "benchmarks" / "quick.yaml")
+    parser.add_argument("--config", type=Path, default=ROOT / "ml" / "benchmarks" / "final_2025.yaml")
     args = parser.parse_args()
     config = yaml.safe_load(args.config.read_text())
     final, years = config["final"], config["data"]["years"]
@@ -59,7 +59,7 @@ def main():
     model = models.build(final["model"], final.get("params")).fit(train[features], train["y"])
     test["prob"] = model.predict_proba(test[features])[:, 1]
 
-    keep = ["region_fips", "block_start", "prob", "y", "peak_out", "peak_pct_out",
+    keep = ["region_fips", "block_start", "prob", "y", "is_onset", "peak_out", "peak_pct_out",
             "gust_max_ms", "cape_max_jkg", "precip_sum_mm", "shear_0_6km_max_ms",
             "storm_reports", "storm_max_wind_kt", "storm_tornado"]
     test[keep].to_parquet(OUT / "predictions.parquet", index=False)
@@ -103,14 +103,21 @@ def main():
     if benchmarks:
         results = pd.concat(benchmarks, ignore_index=True)
         results["split_kind"] = results["split"].str.split("(").str[0]
+        # text columns can be blank in older files (e.g. git_commit): store them as strings
+        text = results.select_dtypes("object").columns
+        results[text] = results[text].astype("string")
         results.to_parquet(OUT / "metrics.parquet", index=False)
 
     # Alert level for the app: the top 1% of predicted risk. A fixed 0.5 would almost never
     # fire — events are rare (~1% of blocks), so probabilities stay low even before big storms.
     alert = float(test["prob"].quantile(0.99))
     alerts = test["prob"] >= alert
+    # the same top-1% rule on new-outage blocks only, as the onset_* benchmark metrics use
+    onset = test[test["is_onset"]]
+    onset_alert = float(onset["prob"].quantile(0.99))
     meta = {
         "alert_threshold": round(alert, 4),
+        "onset_alert_threshold": round(onset_alert, 4),
         "alert_precision": round(float(test.loc[alerts, "y"].mean()), 4),
         "alert_recall": round(float(alerts[test["y"] == 1].mean()), 4),
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),

@@ -8,34 +8,34 @@
 name: official
 description: >
   NWS warnings and SPC outlooks as baselines, and as features, against the model,
-  at >= 1%, 5% and 10% of customers, on 2024 → 2025 and unseen counties. Ranked by onset PR-AUC.
+  at >= 1%, 5% and 10% of customers, on 2020–2024 → 2025 and unseen counties. Ranked by onset PR-AUC.
 
 data:
   threshold_pct: [1, 5, 10]
-  years: [2024, 2025]
+  years: [2020, 2021, 2022, 2023, 2024, 2025]
   train_on: [all]
 
 rank_by: onset_pr_auc
 
 splits:
   - kind: time
-    train_years: [2024]
+    train_years: [2020, 2021, 2022, 2023, 2024]
     test_years: [2025]
   - kind: county
     folds: 5
 
 features:
   - warnings+outlook
-  - weather+place+history
-  - weather+place+history+warnings+outlook
-  - weather+place+history+recent
-  - weather+place+history+recent+warnings+outlook
+  - weather+place
+  - weather+place+warnings+outlook
+  - weather+place+recent
+  - weather+place+recent+warnings+outlook
 
 models:
   - name: climatology
   - name: nws_warnings
   - name: spc_outlook
   - name: official
-  - name: xgboost
-    params: {n_estimators: 400, learning_rate: 0.03, max_depth: 4, min_child_weight: 5,
+  - name: xgboost             # final settings (ml/benchmarks/final_2025.yaml)
+    params: {n_estimators: 800, learning_rate: 0.03, max_depth: 4, min_child_weight: 20,
              subsample: 0.8, colsample_bytree: 0.8}

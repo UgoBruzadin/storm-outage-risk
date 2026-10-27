@@ -137,10 +137,17 @@ this is an upper bound for a 24–48 h forecast.
 
 `canopy` = the two canopy features, used for ablations (`weather+place-canopy`).
 
-### `history` — the region's 2020–2023 track record
+### `history` — the region's track record as of each year
 
 `hist_hours_out_per_customer`, `hist_events_per_year`, `hist_storm_hit_rate`,
-`hist_quiet_event_rate`, `hist_repeat_7d_share` — the scorecard columns above.
+`hist_quiet_event_rate`, `hist_repeat_7d_share` — the scorecard measures above, but from
+`mart_study__region_history_asof`: computed from the **3 years before January 1 of the
+row's own year** (a 2024 row sees 2021–2023), joined on region and year. No row's history
+contains its own year or later, so history features work on any training years;
+`data.check_history` enforces it per row. EAGLE-I recorded fewer events before 2020
+(~10/year per region vs ~24 after), so early history values run low. On the 2024
+validation year, history did not improve the model (`tune.yaml`), and the final model
+leaves it out.
 
 ### `recent` — outages already known at the block's start
 
@@ -204,6 +211,12 @@ roadmap; until then, treat differences under ~0.005 PR-AUC as possibly noise.)
 |---|---|---|---|---|
 | `quick.yaml` | Which **model family** is best, and do features beyond weather help? | 66 | models: prior, climatology, logistic, LightGBM, XGBoost (one setting each); features: weather → +place+history → +recent; outage size 1/5/10% | trained on all blocks |
 | `onsets.yaml` | Should a model of **new outages** be **trained** on new outages only? And does **canopy** help? | 72 | `train_on`: all vs onsets; features incl. `weather+place` vs `weather+place-canopy`; outage size 1/5/10% | LightGBM only (+ climatology baseline) |
+| `tune.yaml` | Which **XGBoost settings**, and does **as-of history** help? Chosen on a **validation year** | 49 | grid: trees 400/800, learning rate 0.03/0.06, depth 4/6/8, min child weight 5/20; with and without history | train 2020–2023, validate 2024; 2025 not loaded |
+| `final_2025.yaml` | The **reported results**: the validation winner, tested once on 2025 | 36 | features: weather → +place → +history / +recent; outage size 1/5/10% | train 2020–2024, test 2025; county split over 2020–2025 |
+| `years_2020.yaml`, `years_2024.yaml` | Does **more training history** help? | 4 each | training years only | test 2025, ≥ 5% |
+| `ablations.yaml` | With five years, do **canopy** and **antecedent rain** help? | 12 | `-canopy`, `+wet_soil` vs weather+place+recent; XGBoost; outage size 5/10% | train 2020–2023, validate 2024; county split within 2020–2024 |
+| `seeds_tune.yaml` | Is the tuning winner real? The leading settings, **5 seeds each** | 30 | three settings × with/without history × seeds 0–4 | validate 2024 |
+| `seeds_ablate.yaml` | Are the canopy and rain effects bigger than **seed noise**? | 60 | `-canopy`, `+wet_soil` vs weather+place+recent × seeds 0–4; outage size 5/10% | validate 2024; county split within 2020–2024 |
 | `official.yaml` | Does the model beat, and add to, **NWS warnings and SPC outlooks**? | 54 | baselines: climatology, nws_warnings, spc_outlook, official; XGBoost on official forecasts only, on the model's features, and on both; outage size 1/5/10% | final XGBoost settings |
 | `weathernext.yaml` | How does **weathernext-outage-forecasting's setup** score on this data, under its split and under ours? | 9 | splits: random (theirs), county, time; their features, class-weighted boosted tree and logistic regression vs the final model | ≥ 5% |
 | `splits.yaml` | How much does the **choice of test set** change the score? | 9 | splits: time, county, random | final XGBoost settings, ≥ 5% |

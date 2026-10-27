@@ -12,8 +12,9 @@ Baselines come first — a model is only interesting if it beats them:
   spc_outlook   the training event rate for each SPC Day 1 categorical risk level
   official      both: warnings x outlook level
 
-Any model accepts class_weight: balanced, which weights events by (non-events / events)
-during training, as BigQuery ML's auto_class_weights does.
+Seeds default to 0; pass random_state (e.g. a list of seeds) to repeat a run and measure
+how much of a difference is noise. Any model accepts class_weight: balanced, which weights
+events by (non-events / events) during training, as BigQuery ML's auto_class_weights does.
 """
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
@@ -76,22 +77,22 @@ def _logistic(**params):
 
 
 def _hgb(**params):
-    return HistGradientBoostingClassifier(random_state=0, **params)
+    return HistGradientBoostingClassifier(**{"random_state": 0, **params})
 
 
 def _random_forest(**params):
     # sklearn forests handle NaN natively since 1.4
-    return RandomForestClassifier(random_state=0, n_jobs=-1, **params)
+    return RandomForestClassifier(**{"random_state": 0, "n_jobs": -1, **params})
 
 
 def _lightgbm(**params):
     from lightgbm import LGBMClassifier
-    return LGBMClassifier(random_state=0, verbose=-1, n_jobs=-1, **params)
+    return LGBMClassifier(**{"random_state": 0, "verbose": -1, "n_jobs": -1, **params})
 
 
 def _xgboost(**params):
     from xgboost import XGBClassifier
-    return XGBClassifier(random_state=0, n_jobs=-1, tree_method="hist", eval_metric="aucpr", **params)
+    return XGBClassifier(**{"random_state": 0, "n_jobs": -1, "tree_method": "hist", "eval_metric": "aucpr", **params})
 
 
 WARNINGS = ("warn_svr", "warn_tor", "warn_wind", "warn_winter")

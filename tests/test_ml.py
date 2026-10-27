@@ -168,8 +168,16 @@ def test_f1_at_50():
     assert s["precision_at_50"] == 0.5 and s["recall_at_50"] == 0.5 and s["f1_at_50"] == 0.5
 
 
-def test_history_features_refused_inside_the_history_window(frame):
-    df = frame.assign(history_end=pd.Timestamp("2025-01-01"))         # history covers 2024, a row year here
+def test_history_must_end_before_each_rows_own_year(frame):
+    features = data.resolve_features("weather+place+history")
+    as_of = frame.assign(history_end=pd.to_datetime(frame["year"].astype(str) + "-01-01"))
+    data.check_history(as_of, features)                                 # as-of history: fine
+    fixed = frame.assign(history_end=pd.Timestamp("2025-01-01"))        # covers 2024, a row year here
     with pytest.raises(ValueError, match="history"):
-        data.check_history(df, data.resolve_features("weather+place+history"))
-    data.check_history(df, data.resolve_features("weather+place"))     # no history features: fine
+        data.check_history(fixed, features)
+    data.check_history(fixed, data.resolve_features("weather+place"))   # no history features: fine
+
+
+def test_seed_can_be_set_from_the_config():
+    assert models.build("xgboost", {"random_state": 3}).get_params()["random_state"] == 3
+    assert models.build("xgboost", {}).get_params()["random_state"] == 0
