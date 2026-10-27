@@ -9,6 +9,7 @@
 
 Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
 Usage: pixi run python scripts/make_site_figures.py
+Then bump the ?v= on the image links in site/index.html, or browsers keep showing the old files.
 """
 import json
 from pathlib import Path
