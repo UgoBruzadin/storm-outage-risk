@@ -28,7 +28,7 @@
   --il: #3987e5; --mo: #d95926;
 }
 * { box-sizing: border-box; }
-html { scroll-snap-type: y proximity; -webkit-text-size-adjust: 100%; }
+html { scroll-snap-type: y mandatory; -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 18px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--accent); }
 
@@ -67,6 +67,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .steps button { width: 30px; height: 6px; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; padding: 0; }
 .steps button.on { background: var(--ink-2); }
 .when { font-variant-numeric: tabular-nums; font-weight: 600; }
+.mlegend { display: none; align-items: center; gap: 6px; font-size: .72rem; color: var(--muted); margin-top: 4px; }
+.mlegend i { flex: 1; height: 6px; border-radius: 3px; }
 .totals { color: var(--ink-2); font-size: .95rem; font-variant-numeric: tabular-nums; }
 
 /* pipeline */
@@ -115,14 +117,30 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 @media (max-width: 760px) {
   body { font-size: 16px; }
-  .maps, .waffles, .next { grid-template-columns: 1fr; }
+  h1, h2 { font-size: clamp(1.55rem, 7vw, 2rem); margin-bottom: 10px; }
+  .lead { font-size: .98rem; margin-bottom: 14px; }
+  .kicker { margin-bottom: 6px; }
+  .maps { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .map svg { max-height: none; }
+  .map h3 { font-size: .8rem; line-height: 1.25; margin-bottom: 4px; min-height: 2.5em; }
+  .map .legend { display: none; }
+  .mlegend { display: flex; }
+  .waffle svg { max-height: 19svh; width: auto; max-width: 100%; }
+  .waffle h3 b { font-size: 1.25rem; }
+  .next { gap: 8px; margin-bottom: 16px; }
+  .next div { font-size: .88rem; }
+  .controls { margin-top: 8px; gap: 8px 12px; }
+  .totals { font-size: .85rem; }
+  .src { padding: 9px 14px; }
+  .table-card { padding: 18px; }
+  .next div { padding: 10px 12px; }
+  .waffles, .next { grid-template-columns: 1fr; }
   .pipe { grid-template-columns: 1fr; }
   .flow { display: none; }
   .dots { display: none; }
   .slide { padding: 72px 16px 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-snap-type: none; }
   .src, .table-card { transition: none; }
   .flow path { animation: none; }
 }
@@ -275,11 +293,12 @@ function showTip(event, html) {
 }
 const hideTip = () => { tip.style.opacity = 0; };
 // run fn once, when el first scrolls into view (at once with reduced motion)
-function onEnter(el, fn, threshold = 0.4) {
+function onEnter(el, fn) {
   if (REDUCE) { fn(); return; }
+  // fires once the screen's top passes the middle of the display, however tall the screen is
   const io = new IntersectionObserver(entries => entries.forEach(e => {
     if (e.isIntersecting) { io.disconnect(); fn(); }
-  }), { threshold });
+  }), { rootMargin: "0px 0px -45% 0px", threshold: 0 });
   io.observe(el);
 }
 const repaint = [];
@@ -366,6 +385,15 @@ function storm(data, features, states, fc) {
     "probability of ≥ 5% out");
   legend(actual, 80, 445, 300, () => ramp("orange"), [0, maxO], [0, 20, 40, 60, 80].filter(t => t <= maxO), d => d + "%",
     "share of customers out");
+  // a compact legend under each map, shown on phones instead of the in-map one
+  const mlegends = [[pred, () => ramp("blue"), "0%", pct(maxP)], [actual, () => ramp("orange"), "0%", Math.round(maxO) + "%"]]
+    .map(([svg, colors, lo, hi]) => {
+      const box = d3.select(svg.node().parentNode).append("div").attr("class", "mlegend");
+      box.append("span").text(lo); const bar = box.append("i"); box.append("span").text(hi);
+      const paint = () => bar.style("background", `linear-gradient(to right, ${colors().join(",")})`);
+      paint(); return paint;
+    });
+  repaint.push(...mlegends);
   const buttons = d3.select(".steps").selectAll("button").data(data.storm).join("button").attr("type", "button")
     .attr("aria-label", d => when(d.start)).on("click", (e, d) => { stop(); show(data.storm.indexOf(d)); });
   let i = 0, timer = null;
@@ -401,7 +429,7 @@ function storm(data, features, states, fc) {
   repaint.push(() => show(i, false));
   if (REDUCE) { show(d3.maxIndex(data.storm, s => s.out_mo + s.out_il), false); return; }
   show(0, false);
-  onEnter(document.querySelector("#storm"), play, 0.3);
+  onEnter(document.querySelector("#storm"), play);
 }
 
 function pipeline(data) {
