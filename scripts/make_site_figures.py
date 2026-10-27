@@ -6,7 +6,7 @@
   results.jpg         onset PR-AUC of the model, its ablations and the comparisons
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2023 scorecard), one dot per region
-  site/story/data.json  everything the scroll-through story draws (shapes, storm, results)
+  site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
 
 Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
 Usage: pixi run python scripts/make_site_figures.py
@@ -252,7 +252,7 @@ def canopy_scatter(gdf):
 
 
 def story_data(gdf, preds, meta):
-    """One JSON for site/story/: county shapes (lon/lat, simplified), the March 2025 storm,
+    """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm,
     the heartbeat example, headline results, per-county accuracy and canopy."""
     shapes = gpd.read_parquet(ROOT / "data" / "raw" / "geo" / "regions_study.parquet")
     # state outlines from the full-detail shapes: dissolving simplified counties leaves slivers
@@ -342,7 +342,7 @@ def story_data(gdf, preds, meta):
                          for state, g in canopy.groupby("state")} | {
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)}},
     }
-    out = ROOT / "site" / "story" / "data.json"
+    out = ROOT / "site" / "data" / "story.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")))
     return out
