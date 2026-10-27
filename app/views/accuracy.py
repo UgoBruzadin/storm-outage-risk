@@ -36,7 +36,7 @@ order = shapes_order()
 cells = df.set_index("region_fips").reindex(order)
 d3_component("accuracy", {"new": [int(v) for v in cells.new_outages], "caught": [int(v) for v in cells.caught],
                           "expected": [round(float(v), 2) for v in cells.expected], "min_events": MIN_EVENTS},
-             height=600)
+             height=540)
 st.caption(
     "Outages caught: the share of each county's new outages that fell in a block the model flagged; darker = more. "
     "Expected vs actual: actual new outages ÷ the number the model expected (the sum of its probabilities); orange "

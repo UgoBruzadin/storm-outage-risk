@@ -4,7 +4,8 @@
   <button class="button on" data-view="caught" type="button">Outages caught</button>
   <button class="button" data-view="ratio" type="button">Expected vs actual</button>
 </div>
-<svg id="map" viewBox="0 0 900 560" role="img" aria-label="Model accuracy by county"></svg>
+<svg id="map" viewBox="0 0 900 480" role="img" aria-label="Model accuracy by county"
+  style="max-height:480px"></svg>
 <script>
 const judged = DATA.new.map(n => n >= DATA.min_events);
 const share = DATA.new.map((n, j) => (judged[j] ? DATA.caught[j] / n : null));
@@ -14,7 +15,7 @@ const svg = d3.select("#map");
 svg.append("defs").append("pattern").attr("id", "hatch").attr("width", 6).attr("height", 6)
   .attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)")
   .append("line").attr("y2", 6).attr("stroke", "var(--other)").attr("stroke-width", 1.5);
-const counties = countyMap(svg.append("g").attr("transform", "translate(170,0)"), 640, 550);
+const counties = countyMap(svg.append("g").attr("transform", "translate(230,6)"), 520, 468);
 const legendBox = svg.append("g");
 const views = {
   caught: { values: share, scale: d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, 1]),

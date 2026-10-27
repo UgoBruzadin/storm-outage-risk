@@ -22,6 +22,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .steps { display: flex; gap: 5px; }
 .steps button { width: 28px; height: 6px; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; padding: 0; }
 .steps button.on { background: var(--ink-2); }
+.steps button.peak { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent); }
 .when { font-weight: 600; font-variant-numeric: tabular-nums; }
 .totals { color: var(--ink-2); font-size: .9rem; font-variant-numeric: tabular-nums; }
 .tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink);
