@@ -14,7 +14,7 @@ st.markdown(
     "Left: what the model predicted from the weather and the place. Right: what actually happened."
 )
 
-# alert level = the top 1% of predicted risk in the test year (see ml/export_app_data.py)
+# alert level = the top 1% of predicted risk in the validation year, fixed before the test year (ml/export_app_data.py)
 alert = m.get("alert_threshold", 0.5)
 
 labels = {

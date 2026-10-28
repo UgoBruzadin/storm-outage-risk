@@ -132,16 +132,33 @@ def main():
 
     # Alert level for the app: the top 1% of predicted risk. A fixed 0.5 would almost never
     # fire — events are rare (~1% of blocks), so probabilities stay low even before big storms.
-    alert = float(test["prob"].quantile(0.99))
+    # The cutoff is fixed before the test year, as a live system would have to: the same model
+    # trained one year earlier and scored on the validation year (the year before the test year).
+    # Ranking the test year's own predictions instead would use a distribution only known afterwards.
+    val_year = max(years) - 1
+    val_train, val = df[df.year < val_year], df[df.year == val_year].copy()
+    val["prob"] = (models.build(final["model"], final.get("params"))
+                   .fit(val_train[features], val_train["y"]).predict_proba(val[features])[:, 1])
+    alert = float(val["prob"].quantile(0.99))
+    onset_alert = float(val.loc[val["is_onset"], "prob"].quantile(0.99))   # same rule on new-outage blocks
     alerts = test["prob"] >= alert
-    # the same top-1% rule on new-outage blocks only, as the onset_* benchmark metrics use
     onset = test[test["is_onset"]]
-    onset_alert = float(onset["prob"].quantile(0.99))
+    onset_alerts = onset["prob"] >= onset_alert
     meta = {
         "alert_threshold": round(alert, 4),
         "onset_alert_threshold": round(onset_alert, 4),
+        "alert_rule": f"top 1% of {val_year} validation predictions (model trained before {val_year})",
         "alert_precision": round(float(test.loc[alerts, "y"].mean()), 4),
         "alert_recall": round(float(alerts[test["y"] == 1].mean()), 4),
+        "alert_share": round(float(alerts.mean()), 4),
+        "onset_alert_precision": round(float(onset.loc[onset_alerts, "y"].mean()), 4),
+        "onset_alert_recall": round(float(onset_alerts[onset["y"] == 1].mean()), 4),
+        "onset_alert_share": round(float(onset_alerts.mean()), 4),
+        "onset_event_rate": round(float(onset["y"].mean()), 5),
+        "test_start": str(test["block_start"].min()),
+        "test_end": str(test["block_start"].max()),
+        "test_onset_blocks": int(len(onset)),
+        "test_onset_events": int(onset["y"].sum()),
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "config": str(args.config.relative_to(ROOT)) if args.config.is_absolute() else str(args.config),
         "model": final["model"],

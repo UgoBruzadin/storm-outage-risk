@@ -22,8 +22,9 @@ size = f"≥ {m['threshold_pct']:g}%"
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Counties", f"{len(regions)}", help="Missouri and Illinois; St. Louis City and County are one region.")
 c2.metric("Top alerts vs average", f"{hit_rate / base_rate:.0f}×",
-          help=f"The riskiest 1% of calm county-periods in {m['test_year']} became a {size} outage "
-               f"{hit_rate:.0%} of the time, against {base_rate:.1%} on average.")
+          help=f"Calm county-periods above the alert level (set on {m['test_year'] - 1}, before "
+               f"{m['test_year']} was scored) became a {size} outage {hit_rate:.0%} of the time, against "
+               f"{base_rate:.1%} on average.")
 c3.metric("New outages caught", f"{(flagged & (onsets.y == 1)).sum() / onsets.y.sum():.0%}",
           help=f"Share of all {int(onsets.y.sum()):,} new {size} outages in {m['test_year']} that fell in a "
                "flagged block.")

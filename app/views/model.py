@@ -86,7 +86,8 @@ st.plotly_chart(style(fig, height=460), width="stretch")
 st.caption(
     f"Final model ({m.get('config', 'benchmark config')}): {family}, features {m['features']}, trained on "
     f"{m['train_year']}, scored on {m['test_year']} ({m['test_blocks']:,} blocks, {m['test_events']:,} events). "
-    f"Alert level (top 1% risk): {m.get('alert_precision', float('nan')):.0%} of alerts were real events."
+    f"Alert level ({m.get('alert_rule', 'top 1% risk')}): {m.get('alert_precision', float('nan')):.0%} of "
+    f"alerts were real events."
 )
 
 with st.expander("All runs (table view)"):

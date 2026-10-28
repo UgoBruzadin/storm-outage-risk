@@ -541,9 +541,11 @@ function alerts(data) {
   document.querySelector("#alerts-title").textContent =
     `The model's top alerts were ${Math.round(a.hit_rate / a.base_rate)}× more likely to be real.`;
   document.querySelector("#w1-h").innerHTML = `<b>${nAvg} in 1,000</b>average county-periods had a major new outage`;
-  document.querySelector("#w2-h").innerHTML = `<b>${nModel} in 1,000</b>of the riskiest 1% the model flagged did`;
-  document.querySelector("#alerts-note").textContent = `Major = at least 5% of a county's customers. Those top alerts ` +
-    `caught ${pct(a.caught)} of all ${fmt(a.new_outages)} major new outages in 2025.`;
+  document.querySelector("#w2-h").innerHTML = `<b>${nModel} in 1,000</b>of the periods the model flagged did`;
+  document.querySelector("#alerts-note").textContent = `Major = at least 5% of a county's customers. The alert level was ` +
+    `set on 2024, before 2025 was scored, and flagged ${d3.format(".1%")(a.flagged)} of periods. Those alerts caught ` +
+    `${pct(a.caught)} of all ${fmt(a.new_outages)} major new outages in 2025 (1 January to 31 December, ` +
+    `${fmt(a.calm_periods)} county-periods with no outage under way).`;
   const grids = [["#waffle-avg", nAvg], ["#waffle-model", nModel]].map(([id, lit]) => {
     const svg = d3.select(id).attr("aria-label", `${lit} of 1,000 dots lit`);
     const order = d3.shuffle(d3.range(1000));

@@ -120,8 +120,8 @@ pre .c { color: var(--muted); }
   <div class="stats">
     <div class="stat"><b>216</b><span>counties covered across Missouri and Illinois</span></div>
     <div class="stat"><b>6 years</b><span>of storms and outages (2020–2025), in 6-hour steps</span></div>
-    <div class="stat"><b>26×</b><span>more likely than average: counties flagged as top-1% risk had a major outage
-      (5%+ of customers)</span></div>
+    <div class="stat"><b>25×</b><span>more likely than average: county-periods above an alert level set in advance
+      had a major new outage (5%+ of customers)</span></div>
     <div class="stat"><b>1 in 4</b><span>major new outages caught by those top alerts</span></div>
   </div>
   <div class="abstract">
@@ -133,9 +133,9 @@ pre .c { color: var(--muted); }
       that a significant share of customers lose power. It combines public weather data (wind, gusts, rain, ice, storm
       instability) with what each place is like (size, tree cover, housing age, density) and whether it already had
       outages in the past day.</p>
-    <p><strong>How well it works.</strong> I tested it on 2025, a year it never trained on. The 1% of county-periods it
-      ranked riskiest were 26× more likely than average to have a major new outage, and they caught about a quarter of
-      all of them. Weather does most of the work; local factors add a little. The model beats National Weather Service
+    <p><strong>How well it works.</strong> I tested it on 2025 (1 January to 31 December), a year it never trained on.
+      With an alert level fixed on 2024, it flagged about 1% of county-periods; those were 25× more likely than
+      average to have a major new outage, and they caught about a quarter of all of them. Weather does most of the work; local factors add a little. The model beats National Weather Service
       warnings and Storm Prediction Center outlooks used alone, and adding those forecasts to the model improves it by
       another 15%.</p>
     <p><strong>What it would be worth.</strong> If a utility had sent repair crews ahead of storms wherever the
@@ -217,7 +217,9 @@ pre .c { color: var(--muted); }
     already underway.</li>
   <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
     county-periods the model ranks riskiest, about 1 in 7 become a ≥ 5% outage (26× the average), and together they
-    catch 26% of all new ≥ 5% outages.</li>
+    catch 26% of all new ≥ 5% outages. Ranking a year after the fact isn't something a live system can do, so the
+    alert level is also fixed in advance, as the top 1% of a 2024 validation run: on 2025 it flags 1.1% of calm
+    county-periods, 13% of them become a ≥ 5% outage (25×), and they catch 27%.</li>
   <li><strong>Tuning barely matters.</strong> The top ten settings on 2024 sit within ±1.2% of each other, the same as
     the spread across random seeds. Up-weighting rare events hurt.</li>
   <li><strong>Tree canopy is why I compare across models and seeds.</strong> With LightGBM on one year of data,
@@ -247,7 +249,7 @@ pre .c { color: var(--muted); }
 
 <h3>Where it works, and where it doesn't</h3>
 <figure>
-  <img src="../assets/accuracy.jpg?v=3" alt="Two county maps for 2025. Left: share of each county's new outages that the model flagged, mostly between 10% and 50%. Right: actual new outages divided by the number the model expected, orange where it underrated a county and blue where it overrated one; hatched counties had fewer than three new outages." loading="lazy">
+  <img src="../assets/accuracy.jpg?v=4" alt="Two county maps for 2025. Left: share of each county's new outages that the model flagged, mostly between 10% and 50%. Right: actual new outages divided by the number the model expected, orange where it underrated a county and blue where it overrated one; hatched counties had fewer than three new outages." loading="lazy">
   <figcaption>Per county, 2025. Left: the share of new outages that fell in a block the model flagged. Right: actual
     new outages against the number the model expected. Orange counties had more outages than expected. Most of
     northern Illinois had too few outages to judge (hatched). The same view is on the dashboard's Accuracy tab.</figcaption>

@@ -48,7 +48,11 @@ What the numbers say:
 - **Place helps for known counties, not new ones**: +25–34% on the next year, about zero
   on unseen counties.
 - **Of the 1% of calm county-blocks the model ranks riskiest, about 1 in 7 become a ≥ 5%
-  outage** (26× the base rate), catching 26% of all new ≥ 5% outages.
+  outage** (26× the base rate), catching 26% of all new ≥ 5% outages. With the alert level
+  fixed in advance instead (the top 1% of a 2024 validation run), it flags 1.1% of calm
+  blocks in 2025, 13% become a ≥ 5% outage (25×), and they catch 27%.
+- **The test year is complete**: 1 January to 31 December 2025, 290,002 county-blocks,
+  271,927 of them with no outage under way, 1,445 new ≥ 5% outages.
 - **On new outages the model is a weather model**: surface wind, minimum temperature,
   county size and wind × rain lead. Scored on all blocks, the previous block's outage is
   seven times any weather or place feature — persistence, not prediction.

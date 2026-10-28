@@ -1,9 +1,11 @@
 """The benchmark machinery: if a split leaks or a metric is wrong, every comparison is wrong.
 
-Uses a small synthetic frame with every feature column, so no warehouse is needed.
+Uses a small synthetic frame with every feature column, so no warehouse is needed (the loader test
+builds a tiny DuckDB file of its own).
 """
 import importlib.util
 
+import duckdb
 import numpy as np
 import pandas as pd
 import pytest
@@ -181,3 +183,27 @@ def test_history_must_end_before_each_rows_own_year(frame):
 def test_seed_can_be_set_from_the_config():
     assert models.build("xgboost", {"random_state": 3}).get_params()["random_state"] == 3
     assert models.build("xgboost", {}).get_params()["random_state"] == 0
+
+
+def test_load_reads_only_the_years_asked_for(tmp_path):
+    """[2020, 2022] must not bring in 2021; recent-outage features still see the block before."""
+    db = tmp_path / "w.duckdb"
+    con = duckdb.connect(str(db))
+    con.sql("CREATE SCHEMA marts")
+    con.sql("""
+        CREATE TABLE marts.mart_study__region_6h AS
+        SELECT '29001' AS region_fips, t AS block_start, 1.0 * (year(t) - 2019) AS peak_pct_out, true AS has_weather,
+               1000 AS customers, 10.0 AS gust_max_ms, 1.0 AS precip_sum_mm, 5.0 AS shear_0_6km_max_ms,
+               100.0 AS cape_max_jkg, 8.0 AS wind10_max_ms, 0.0 AS precip_prev_72h_mm
+        FROM range(TIMESTAMP '2020-12-31 18:00', TIMESTAMP '2022-01-01 06:00', INTERVAL 6 HOUR) AS r(t)
+    """)
+    con.sql("""
+        CREATE TABLE marts.mart_study__region_history_asof (region_fips VARCHAR, as_of_year INT,
+            hours_out_per_customer DOUBLE, events_per_year DOUBLE, storm_hit_rate DOUBLE, quiet_event_rate DOUBLE,
+            repeat_7d_share DOUBLE, history_end TIMESTAMP)
+    """)
+    con.close()
+    df = data.load(5, [2020, 2022], db=db)
+    assert set(df["year"]) == {2020, 2022}
+    first_2022 = df[df["block_start"] == pd.Timestamp("2022-01-01")].iloc[0]
+    assert first_2022["prev_block_pct_out"] == 2.0          # the last 2021 block, outside the years asked for

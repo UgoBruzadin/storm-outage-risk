@@ -98,7 +98,8 @@ def load(threshold_pct, years, db=DB):
                ON h.region_fips = m.region_fips AND h.as_of_year = year(m.block_start)
         WHERE m.has_weather
           AND m.peak_pct_out IS NOT NULL
-          AND year(m.block_start) BETWEEN {min(years)} AND {max(years)}
+          -- the years asked for, not every year between the first and last
+          AND year(m.block_start) IN ({", ".join(str(int(y)) for y in years)})
         -- a fixed row order: DuckDB's parallel scan returns rows in varying order, and
         -- row subsampling in the tree models depends on it, so without this the same
         -- run gives slightly different scores (~1%) each time

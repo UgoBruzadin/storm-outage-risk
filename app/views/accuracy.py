@@ -11,8 +11,9 @@ size = f"≥ {m['threshold_pct']:g}%"
 st.title("🎯 Accuracy by county")
 st.markdown(
     f"How the model did in **{m['test_year']}**, a year it never saw, county by county. Scored on **new outages** "
-    f"only: blocks where {size} of customers lost power after six calm hours. The model flags the riskiest 1% of "
-    f"calm county-blocks (probability ≥ {m['onset_alert_threshold']:.1%})."
+    f"only: blocks where {size} of customers lost power after six calm hours. A block is flagged when its "
+    f"probability is at least {m['onset_alert_threshold']:.1%}: the top 1% of calm county-blocks in "
+    f"{m['test_year'] - 1}, fixed before {m['test_year']} was scored."
 )
 
 onsets = preds[preds["is_onset"]].assign(flagged=lambda d: d["prob"] >= m["onset_alert_threshold"])

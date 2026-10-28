@@ -21,7 +21,10 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | Utility coverage also varies **within** a state (Jefferson Co., MO ~0% outage-hours in 2018, 7% in 2019, 54% from 2020) | Untracked years look calm | History/resilience window and training start in 2020 |
 | **Regions go dark for whole years after 2020** too: Crockett & Obion, TN show outages in ~20–30% of blocks every year, then **0% in 2025**; Wolfe, KY shows 0% in 2020–2021, then ~30–40% | Spurious zeros — for Crockett/Obion in the **test year** | Open: per-region coverage flag (see decisions.md) |
 
-## NOAA Global Hourly (ISD)
+## NOAA Global Hourly (ISD): St. Louis airport station, legacy prototype only
+
+The first prototype (`legacy/`) used one airport station's hourly reports. The county
+model uses HRRR via Open-Meteo instead, so nothing in this section limits it.
 
 | Quirk | Fix |
 |---|---|
@@ -33,7 +36,7 @@ Everything surprising found in the raw data, and what the pipeline does about it
 | Some hours have two `FM-15` reports (e.g. 08:50 and 08:51) | `QUALIFY row_number() … = 1` keeps the earliest |
 | Gust (`OC1`) only reported when gusty — NULL in ~86% of hours | NULL here means "no gust": fall back to wind speed |
 | Thunder almost never in coded `MW1`, but present in the METAR text (`REM`: `TS`, `-TSRA`, `VCTS`, `TSB28E51`) | Regex on `REM` |
-| 2025 file ends **2025-08-27** | Grid ends where the shorter dataset ends (`least(...)`) |
+| The station's 2025 file ends **2025-08-27** | The legacy grid ends where the shorter dataset ends (`least(...)`). The county model's test year is complete: 2025-01-01 to 2025-12-31 |
 
 ## Other sources
 
