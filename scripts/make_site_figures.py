@@ -7,6 +7,8 @@
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
+  social.jpg          1200x630 link-preview card (og:image) for both pages: the March 2025 storm at its peak
+  storm.mp4           the March 2025 storm played period by period, predicted vs actual, for social posts
 
 Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
 Usage: pixi run python scripts/make_site_figures.py
@@ -348,6 +350,96 @@ def story_data(gdf, preds, meta):
     return out
 
 
+MARCH_STORM = pd.date_range("2025-03-14 06:00", "2025-03-15 18:00", freq="6h")     # the story page's storm
+
+
+class StormFrame:
+    """The March 2025 storm on a 1200x630 canvas: predicted risk beside what happened, one 6-hour period at a
+    time. Counties are drawn once; draw(prob, pct, ...) only recolors them, so the clip can tween between periods."""
+
+    def __init__(self, gdf, preds):
+        self.order = gdf.region_fips.tolist()
+        steps = [preds[preds.block_start == b].set_index("region_fips").reindex(self.order) for b in MARCH_STORM]
+        self.prob = np.array([s.prob.to_numpy(float) for s in steps])
+        self.pct = np.array([s.peak_pct_out.to_numpy(float) for s in steps])
+        out = lambda s, state: int(s[s.index.str.startswith(state)].peak_out.sum())     # noqa: E731
+        self.out = [(out(s, "29"), out(s, "17")) for s in steps]                     # (Missouri, Illinois)
+        self.vmax_p = max(0.1, np.nanmax(self.prob))
+        self.vmax_o = max(10, np.nanmax(self.pct))
+        self.peak = int(np.nanargmax(np.nansum(self.pct, axis=1)))
+
+        self.fig = plt.figure(figsize=(6, 3.15), dpi=200)
+        parts = gdf.reset_index(drop=True).explode(index_parts=False)     # one patch per polygon part
+        self.part_of = parts.index.to_numpy()                             # part -> county row
+        self.maps = []
+        for left, title, colors, vmax, step, label, fmt in [
+                (0.035, "Predicted risk", BLUE, self.vmax_p, 0.4, "probability of ≥ 5% out", lambda v: f"{v:.0%}"),
+                (0.52, "What happened", ORANGE, self.vmax_o, 40, "share of customers out", lambda v: f"{v:.0f}%")]:
+            ax = self.fig.add_axes([left, 0.13, 0.30, 0.6])         # the map fills ~0.30 of the width
+            parts.plot(ax=ax, facecolor=SURFACE, edgecolor=SURFACE, linewidth=0.3)
+            gdf.dissolve("state").boundary.plot(ax=ax, color=INK_2, linewidth=0.6)
+            minx, miny, maxx, maxy = gdf.total_bounds
+            ax.set_xlim(minx, maxx)
+            ax.set_ylim(miny, maxy)
+            ax.set_aspect("equal", anchor="W")
+            ax.set_axis_off()
+            self.fig.text(left, 0.765, title, fontsize=9, fontweight="bold")
+            cax = self.fig.add_axes([left + 0.315, 0.36, 0.12, 0.022])     # in the space right of the map
+            ticks = np.arange(0, vmax + 1e-9, step)
+            bar = colorbar(self.fig, cax, colors, 0, vmax, label, ticks, [fmt(t) for t in ticks])
+            bar.ax.tick_params(labelsize=5.5, length=2)
+            bar.ax.xaxis.label.set_fontsize(5.5)
+            bar.ax.xaxis.set_label_position("top")
+            self.maps.append((ax.collections[0], cmap(colors), plt.Normalize(0, vmax)))
+        self.fig.text(0.035, 0.94, "Which counties lose power when a storm hits?", fontsize=12.5, fontweight="bold",
+                      va="top")
+        self.subtitle = self.fig.text(0.035, 0.855, "", fontsize=7.5, color=INK_2, va="top")
+        self.totals = self.fig.text(0.035, 0.085, "", fontsize=7, color=INK_2, va="top")
+        self.fig.text(0.965, 0.085, "ugobruzadin.github.io/storm-outage-risk", fontsize=6.5, color=MUTED, ha="right",
+                      va="top")
+
+    def draw(self, k, t=0.0):
+        """Period k, blended a fraction t of the way toward period k + 1."""
+        nxt = min(k + 1, len(MARCH_STORM) - 1)
+        for (patches, ramp, norm), values in zip(self.maps, (self.prob, self.pct), strict=True):
+            v = (1 - t) * values[k] + t * values[nxt]
+            colors = ramp(norm(np.nan_to_num(v)))
+            colors[np.isnan(v)] = plt.matplotlib.colors.to_rgba("#e4e3dc")
+            patches.set_facecolor(colors[self.part_of])
+        step = nxt if t >= 0.5 else k
+        when = MARCH_STORM[step].tz_localize("UTC").tz_convert("America/Chicago")
+        self.subtitle.set_text(f"{when:%-d %B %Y, %-I %p} CT, the next 6 hours. Model trained on 2020–2024; "
+                               "it never saw this storm.")
+        mo, il = self.out[step]
+        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}")
+
+
+def social_card(gdf, preds):
+    frame = StormFrame(gdf, preds)
+    frame.draw(frame.peak)
+    frame.fig.savefig(OUT / "social.jpg", pil_kwargs={"quality": 90})      # no tight bbox: exactly 1200x630
+    plt.close(frame.fig)
+
+
+def storm_clip(gdf, preds, fps=30, hold=1.0, tween=0.5):
+    """MP4 (H.264, needs ffmpeg) for LinkedIn and Reddit: each period held `hold` seconds, `tween` seconds of
+    blending to the next, and the last period held three times as long."""
+    from matplotlib.animation import FFMpegWriter
+    frame = StormFrame(gdf, preds)
+    plan = []
+    for k in range(len(MARCH_STORM)):
+        plan += [(k, 0.0)] * int(fps * hold * (3 if k == len(MARCH_STORM) - 1 else 1))
+        if k < len(MARCH_STORM) - 1:
+            n = int(fps * tween)
+            plan += [(k, (i + 1) / (n + 1)) for i in range(n)]
+    writer = FFMpegWriter(fps=fps, codec="libx264", extra_args=["-pix_fmt", "yuv420p", "-crf", "23"])
+    with writer.saving(frame.fig, str(OUT / "storm.mp4"), dpi=200):
+        for k, t in plan:
+            frame.draw(k, t)
+            writer.grab_frame()
+    plt.close(frame.fig)
+
+
 if __name__ == "__main__":
     gdf = load()
     preds = pd.read_parquet(APP / "predictions.parquet")
@@ -358,6 +450,8 @@ if __name__ == "__main__":
     results()
     canopy_map(gdf)
     canopy_scatter(gdf)
+    social_card(gdf, preds)
+    storm_clip(gdf, preds)
     story = story_data(gdf, preds, meta)
     print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
           ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))
