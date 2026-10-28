@@ -7,6 +7,7 @@
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
+  value.jpg           what acting on each forecast was worth in 2025 (ml/value.py): relative value and dollars
   social.jpg          1200x630 link-preview card (og:image) for both pages: the March 2025 storm at its peak
   storm.mp4           the March 2025 storm played period by period, predicted vs actual, for social posts
 
@@ -217,6 +218,69 @@ def results():
     save(fig, "results.jpg")
 
 
+VALUE_FORECASTS = [  # (column in ml/results/value_*.csv, label), drawn top to bottom
+    ("perfect", "Perfect forecast"), ("model", "This model"), ("official", "Warnings + outlook"),
+    ("spc_outlook", "SPC outlook"), ("nws_warnings", "NWS warnings"), ("climatology", "Historical average")]
+
+
+def money(millions):
+    """−14.9 -> '−\\$14.9M' (escaped: matplotlib reads a bare $ as math)."""
+    if abs(millions) < 0.05:
+        return "\\$0"
+    return f"{'−' if millions < 0 else ''}\\${abs(millions):.1f}M"
+
+
+def value_figure():
+    """Left: relative economic value over the cost/loss ratio. Right: net savings in 2025 under the four
+    typical-customer-mix scenarios, a range per forecast with each scenario a dot."""
+    curves = pd.read_csv(RESULTS / "value_curves_2025.csv")
+    dollars = pd.read_csv(RESULTS / "value_2025.csv").query("mix == 'typical mix'")
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200, gridspec_kw={"width_ratios": [1, 1.15]})
+    styles = {"model": (BLUE[4], "-", 2.4), "official": (INK_2, "-", 1.6), "spc_outlook": (MUTED, "--", 1.4),
+              "nws_warnings": (HATCH, "-", 1.4)}
+    for col, label in VALUE_FORECASTS:
+        if col not in styles:
+            continue
+        color, ls, lw = styles[col]
+        a.plot(curves.cost_loss, curves[col].clip(lower=0), color=color, linestyle=ls, linewidth=lw,
+               label=f"{label}, best {curves[col].max():.2f}")
+    a.legend(frameon=False, fontsize=9.5, loc="upper right", labelcolor=INK)
+    a.set_xscale("log")
+    a.set_xticks([0.003, 0.01, 0.03, 0.1, 0.3], ["0.3%", "1%", "3%", "10%", "30%"])
+    a.set_ylim(0, 0.6)
+    a.set_xlabel("staging cost as a share of the loss it avoids")
+    a.set_title("Share of a perfect forecast's value", loc="left", fontsize=13, fontweight="bold")
+    a.grid(axis="y", color=LINE, linewidth=0.6)
+
+    y = np.arange(len(VALUE_FORECASTS))[::-1]
+    for yi, (col, _) in zip(y, VALUE_FORECASTS, strict=True):
+        v = dollars[col] / 1e6
+        color = BLUE[4] if col == "model" else (MUTED if col == "perfect" else HATCH)
+        b.plot([v.min(), v.max()], [yi, yi], color=color, linewidth=7, solid_capstyle="round", alpha=0.45)
+        b.scatter(v, [yi] * len(v), color=color, s=26, zorder=3, edgecolor=SURFACE, linewidth=1)
+        b.text(v.max() + 2, yi, f"{money(v.min())} to {money(v.max())}", va="center", fontsize=9, color=INK)
+    b.axvline(0, color=INK_2, linewidth=0.8)
+    b.set_yticks(y, [label for _, label in VALUE_FORECASTS], fontsize=10.5, color=INK)
+    b.set_xlim(-65, 140)
+    b.set_xlabel("net savings in 2025, $ millions (customer outage costs avoided − staging costs)")
+    b.set_title("Estimated savings from staging crews", loc="left", fontsize=13, fontweight="bold")
+    b.grid(axis="x", color=LINE, linewidth=0.6)
+    b.tick_params(axis="y", length=0)
+    for ax in (a, b):
+        ax.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+    b.spines["left"].set_visible(False)
+    fig.suptitle("What acting on each forecast was worth in 2025", x=0.02, ha="left", fontsize=15, fontweight="bold")
+    fig.text(0.02, -0.06, "Right: each dot is one scenario (a staged crew shortens outages by 10% or 25%; staging "
+             "costs \\$5,000 or \\$20,000 per county per 6 hours), typical customer mix, outage costs from "
+             "Berkeley Lab's ICE models.\nThe model sees each period's weather as it happened, so these are "
+             "best-case estimates.",
+             color=MUTED, fontsize=9)
+    fig.tight_layout()
+    save(fig, "value.jpg")
+
+
 def canopy_map(gdf):
     fig, (ax,), (cax,) = map_figure(1)
     county_map(ax, gdf, "canopy_mean_pct", GREEN, 0, 75)
@@ -344,6 +408,14 @@ def story_data(gdf, preds, meta):
                          for state, g in canopy.groupby("state")} | {
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)}},
     }
+    dollars = pd.read_csv(RESULTS / "value_2025.csv").query("mix == 'typical mix'")
+    data["value"] = {
+        "forecasts": [{"key": col, "label": label, "ours": col == "model",
+                       "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
+                      for col, label in VALUE_FORECASTS],
+        "scenarios": [{"cut": float(r.restoration_cut), "cost": int(r.staging_cost)} for r in dollars.itertuples()],
+        "outage_cost": round(float(dollars.outage_cost_2025.iloc[0]) / 1e6),
+    }
     out = ROOT / "site" / "data" / "story.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")))
@@ -450,6 +522,7 @@ if __name__ == "__main__":
     results()
     canopy_map(gdf)
     canopy_scatter(gdf)
+    value_figure()
     social_card(gdf, preds)
     storm_clip(gdf, preds)
     story = story_data(gdf, preds, meta)

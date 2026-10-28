@@ -18,6 +18,7 @@ build-legacy = { cmd = "python legacy/build_warehouse.py", description = "Old St
 benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark config: pixi run benchmark ml/benchmarks/quick.yaml [--dry-run]" }
 train = { cmd = "python -m ml.benchmark ml/benchmarks/quick.yaml", description = "The quick benchmark (baselines vs model families, ~minutes)" }
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
+value = { cmd = "python -m ml.value", description = "What acting on each forecast was worth in the test year (cost-loss value and dollar scenarios) -> ml/results/value_*.csv" }
 export-app = { cmd = "python -m ml.export_app_data", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
 app = { cmd = "streamlit run app/streamlit_app.py --server.address=localhost", description = "Run the dashboard locally (this computer only)" }
 publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }

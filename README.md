@@ -87,6 +87,36 @@ the block started; the model's HRRR weather covers the block itself.
   boosted tree, 80/20 county-date hash split) with HRRR in place of WeatherNext. On its own
   split it scores 0.059, and its precision at a 0.5 cut-off is 2%.
 
+### What it would be worth
+
+If a utility had staged repair crews wherever each forecast pointed in 2025, how much
+would it have saved? `pixi run value` (`ml/value.py`) scores every forecast on the same
+new outages, two ways:
+
+- **Relative economic value** (the cost-loss model used to value weather forecasts), which
+  needs no dollar figures: the share of a perfect forecast's savings captured. The model
+  reaches 0.52; warnings + outlook 0.34, the SPC outlook 0.31, NWS warnings 0.09.
+- **Dollars**: customer outage costs from Berkeley Lab's ICE models and a typical customer
+  mix, under four scenarios (a staged crew shortens outages by 10% or 25%; staging costs
+  $5,000 or $20,000 per county per 6 hours). Every forecast stages by the same rule, using
+  2020–2024 data only.
+
+| Net savings in 2025 | Range over the four scenarios |
+|---|---|
+| Perfect forecast | $11.6M to $99.5M |
+| **This model** | **$3.5M to $38.8M** |
+| Warnings + outlook | −$14.9M to −$0.6M |
+| SPC outlook | −$18.9M to −$1.4M |
+| NWS warnings | −$57.7M to $2.0M |
+
+The estimate: **about $4–39 million saved in 2025**, where acting on the official
+forecasts would mostly have lost money: they point at far more counties than lose power.
+At each forecast's best cutoff in hindsight, the model still saves about 3× as much.
+Almost all the avoided cost is businesses' (for households alone, staging never pays), the
+figures are customers' losses rather than the utility's, and like every score here they are
+a best case because the weather inputs are near-observed. Results:
+`ml/results/value_2025.csv`, `ml/results/value_curves_2025.csv`.
+
 ### Limitations
 
 - **Weather is short-range, not a 24–48 h forecast.** The HRRR archive stitches the first

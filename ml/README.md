@@ -28,6 +28,7 @@ the git commit).
 | `metrics.py` | PR-AUC, lift, ROC-AUC, Brier, log loss, precision/recall in the top 1% | add a metric |
 | `benchmark.py` | expands the config into runs, evaluates, logs, ranks | — |
 | `export_app_data.py` | trains `final:` and exports the dashboard's files | — |
+| `value.py` | what acting on each forecast was worth in the test year: relative economic value and dollar scenarios | change the scenarios (`MIXES`, `RESTORATION_CUT`, `STAGING_COST`) |
 
 ## Writing a config
 

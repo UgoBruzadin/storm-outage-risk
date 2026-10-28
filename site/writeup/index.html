@@ -138,6 +138,9 @@ pre .c { color: var(--muted); }
       all of them. Weather does most of the work; local factors add a little. The model beats National Weather Service
       warnings and Storm Prediction Center outlooks used alone, and adding those forecasts to the model improves it by
       another 15%.</p>
+    <p><strong>What it would be worth.</strong> If a utility had sent repair crews ahead of storms wherever the
+      model pointed in 2025, it would have avoided an estimated $4–39 million in outage costs, depending on
+      assumptions about crews. Acting on the official forecasts the same way would mostly have lost money.</p>
     <p><strong>One caveat.</strong> The model currently sees the weather as it actually happened, not as it was
       forecast, so these scores are the best case for planning ahead. Feeding it forecasts made hours in advance is
       the next step.</p>
@@ -149,6 +152,7 @@ pre .c { color: var(--muted); }
       <li><a href="#story">How it started</a></li>
       <li><a href="#findings">What I found</a></li>
       <li><a href="#compare">How it compares</a></li>
+      <li><a href="#value">What it would be worth</a></li>
       <li><a href="#pitfalls">Pitfalls, with code</a></li>
       <li><a href="#built">How it's built</a></li>
       <li><a href="#limits">Limitations</a></li>
@@ -352,6 +356,77 @@ pre .c { color: var(--muted); }
   project doesn't have, so their scores aren't comparable. What this project adds is a public-data, multi-utility,
   county-level version for everyday convective and winter storms, evaluated on a future year and on new outages
   only.</p>
+
+<h2 id="value">What it would be worth</h2>
+<p>A better score only matters if it changes a decision. The decision here: before a storm, a utility can send repair
+  crews to wait in a county. Staging costs money every time. It pays off only if that county then loses power,
+  because restoration starts sooner and customers are out for less time. So the question is: if a utility had staged
+  crews wherever each forecast pointed in 2025, how much would it have saved?</p>
+<figure>
+  <img src="../assets/value.jpg?v=1" alt="Left: share of a perfect forecast's value against the staging cost as a share of the loss it avoids. The model peaks at 0.52, warnings plus outlook at 0.34, the SPC outlook at 0.31 and NWS warnings at 0.09. Right: estimated net savings in 2025 under four scenarios: the model saves 3.5 to 38.8 million dollars, while warnings plus outlook, the SPC outlook, NWS warnings and the historical average range from a loss of 57.7 million to a gain of 2.0 million." loading="lazy">
+</figure>
+
+<h3>Without dollar figures</h3>
+<p>Forecasters value forecasts with the cost-loss model. Staging costs <em>C</em>; an outage you weren't ready for
+  costs <em>L</em> more than one you were. A forecast is worth acting on when its probability exceeds <em>C/L</em>.
+  Its <strong>relative value</strong> is the share of a perfect forecast's savings it captures, over the better of
+  "never stage" and "always stage": 1 is perfect, 0 is no better than either. The model reaches 0.52, against 0.34
+  for warnings and outlook together, 0.31 for the outlook and 0.09 for warnings, and it is ahead at every cost-loss
+  ratio (left panel). This part needs no assumptions about money.</p>
+
+<h3>In dollars</h3>
+<p>Turning value into dollars takes four inputs. Two come from published data, two are assumptions, so the
+  estimate is a range over four scenarios.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Input</th><th>Value</th><th>Source</th></tr></thead>
+  <tbody>
+    <tr><td>What an outage costs a customer, by length</td><td>home: about $6 for 1 hour, $14 for 8; small business:
+      about $630 and $3,500; large business: about $6,000 and $28,000</td><td>Berkeley Lab's Interruption Cost
+      Estimate (ICE) models</td></tr>
+    <tr><td>Customer mix</td><td>88% homes, 11% small and 1% large businesses</td><td>about the U.S. mix by
+      customer count (EIA)</td></tr>
+    <tr><td>How much a staged crew shortens an outage</td><td>10% or 25%</td><td>assumption</td></tr>
+    <tr><td>Cost of staging a crew in a county for 6 hours</td><td>$5,000 or $20,000</td><td>assumption</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Each outage's length and the number of customers affected come from EAGLE-I. Every forecast stages by the same
+  rule, using only 2020–2024 data: stage when its probability times the county's average avoidable loss per new
+  outage is at least the staging cost.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Net savings in 2025</th><th>Shortened 10%, $5k</th><th>10%, $20k</th><th>25%, $5k</th><th>25%, $20k</th></tr></thead>
+  <tbody>
+    <tr><td>Perfect forecast (the ceiling)</td><td>$33.3M</td><td>$11.6M</td><td>$99.5M</td><td>$77.8M</td></tr>
+    <tr><td>This model</td><td class="best">$8.6M</td><td class="best">$3.5M</td><td class="best">$38.8M</td><td class="best">$18.3M</td></tr>
+    <tr><td>Warnings + outlook</td><td>−$0.6M</td><td>−$2.4M</td><td>−$14.9M</td><td>−$12.7M</td></tr>
+    <tr><td>SPC outlook</td><td>−$1.4M</td><td>−$3.9M</td><td>−$18.9M</td><td>−$10.7M</td></tr>
+    <tr><td>NWS warnings</td><td>$2.0M</td><td>$0.0M</td><td>−$57.7M</td><td>−$26.8M</td></tr>
+    <tr><td>Historical average</td><td>−$1.5M</td><td>$0.0M</td><td>−$9.5M</td><td>−$2.5M</td></tr>
+  </tbody>
+</table>
+</div>
+<ul>
+  <li><strong>The estimate: $4–39 million saved in 2025</strong> across Missouri and Illinois, where acting on the
+    official forecasts would mostly have lost money. The new outages of 2025 cost customers an estimated $1.1
+    billion; the model's alerts would have avoided 0.3–3% of that.</li>
+  <li><strong>The official forecasts lose money because they point at too many places.</strong> In the 25%, $5k
+    scenario the model stages crews 2,383 times; warnings and outlook together would stage them 11,697 times and NWS
+    warnings 17,502 times, mostly in counties that kept their power.</li>
+  <li><strong>Checked generously.</strong> The official forecasts were fitted only on periods with no outage under way, so their
+    probabilities answer the same question as the model's. Given each forecast's best possible cutoff in
+    hindsight, chosen on 2025 itself, the model still saves about three times as much ($40.8M against $13.7M for
+    warnings and outlook, in the 25%, $5k scenario). The model's own rule comes within 10% of its best cutoff,
+    so its probabilities can be used as they are.</li>
+  <li><strong>Businesses carry the value.</strong> Counting only what outages cost households, staging never pays,
+    even with a perfect forecast: a home loses about $14 in an 8-hour outage. Almost all the avoided cost is
+    businesses', so the estimate moves with the customer mix.</li>
+  <li><strong>What the estimate is not.</strong> It counts customers' losses, not the utility's own costs. It covers
+    one year, and like every score here it is a best case, because the model sees each period's weather as it
+    happened. With forecast weather it would be lower.</li>
+</ul>
+<p>Code: <code>ml/value.py</code>; results in <code>ml/results/value_2025.csv</code>.</p>
 
 <h2 id="pitfalls">Pitfalls, with code</h2>
 <p>Each of these produced a plausible-looking wrong answer before it was caught. The fixes live in the dbt models

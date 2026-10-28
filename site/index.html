@@ -104,6 +104,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .axis path, .axis line { stroke: var(--line); }
 .gridline line { stroke: var(--grid); }
 .label { fill: var(--ink); font-size: 16px; }
+#savings .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
 .waffles { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
@@ -259,6 +260,18 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <svg id="scatter" role="img" aria-label="Tree canopy against storm hit rate, one dot per county"></svg>
 </section>
 
+<section class="slide" id="value" data-title="What it's worth">
+  <p class="kicker">What it's worth · an estimate for 2025</p>
+  <h2 id="value-title">Worth millions where the official forecasts lose money.</h2>
+  <p class="lead">Suppose a utility had sent repair crews to wait wherever each forecast pointed. Crews cost money every
+    time, and pay off when the power goes out, because it comes back sooner. Each dot is one scenario.</p>
+  <svg id="savings" role="img" aria-label="Estimated net savings in 2025 from staging crews on each forecast, four scenarios each"></svg>
+  <p class="note">Net savings: what outages cost homes and businesses (Berkeley Lab's outage-cost models) that staged
+    crews avoid, minus the cost of staging. Scenarios: crews shorten outages by 10% or 25%; staging costs $5,000 or
+    $20,000 per county per 6 hours. Every forecast stages by the same rule, using 2020–2024 data only. Best case: the
+    model sees each period's weather as it happened.</p>
+</section>
+
 <section class="slide" id="end" data-title="What's next">
   <p class="kicker">What's next</p>
   <h2>From replaying storms to forecasting them.</h2>
@@ -347,6 +360,7 @@ d3.json("data/story.json").then(data => {
     ["#heartbeat", animate => heartbeat(data, animate)],
     ["#persistence", animate => persistence(data, animate)],
     ["#bars", animate => compare(data, animate)],
+    ["#savings", animate => savings(data, animate)],
     ["#map-acc", animate => accuracy(data, features, states, fc, animate)],
     ["#scatter", animate => trees(data, animate)],
   ];
@@ -561,6 +575,56 @@ function compare(data, animate) {
   onEnter(document.querySelector("#compare"), () => {
     bars.transition().delay((d, i) => i * 220).duration(800).ease(d3.easeCubicOut).attr("width", d => x(d.value));
     vals.transition().delay((d, i) => i * 220).duration(800).ease(d3.easeCubicOut).attr("x", d => x(d.value) + 10).attr("opacity", 1);
+  });
+}
+
+function savings(data, animate) {
+  const still = REDUCE || !animate;
+  const v = data.value, W = widthOf("#savings"), narrow = W < 600, rowH = narrow ? 42 : 44;
+  const left = narrow ? 0 : 180, right = narrow ? 8 : 150;
+  const model = v.forecasts.find(f => f.ours).scenarios;
+  document.querySelector("#value-title").textContent =
+    `An estimated $${d3.min(model).toFixed(0)}–${d3.max(model).toFixed(0)} million saved in 2025.`;
+  const svg = d3.select("#savings").attr("viewBox", `0 0 ${W} ${36 + v.forecasts.length * rowH}`);
+  const all = v.forecasts.flatMap(f => f.scenarios);
+  const x = d3.scaleLinear().domain([Math.min(0, d3.min(all)), d3.max(all)]).nice().range([left, W - right]);
+  const money = m => (Math.abs(m) < 0.05 ? "$0" : `${m < 0 ? "−" : ""}$${Math.abs(m).toFixed(1)}M`);
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
+    .call(d3.axisBottom(x).ticks(narrow ? 4 : 7).tickSize(-(v.forecasts.length * rowH)).tickFormat(""))
+    .select(".domain").remove();
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
+    .call(d3.axisBottom(x).ticks(narrow ? 4 : 7).tickFormat(d => (d === 0 ? "0" : `${d < 0 ? "−" : ""}$${Math.abs(d)}M`)))
+    .select(".domain").remove();
+  svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 6).attr("y2", 16 + v.forecasts.length * rowH)
+    .attr("stroke", "var(--ink-2)");
+  const color = f => (f.ours ? "var(--accent)" : f.key === "perfect" ? "var(--muted)" : "var(--other)");
+  const g = svg.selectAll("g.row").data(v.forecasts).join("g").attr("class", "row")
+    .attr("transform", (d, i) => `translate(0,${(narrow ? 28 : 22) + i * rowH})`);
+  g.append("text").attr("class", d => "label" + (d.ours ? "" : " muted")).attr("x", narrow ? 0 : left - 14)
+    .attr("y", narrow ? -12 : 5).attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400))
+    .text(d => d.label);
+  const lo = d => d3.min(d.scenarios), hi = d => d3.max(d.scenarios);
+  const bands = g.append("rect").attr("y", -5).attr("height", 10).attr("rx", 5).attr("fill", color).attr("opacity", 0.35)
+    .attr("x", d => (still ? x(lo(d)) : x(0))).attr("width", d => (still ? x(hi(d)) - x(lo(d)) : 0));
+  const dotsSel = g.selectAll("circle").data(d => d.scenarios.map((m, k) => ({ m, k, f: d }))).join("circle")
+    .attr("r", narrow ? 4.5 : 5.5).attr("fill", d => color(d.f)).attr("stroke", "var(--surface)").attr("stroke-width", 1.5)
+    .attr("cx", d => (still ? x(d.m) : x(0)))
+    .on("pointermove", (e, d) => {
+      const s = v.scenarios[d.k];
+      showTip(e, `<b>${d.f.label}: ${money(d.m)}</b>crews shorten outages ${pct(s.cut)}, staging $${fmt(s.cost)} per county`);
+    }).on("pointerleave", hideTip);
+  const vals = g.append("text").attr("class", "label").attr("y", 5).attr("opacity", still ? 1 : 0)
+    .attr("x", d => (narrow ? W - right : x(hi(d)) + 12)).attr("text-anchor", narrow ? "end" : "start")
+    .attr("dy", narrow ? -17 : 0).style("font-size", narrow ? "13px" : null)
+    .text(d => `${money(lo(d))} to ${money(hi(d))}`);
+  if (still) return;
+  onEnter(document.querySelector("#value"), () => {
+    const delay = (d, i) => 300 + i * 250;
+    bands.transition().delay(delay).duration(900).ease(d3.easeCubicOut)
+      .attr("x", d => x(lo(d))).attr("width", d => x(hi(d)) - x(lo(d)));
+    dotsSel.transition().delay(d => 300 + v.forecasts.indexOf(d.f) * 250).duration(900).ease(d3.easeCubicOut)
+      .attr("cx", d => x(d.m));
+    vals.transition().delay((d, i) => 900 + i * 250).duration(500).attr("opacity", 1);
   });
 }
 
