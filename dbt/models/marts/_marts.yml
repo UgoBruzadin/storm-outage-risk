@@ -47,6 +47,17 @@ models:
         description: True when all 6 hours of HRRR weather before `hour` exist.
         data_tests: [not_null]
 
+  - name: mart_study__region_coverage
+    description: >
+      Whether EAGLE-I was tracking each region in each year: tracked when the share of hours
+      with anyone out is at least a fifth of the region's typical share.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, year]
+    columns:
+      - name: tracked
+        data_tests: [not_null]
+
   - name: mart_study__region_history_asof
     description: >
       Each region's outage track record as of January 1 of each year, from the 3 years

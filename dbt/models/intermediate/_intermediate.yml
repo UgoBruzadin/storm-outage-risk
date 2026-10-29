@@ -30,6 +30,16 @@ models:
         data_tests:
           - dbt_utils.accepted_range: {min_value: 0, max_value: 4}
 
+  - name: int_study__region_neighbors
+    description: Pairs of nearby regions (within 100 km, or upwind within 200 km) with distance and bearing.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, neighbor_fips]
+    columns:
+      - name: bearing_deg
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 360}
+
   - name: int_study__outages_1h
     description: Peak customers out per region per hour (hours with outages only).
     data_tests:

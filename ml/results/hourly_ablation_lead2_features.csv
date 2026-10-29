@@ -1,0 +1,26 @@
+lead_hours,config,features,seed,onset_pr_auc,precision_top1,recall_top1,n_rows,n_events
+2,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,0,0.0543364129026669,0.08316118438476615,0.17039288039939224,1887903,9214
+2,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,1,0.053265853511607356,0.08316118438476615,0.17039288039939224,1887903,9214
+2,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,2,0.054946307161913996,0.0831082154775147,0.17028434990232255,1887903,9214
+2,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,3,0.05570021129812229,0.08480322050956089,0.17375732580855222,1887903,9214
+2,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,4,0.053895037186677486,0.085174002860321,0.17451703928803994,1887903,9214
+2,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,0,0.05472629897131884,0.08485618941681233,0.17386585630562187,1887903,9214
+2,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,1,0.055203056855562635,0.0871338524286244,0.17853266767961798,1887903,9214
+2,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,2,0.05472503336086262,0.08649822554160708,0.17723030171478185,1887903,9214
+2,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,3,0.055513768650385056,0.0855447852110811,0.1752767527675277,1887903,9214
+2,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,4,0.0555754451664948,0.08671010117061285,0.17766442370306057,1887903,9214
+2,+ neighbours + time since last outage,weather+place+recent_now+warnings+outlook+neighbors+since,0,0.05549667236267985,0.08570369193283543,0.1756023442587367,1887903,9214
+2,+ neighbours + time since last outage,weather+place+recent_now+warnings+outlook+neighbors+since,1,0.05526645534046074,0.08527994067482388,0.17473410028217928,1887903,9214
+2,+ neighbours + time since last outage,weather+place+recent_now+warnings+outlook+neighbors+since,2,0.053977853662631005,0.08602150537634409,0.17625352724115476,1887903,9214
+2,+ neighbours + time since last outage,weather+place+recent_now+warnings+outlook+neighbors+since,3,0.05402480416443908,0.08633931881985275,0.17690471022357282,1887903,9214
+2,+ neighbours + time since last outage,weather+place+recent_now+warnings+outlook+neighbors+since,4,0.05228817320706601,0.0863922877271042,0.1770132407206425,1887903,9214
+2,+ neighbours + rain in the past 72 h,weather+place+recent_now+warnings+outlook+neighbors+wet_72h,0,0.05232891120078625,0.08671010117061285,0.17766442370306057,1887903,9214
+2,+ neighbours + rain in the past 72 h,weather+place+recent_now+warnings+outlook+neighbors+wet_72h,1,0.05328264696585246,0.0863922877271042,0.1770132407206425,1887903,9214
+2,+ neighbours + rain in the past 72 h,weather+place+recent_now+warnings+outlook+neighbors+wet_72h,2,0.05245052023639441,0.0871338524286244,0.17853266767961798,1887903,9214
+2,+ neighbours + rain in the past 72 h,weather+place+recent_now+warnings+outlook+neighbors+wet_72h,3,0.05128005138555268,0.0867630700778643,0.17777295420013023,1887903,9214
+2,+ neighbours + rain in the past 72 h,weather+place+recent_now+warnings+outlook+neighbors+wet_72h,4,0.05259398879971206,0.08506806504581811,0.1742999782939006,1887903,9214
+2,+ neighbours − canopy,weather+place+recent_now+warnings+outlook+neighbors-canopy,0,0.05316012823849342,0.08596853646909264,0.1761449967440851,1887903,9214
+2,+ neighbours − canopy,weather+place+recent_now+warnings+outlook+neighbors-canopy,1,0.05448007490094201,0.08729275915037872,0.178858259170827,1887903,9214
+2,+ neighbours − canopy,weather+place+recent_now+warnings+outlook+neighbors-canopy,2,0.05275263432890647,0.08596853646909264,0.1761449967440851,1887903,9214
+2,+ neighbours − canopy,weather+place+recent_now+warnings+outlook+neighbors-canopy,3,0.055383324530307795,0.08692197679961862,0.17809854569133926,1887903,9214
+2,+ neighbours − canopy,weather+place+recent_now+warnings+outlook+neighbors-canopy,4,0.05219673265929777,0.08671010117061285,0.17766442370306057,1887903,9214

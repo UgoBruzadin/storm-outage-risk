@@ -7,6 +7,7 @@ Feature groups are combined by name in benchmark configs:
     "weather+place+history"   -> union of the three groups
     "weather+place-canopy"    -> minus every feature in the "canopy" group
 """
+import warnings
 from pathlib import Path
 
 import duckdb
@@ -56,6 +57,12 @@ FEATURE_GROUPS = {
     "recent_now": ["pct_out_now", "max_pct_out_prev_24h"],
     # moving-window table: how long since the last >= 1% outage, how big it was, the worst of the past week
     "since": ["hours_since_outage", "last_outage_pct", "max_pct_out_prev_7d"],
+    # moving-window table: rain in the 72 hours before the decision (the hourly version of wet_soil)
+    "wet_72h": ["precip_prev_72h_mm", "wind_x_wet_soil"],
+    # moving-window table: neighbouring regions at the decision time (neighbor_features)
+    "neighbors": ["near_gust_max_ms", "near_cape_max_jkg", "near_precip_max_mm", "near_pct_out_max",
+                  "near_warn_share", "up_gust_max_ms", "up_cape_max_jkg", "up_precip_max_mm", "up_pct_out_max",
+                  "up_warn_share"],
 }
 
 
@@ -117,7 +124,7 @@ def load(threshold_pct, years, db=DB):
 HOURLY_LEADS = (0, 1, 2, 3, 6)
 
 
-def load_hourly(threshold_pct, years, lead, onsets_only=True, db=DB):
+def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db=DB):
     """The moving-window table (marts.mart_study__region_1h) for one lead: a row is a decision at the
     start of `hour` about the 6 hours starting `lead` hours later. Features use only what had happened
     by `hour`; y = the window's worst hour >= threshold_pct; is_onset = the region was known to be below
@@ -132,6 +139,9 @@ def load_hourly(threshold_pct, years, lead, onsets_only=True, db=DB):
                hour AS block_start, hour_utc AS block_hour_utc,
                fut_max_pct_{lead} AS fut_max_pct, start_pct_{lead} AS start_pct
         FROM marts.mart_study__region_1h
+        -- only region-years EAGLE-I was tracking (mart_study__region_coverage)
+        SEMI JOIN marts.mart_study__region_coverage AS c
+               ON c.region_fips = mart_study__region_1h.region_fips AND c.year = year(hour) AND c.tracked
         WHERE has_weather
           AND fut_max_pct_{lead} IS NOT NULL
           AND year(hour) IN ({", ".join(str(int(y)) for y in years)})
@@ -139,10 +149,56 @@ def load_hourly(threshold_pct, years, lead, onsets_only=True, db=DB):
         ORDER BY region_fips, hour
     """).df()
     con.close()
+    if neighbors:
+        nb = neighbor_features(db=db).rename(columns={"hour": "block_start"})
+        df = df.merge(nb, on=["region_fips", "block_start"], how="left")
     df = add_derived(df)
     df["y"] = (df["fut_max_pct"] >= threshold_pct).astype(int)
     df["is_onset"] = df["start_pct"].notna() & (df["start_pct"] < threshold_pct)
     return df
+
+
+NEIGHBOR_CACHE = ROOT / "data" / "cache" / "neighbors_1h.parquet"
+
+
+def neighbor_features(db=DB, cache=NEIGHBOR_CACHE):
+    """For every region and hour, its neighbours' known-by-then features (mart_study__region_1h):
+    the strongest gust and CAPE and the most rain in the past 6 hours, the worst outage in the
+    hour before, and the share with a severe thunderstorm or tornado warning in force; near_* =
+    within 100 km, up_* = upwind (intermediate.int_study__region_neighbors). Computed as
+    hour x region arrays (a SQL join would be ~400M rows) and cached; delete the cache after a
+    dbt build."""
+    if cache.exists():
+        return pd.read_parquet(cache)
+    con = duckdb.connect(str(db), read_only=True)
+    base = con.sql("""
+        SELECT region_fips, hour, gust_max_ms, cape_max_jkg, precip_sum_mm, pct_out_now,
+               (warn_svr OR warn_tor)::DOUBLE AS warn
+        FROM marts.mart_study__region_1h ORDER BY hour, region_fips
+    """).df()
+    pairs = con.sql("SELECT * FROM intermediate.int_study__region_neighbors").df()
+    con.close()
+    regions = sorted(base.region_fips.unique())
+    hours = base.hour.unique()
+    col = {r: i for i, r in enumerate(regions)}
+    out = {"region_fips": np.repeat(regions, len(hours)), "hour": np.tile(hours, len(regions))}
+    sources = {"gust_max_ms": ("gust_max_ms", np.nanmax), "cape_max_jkg": ("cape_max_jkg", np.nanmax),
+               "precip_max_mm": ("precip_sum_mm", np.nanmax), "pct_out_max": ("pct_out_now", np.nanmax),
+               "warn_share": ("warn", np.nanmean)}
+    for name, (source, agg) in sources.items():
+        grid = base.pivot(index="hour", columns="region_fips", values=source).reindex(columns=regions).to_numpy()
+        for kind, flag in (("near", "is_near"), ("up", "is_upwind")):
+            values = np.full((len(regions), len(hours)), np.nan)
+            for r, group in pairs[pairs[flag]].groupby("region_fips"):
+                cols = [col[n] for n in group.neighbor_fips]
+                with np.errstate(all="ignore"), warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)     # all-NaN hours stay NaN
+                    values[col[r]] = agg(grid[:, cols], axis=1)
+            out[f"{kind}_{name}"] = values.ravel()
+    result = pd.DataFrame(out)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    result.to_parquet(cache, index=False)
+    return result
 
 
 def check_history(df, features):

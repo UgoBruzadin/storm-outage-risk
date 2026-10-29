@@ -44,6 +44,8 @@ model uses HRRR via Open-Meteo instead, so nothing in this section limits it.
 |---|---|---|
 | HRRR via Open-Meteo | Free tier counts ~26 "calls" per region-year (10 variables x 2-week units); 10,000/day | `ingest/fetch_weather.py` paces requests, resumes, retries with backoff |
 | HRRR at one point per county | Storm winds are local: KSTL measured a 23.7 m/s gust on 2023-07-02 while HRRR at the county's point showed 5.8 | Keep Storm Events as an independent "storm happened" signal |
+| HRRR hourly rain: ~1,000 region-hours over 100 mm, up to 340 mm (2024-05-07, Morgan Co., MO), mostly with light winds | Beyond any record here; inflates rain sums | The hourly table (`mart_study__region_1h`) treats over 100 mm in an hour as unknown |
+| EAGLE-I coverage by region-year: 47 regions look untracked in 2018, 6 in 2019, Webster and McDonald Co., MO into 2020–2022 | Untracked years look calm | `mart_study__region_coverage`: tracked when the share of hours with anyone out is at least a fifth of the region's 75th-percentile year; the moving-window model drops the rest |
 | NOAA Storm Events | Times in **local standard time all year** (`CZ_TIMEZONE` = `CST-6`, and `EST-5` in parts of IN/KY/TN, `MST-7` in western KS); `BEGIN_DATE_TIME` has a 2-digit year | Rebuild timestamps from `BEGIN_YEARMONTH/DAY/TIME`, subtract each report's own offset |
 | NOAA Storm Events | Winter/wind events are filed by NWS **zone**, not county | NWS zone–county correlation file; zone events spread to every county in the zone |
 | NLCD Tree Canopy (MRLC WCS) | GeoTIFF's nodata tag says **0**, which is a real value (0% canopy); 254 = no data | Read raw pixels, mask by shape ourselves (`rasterio.mask` dropped every 0 → farm counties read 45% instead of ~2%) |

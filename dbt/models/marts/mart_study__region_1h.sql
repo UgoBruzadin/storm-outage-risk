@@ -9,7 +9,8 @@
 --
 -- Features (known at `hour`):
 --   weather    the 6-hour summaries of int_study__weather_6h over the 6 hours before
---              `hour`; NULL unless all 6 exist. precip_prev_72h_mm: the 72 hours before
+--              `hour`; NULL unless all 6 exist. precip_prev_72h_mm: the 72 hours before.
+--              Hourly rain over 100 mm is treated as unknown (an archive artifact)
 --   recent     pct_out_now (the hour before), the worst hour in the past 24 h and 7 days
 --   since      hours since the region last had >= 1% out (capped at 720 = 30 days) and
 --              how big that outage was. NULL when over 10% of the hours since were
@@ -49,7 +50,10 @@ pct AS (
         g.*,
         CASE WHEN g.peak_out IS NULL OR g.peak_out > 1.5 * g.customers THEN NULL
              ELSE least(100.0, 100.0 * g.peak_out / g.customers) END          AS pct_out,
-        w.gust_ms, w.wind10_ms, w.wind850_ms, w.cape_jkg, w.precip_mm, w.temp_c, w.freezing_level_m,
+        w.gust_ms, w.wind10_ms, w.wind850_ms, w.cape_jkg, w.temp_c, w.freezing_level_m,
+        -- over 100 mm in an hour is beyond any record here (the archive has ~1,000 such hours,
+        -- up to 340 mm, mostly with light winds): an artifact, so unknown
+        CASE WHEN w.precip_mm <= 100 THEN w.precip_mm END                   AS precip_mm,
         sqrt((w.u500 - w.u10) ^ 2 + (w.v500 - w.v10) ^ 2)                   AS shear_ms
     FROM grid AS g
     LEFT JOIN {{ ref('stg_hrrr__hourly') }} AS w USING (region_fips, hour)

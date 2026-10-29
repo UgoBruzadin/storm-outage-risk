@@ -13,7 +13,9 @@ Per lead and model:
                     [h + L, h + L + 6) had probability >= the alert level
   alert_episodes    runs of consecutive alerted hours in one region: roughly, crew call-outs
   alert level       the top 1% of the same model trained on 2020–2023 and scored on 2024,
-                    fixed before 2025 is scored
+                    fixed before 2025 is scored; an alert needs a probability strictly above
+                    it, so a rate table that gives many hours the same value can't flag
+                    more than 1% of them by a tie
 
 Usage: pixi run python -m ml.moving_window [--leads 0,2]
 Writes ml/results/moving_window_2025.csv.
@@ -29,11 +31,15 @@ THRESHOLD_PCT = 5
 TRAIN_YEARS, VAL_YEAR, TEST_YEAR = [2020, 2021, 2022, 2023, 2024], 2024, 2025
 PARAMS = {"n_estimators": 800, "learning_rate": 0.03, "max_depth": 4, "min_child_weight": 20,
           "subsample": 0.8, "colsample_bytree": 0.8}      # the 6-hour final model's settings
+# the final features, chosen on the 2024 validation year over seeds (hourly_ablation.py): neighbours
+# in (+2.8% at 2 h, +5.7% at 6 h, every seed); canopy kept; time since the last outage (mixed) and
+# rain in the past 72 h (worse with every seed) left out; training from 2020 (adding 2018–2019: +0.5%)
+FEATURES = "weather+place+recent_now+warnings+outlook+neighbors"
 RUNS = [  # (label, model, feature spec)
     ("Warnings + outlook (rate table)", "official", None),
     ("Model: weather + place + recent", "xgboost", "weather+place+recent_now"),
     ("+ warnings + outlook", "xgboost", "weather+place+recent_now+warnings+outlook"),
-    ("+ time since last outage", "xgboost", "weather+place+recent_now+warnings+outlook+since"),
+    ("+ neighbours (final)", "xgboost", FEATURES),
 ]
 
 
@@ -85,7 +91,7 @@ def main():
         for label, model, spec in RUNS:
             p = fit_predict(model, spec, train, test)
             level = pd.Series(fit_predict(model, spec, val_train, val)).quantile(0.99)
-            flagged = pd.Series(p >= level, index=test.index)
+            flagged = pd.Series(p > level, index=test.index)
             s = score(test["y"].to_numpy(), p)
             rows.append({"lead_hours": lead, "run": label, "onset_pr_auc": s["pr_auc"],
                          "event_rate": test["y"].mean(), "alert_level": level, "alert_share": flagged.mean(),
