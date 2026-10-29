@@ -68,7 +68,7 @@ are minimal and lack geopandas, dbt and the ML libraries).
 2. Declare it in `dbt/models/staging/_sources.yml` (no `{}` in `external_location`: read as text and cast in staging).
 3. `stg_<source>__<thing>.sql` renames, casts and decodes missing-value codes — nothing else.
 4. Tests go in `_staging.yml`; intermediate models use it via `{{ ref() }}`.
-5. Quirks go in `data-notes.md`, choices in `decisions.md`.
+5. Quirks go in `data-notes.md`, choices in `decisions.md`, every experiment and its result in `experiments.md`.
 
 ## Troubleshooting
 

@@ -9,6 +9,7 @@ version = "0.1.0"
 fetch-noaa = { cmd = "python ingest/fetch_noaa.py", description = "Download NOAA hourly weather into data/raw/noaa" }
 fetch-counties = { cmd = "python ingest/fetch_counties.py", description = "Census county shapes for MO + IL -> data/raw/geo" }
 fetch-weather = { cmd = "python ingest/fetch_weather.py", description = "HRRR storm ingredients per region via Open-Meteo (slow: rate-limited, resumable)" }
+fetch-hrrr-forecast = { cmd = "python -m ingest.fetch_hrrr_forecast", description = "HRRR forecasts as issued, per region, from the hrrrzarr archive: pass a start and end date (resumable)" }
 fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = "USFS/NLCD tree canopy % per region (2021) -> data/raw/geo" }
 fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
@@ -19,6 +20,7 @@ benchmark = { cmd = "python -m ml.benchmark", description = "Run a benchmark con
 train = { cmd = "python -m ml.benchmark ml/benchmarks/quick.yaml", description = "The quick benchmark (baselines vs model families, ~minutes)" }
 mlflow-ui = { cmd = "mlflow ui --backend-store-uri sqlite:///data/mlflow.db", description = "Browse model runs at http://127.0.0.1:5000" }
 value = { cmd = "python -m ml.value", description = "What acting on each forecast was worth in the test year (cost-loss value and dollar scenarios) -> ml/results/value_*.csv" }
+forecast-test = { cmd = "python -m ml.forecast_test", description = "The forecast-ready model with HRRR forecasts of the window, 2025 (needs fetch-hrrr-forecast) -> ml/results/forecast_test_2025.csv" }
 export-app = { cmd = "python -m ml.export_app_data", description = "Train the final model, export small Parquet files for the dashboard -> data/app" }
 app = { cmd = "streamlit run app/streamlit_app.py --server.address=localhost", description = "Run the dashboard locally (this computer only)" }
 publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }
@@ -35,6 +37,7 @@ ipykernel = ">=7.4.0,<8"
 rasterio = ">=1.5.2,<2"
 rasterstats = ">=0.21.0,<0.22"
 pyarrow = ">=21,!=25.0.0"
+numcodecs = ">=0.17.1,<0.18"
 
 [feature.models.dependencies]
 # Benchmark models beyond scikit-learn (default environment only)

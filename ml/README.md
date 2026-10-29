@@ -29,6 +29,13 @@ the git commit).
 | `benchmark.py` | expands the config into runs, evaluates, logs, ranks | — |
 | `export_app_data.py` | trains `final:` and exports the dashboard's files | — |
 | `value.py` | what acting on each forecast was worth in the test year: relative economic value and dollar scenarios | change the scenarios (`MIXES`, `RESTORATION_CUT`, `STAGING_COST`) |
+| `lead_time.py` | 6-hour blocks with weather from before the block only, at several leads | — |
+| `moving_window.py` | the main benchmark: a decision every hour about the 6 hours starting 0–6 h later, every input known by then | change `FEATURES` or `RUNS` |
+| `hourly_ablation.py`, `hourly_tune.py` | feature and settings decisions for the moving-window model, on 2024, over seeds | change `CONFIGS` or `GRID` |
+| `value_hourly.py` | `value.py` for the moving-window model, staging crews on alert episodes | — |
+| `forecast_test.py` | the moving-window model with HRRR forecasts of the window it predicts | change `LEAD` or `RUN_AGE` |
+
+Every experiment, its result and what it means: [docs/experiments.md](../docs/experiments.md).
 
 ## Writing a config
 
