@@ -22,6 +22,31 @@ models:
         description: True when all 6 hours of HRRR weather exist for the block.
         data_tests: [not_null]
 
+  - name: mart_study__region_1h
+    description: >
+      Moving-window modeling table: every study-area region x every hour from 2018. Features
+      use only what had happened by the start of the hour; labels describe the 6 hours
+      starting L = 0, 1, 2, 3 or 6 hours later.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, hour]
+    columns:
+      - name: pct_out
+        description: Worst snapshot in the hour as % of customers; NULL = unknown or suspect.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 100}
+      - name: hours_since_outage
+        description: Hours since the region last had >= 1% out, capped at 720; NULL when the tracker missed too much.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 1, max_value: 720}
+      - name: fut_max_pct_0
+        description: Worst hour in the 6 hours starting at `hour`; NULL unless >= 3 of them are known.
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 100}
+      - name: has_weather
+        description: True when all 6 hours of HRRR weather before `hour` exist.
+        data_tests: [not_null]
+
   - name: mart_study__region_history_asof
     description: >
       Each region's outage track record as of January 1 of each year, from the 3 years

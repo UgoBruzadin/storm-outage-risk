@@ -21,6 +21,27 @@ models:
         data_tests:
           - dbt_utils.accepted_range: {min_value: 0, max_value: 24}
 
+  - name: int_eaglei__hours_1h
+    description: Every hour with the national EAGLE-I snapshot count (the hourly heartbeat).
+    columns:
+      - name: hour
+        data_tests: [unique, not_null]
+      - name: n_snapshots
+        data_tests:
+          - dbt_utils.accepted_range: {min_value: 0, max_value: 4}
+
+  - name: int_study__outages_1h
+    description: Peak customers out per region per hour (hours with outages only).
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, hour]
+
+  - name: int_study__nws_1h
+    description: NWS warnings in force and the latest SPC Day 1 outlook at the start of each hour.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [region_fips, hour]
+
   - name: int_study__outages_6h
     description: Peak/mean customers out per region per 6-hour block (blocks with outages only).
     data_tests:

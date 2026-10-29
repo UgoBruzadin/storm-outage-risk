@@ -52,6 +52,10 @@ FEATURE_GROUPS = {
     # outages known at the start of the block: the previous block(s) are over.
     # Persistence is strong — a model that ignores it is handicapped.
     "recent": ["prev_block_pct_out", "max_pct_out_prev_24h"],
+    # moving-window table (load_hourly): outages in the hour before the decision, and the past day
+    "recent_now": ["pct_out_now", "max_pct_out_prev_24h"],
+    # moving-window table: how long since the last >= 1% outage, how big it was, the worst of the past week
+    "since": ["hours_since_outage", "last_outage_pct", "max_pct_out_prev_7d"],
 }
 
 
@@ -108,6 +112,37 @@ def load(threshold_pct, years, db=DB):
     con.close()
     df = add_derived(df)
     return label(df, threshold_pct) if threshold_pct is not None else df
+
+
+HOURLY_LEADS = (0, 1, 2, 3, 6)
+
+
+def load_hourly(threshold_pct, years, lead, onsets_only=True, db=DB):
+    """The moving-window table (marts.mart_study__region_1h) for one lead: a row is a decision at the
+    start of `hour` about the 6 hours starting `lead` hours later. Features use only what had happened
+    by `hour`; y = the window's worst hour >= threshold_pct; is_onset = the region was known to be below
+    the threshold when the window began. Columns are renamed so the 6-hour feature groups apply:
+    hour -> block_start (the decision time), hour_utc -> block_hour_utc."""
+    if lead not in HOURLY_LEADS:
+        raise ValueError(f"lead must be one of {HOURLY_LEADS}")
+    con = duckdb.connect(str(db), read_only=True)
+    others = ", ".join(f"fut_max_pct_{x}, start_pct_{x}" for x in HOURLY_LEADS)
+    df = con.sql(f"""
+        SELECT * EXCLUDE ({others}, hour, hour_utc),
+               hour AS block_start, hour_utc AS block_hour_utc,
+               fut_max_pct_{lead} AS fut_max_pct, start_pct_{lead} AS start_pct
+        FROM marts.mart_study__region_1h
+        WHERE has_weather
+          AND fut_max_pct_{lead} IS NOT NULL
+          AND year(hour) IN ({", ".join(str(int(y)) for y in years)})
+          {f"AND start_pct_{lead} < {float(threshold_pct)}" if onsets_only else ""}
+        ORDER BY region_fips, hour
+    """).df()
+    con.close()
+    df = add_derived(df)
+    df["y"] = (df["fut_max_pct"] >= threshold_pct).astype(int)
+    df["is_onset"] = df["start_pct"].notna() & (df["start_pct"] < threshold_pct)
+    return df
 
 
 def check_history(df, features):
