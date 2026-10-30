@@ -40,4 +40,7 @@ def test_writeup_contents_links_point_to_headings():
     links = set(re.findall(r"\]\(#([\w-]+)\)", md))
     assert links, "found no contents links"
     assert links <= anchors, f"links with no heading: {sorted(links - anchors)}"
-    assert md.count("\n:::") % 2 == 0 or md.count(":::") >= 2, "unbalanced ::: boxes"
+    body = re.sub(r"<!--.*?-->", "", md, flags=re.S)                      # the guide at the top mentions :::
+    opens = len(re.findall(r"^:::[ \t]*[\w-]+[ \t]*$", body, flags=re.M))
+    closes = len(re.findall(r"^:::[ \t]*$", body, flags=re.M))
+    assert opens == closes, f"{opens} ::: boxes opened, {closes} closed"
