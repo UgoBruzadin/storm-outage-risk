@@ -12,7 +12,7 @@ The question: **will a county's power outage start (≥ 5% of customers out, fro
 |---|---|---|---|---|
 | Perfect-weather ceiling | The weather during the 6 hours it predicts | 0.106 | 2.4× (0.044) | Best case: nobody knows that weather in advance |
 | **Forecast-ready, 2 h ahead** | Weather up to the decision, warnings and outlook in force, neighbouring counties, outages so far | **0.068** | **1.7×** (0.039) | **Main result** |
-| Forecast-ready, 2 h ahead, with HRRR forecasts | As above, plus what HRRR predicted for the window | pending | | [E19](#e19-hrrr-forecasts-as-issued) |
+| Forecast-ready, 2 h ahead, with HRRR forecasts | As above, plus what the HRRR run issued 2 h before the decision predicted for the window | 0.094 | 2.4× (0.039) | First run, one seed: [E19](#e19-hrrr-forecasts-as-issued) |
 
 At 2 hours ahead, the forecast-ready model alerts on 0.74% of calm county-hours. 12.8% of its alerts are followed by a new outage, about 24× the 0.52% base rate. It caught 27% of 2025's 1,624 new outages in time.
 
@@ -184,7 +184,21 @@ The second framing, built to answer the question a utility actually faces. A dec
 ### E19. HRRR forecasts as issued
 - **Question:** The forecast-ready model only knows weather that has already happened. How much does adding what HRRR *predicted* for the window add, and how much of the gap to the 0.106 ceiling is reachable in practice?
 - **Setup:** Each hourly HRRR run's forecasts for the following 13 hours, from the University of Utah's hrrrzarr archive, at the same 216 points (`ingest/fetch_hrrr_forecast.py`). The first version is cheap: 2025 only. A model trained on perfect window weather is scored three ways on 2025: with the actual window weather, with the archive's 1-hour forecasts (a control for the change of data source), and with the forecast from the run issued 2 hours before the decision. Training on forecasts would need the training years too.
-- **Status:** Download running.
+  The model is the E18 final model plus 15 window-weather features: the same summaries (max gust, total rain, …) over the 6 hours it predicts. It is trained on 2020–2024 with the weather that actually happened. The alert level is fixed on 2024 the same way. The forecast for a decision at hour *h* comes from the run issued at *h* − 2, which is complete by *h*. Its forecast hours 4–9 cover the window. The download is ~30 MB of map tiles per run, 2024-12-31 to 2025-12-31, 829 MB kept. 16 of 8,784 runs are missing from the archive, so 1,759,405 of the 1,768,412 decisions are scored, the same rows for every version (`ml/forecast_test.py`, `forecast_test_2025.csv`).
+- **Result (2025, 2 h ahead):**
+
+  | Window weather | Onset PR-AUC | Alerts (share of hours) | Alert precision | Caught | Alert episodes |
+  |---|---|---|---|---|---|
+  | None (the E18 model) | 0.068 | 0.75% | 12.8% | 27% | 3,151 |
+  | Actual (ceiling) | 0.105 | 1.03% | 14.3% | 37% | 4,255 |
+  | HRRR 1-hour forecasts (control) | 0.102 | 1.23% | 13.2% | 41% | 4,780 |
+  | **HRRR forecast issued 2 h before the decision** | **0.094** | 1.25% | 11.9% | 41% | 7,393 |
+
+- **Meaning:**
+  - **Real forecasts recover about 70% of the gap** between the forecast-ready model and the ceiling: 0.068 → 0.094, against 0.105. That is 2.4× warnings + outlook alone (0.039).
+  - The control scores close to the ceiling (0.102), so the change of data source costs little. The rest of the drop is forecast error.
+  - **The alert counts are not like-for-like.** The alert level was set with actual weather, and forecasts push more hours above it: 1.25% of hours instead of 0.75%, and more than twice the episodes. "Caught" rises partly because the model alerts more. Onset PR-AUC doesn't depend on the level, so it is the fair comparison. A fair alert comparison needs the level set on 2024 forecasts, which means downloading 2024.
+  - **Limits:** one seed. The model never saw a forecast in training, so it trusts forecasts as if they were observations; training on forecasts should do at least as well. A run issued 2 h earlier is a realistic delay, but a utility using the newest run would do slightly better.
 
 ### E20. What staging crews would be worth, forecast-ready (2 h ahead)
 - **Question:** E11 again, with the forecast-ready model and crews staged on alert episodes.
@@ -206,7 +220,8 @@ The second framing, built to answer the question a utility actually faces. A dec
 
 | Test | Why | Notes |
 |---|---|---|
-| HRRR forecasts, trained on forecasts | E19's cheap version trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
+| HRRR forecasts, seeds and a 2024 alert level | E19 is one seed, and its alert level was set without forecasts | 2024 forecasts: another ~6 hours of download, ~0.8 GB kept |
+| HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
 | One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
 | Storm-day bootstrap intervals | Give every 2025 score a confidence interval; storms, not hours, are the independent units | |
 | Held-out storms | Split by storm instead of by year | |
