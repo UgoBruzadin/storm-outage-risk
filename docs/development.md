@@ -70,6 +70,14 @@ are minimal and lack geopandas, dbt and the ML libraries).
 4. Tests go in `_staging.yml`; intermediate models use it via `{{ ref() }}`.
 5. Quirks go in `data-notes.md`, choices in `decisions.md`, every experiment and its result in `experiments.md`.
 
+## Editing the site's text
+
+Every word on the story page is in `site/text.yaml`, in page order. Edit, save, and refresh: the page reads the file
+directly. To preview locally, serve the folder (`python3 -m http.server -d site`, then http://localhost:8000).
+Placeholders such as `{ratio}` are numbers filled in from `site/data/story.json`; a comment above each says what it
+holds. `tests/test_site.py` fails if the page asks for a key the file doesn't have. The link-preview text (title,
+description) stays in the `<head>` of `site/index.html`, because link previews are read without running the page.
+
 ## Troubleshooting
 
 - **"Could not set lock"** — something else has `data/warehouse.duckdb` open (the DuckDB UI

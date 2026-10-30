@@ -373,9 +373,10 @@ def story_data(gdf):
 
     ladder = pd.read_parquet(APP / "ladder.parquet")
     lead_time = pd.read_parquet(APP / "lead_time.parquet")
-    runs = {"Warnings + outlook (rate table)": "Warnings + outlook alone",
-            "Model: weather + place + recent": "Model, weather so far only",
-            "+ neighbours (final)": "Model + warnings + outlook"}
+    # each line's key in text.yaml (lead.labels), and a fallback label
+    runs = {"Warnings + outlook (rate table)": ("official", "Warnings + outlook alone"),
+            "Model: weather + place + recent": ("weather", "Model, weather so far only"),
+            "+ neighbours (final)": ("model", "Model + warnings + outlook")}
     at = meta["at_headline_share"]
     calib = pd.read_parquet(APP / "calibration.parquet")
     acc = pd.read_parquet(APP / "county_hourly.parquet").set_index("region_fips").reindex(order)
@@ -397,9 +398,10 @@ def story_data(gdf):
                     "better": round(float(getattr(r, "better_vs_official", float("nan"))), 3),
                     "ours": r.model == meta["headline_model"], "ceiling": "ceiling" in r.model}
                    for r in ladder.itertuples()],
-        "lead_time": [{"label": label, "points": [{"lead": int(r.lead_hours), "value": round(float(r.onset_pr_auc), 3)}
-                                                  for r in lead_time[lead_time.run == run].itertuples()]}
-                      for run, label in runs.items()],
+        "lead_time": [{"key": key, "label": label,
+                       "points": [{"lead": int(r.lead_hours), "value": round(float(r.onset_pr_auc), 3)}
+                                  for r in lead_time[lead_time.run == run].itertuples()]}
+                      for run, (key, label) in runs.items()],
         # paired storm-day permutation tests (ml/significance.py)
         "significance": {f"{r.challenger} vs {r.reference}": round(float(r.p_permutation), 3)
                          for r in pd.read_csv(RESULTS / "significance_2025.csv").itertuples()},
