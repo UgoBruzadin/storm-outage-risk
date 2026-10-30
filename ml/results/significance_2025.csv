@@ -1,0 +1,6 @@
+challenger,reference,pr_auc_challenger,pr_auc_reference,share_of_resamples_better,p_bootstrap,p_permutation,n_storm_days
+No forecasts,Warnings + outlook,0.06801995461817584,0.039300142134942005,1.0,0.001,0.000999000999000999,366
+With HRRR forecasts (mean of 5 runs),Warnings + outlook,0.09949400552808457,0.039300142134942005,1.0,0.001,0.000999000999000999,366
+With HRRR forecasts (mean of 5 runs),No forecasts,0.09949400552808457,0.06801995461817584,1.0,0.001,0.000999000999000999,366
+With HRRR forecasts (mean of 5 runs),With HRRR forecasts (newest run),0.09949400552808457,0.09365618155651731,1.0,0.001,0.001998001998001998,366
+Perfect weather (ceiling),With HRRR forecasts (mean of 5 runs),0.10497619312013935,0.09949400552808457,0.915,0.085,0.09090909090909091,366

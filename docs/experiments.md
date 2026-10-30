@@ -285,6 +285,44 @@ The second framing, built to answer the question a utility actually faces. A dec
   - 99.8% of new outages had a decision that could catch them.
 - **Meaning:** No look-ahead, clock or leakage problem found. The E19–E21 results stand.
 
+### E23. Is the difference significant?
+- **Question:** The 95% ranges of single scores overlap. Are the differences between models real?
+- **Setup:** Two paired tests on 2025, 2 h ahead, 366 storm days (`ml/significance.py`, `significance_2025.csv`):
+  - **Paired bootstrap:** 1,000 resamples of storm days, both models scored on each one. p is the share of resamples where the challenger is not better.
+  - **Storm-day permutation:** 1,000 times, each day's predictions are swapped between the two models with probability ½. Scores are first converted to within-model percentile ranks, so the swap doesn't mix two probability scales.
+- **Result:**
+
+  | Challenger vs. reference | Onset PR-AUC | Better in resamples | p (bootstrap) | p (permutation) |
+  |---|---|---|---|---|
+  | No forecasts vs. warnings + outlook | 0.068 vs. 0.039 | 100% | < 0.001 | 0.001 |
+  | With HRRR forecasts (mean of 5) vs. warnings + outlook | 0.099 vs. 0.039 | 100% | < 0.001 | 0.001 |
+  | With HRRR forecasts (mean of 5) vs. no forecasts | 0.099 vs. 0.068 | 100% | < 0.001 | 0.001 |
+  | Mean of 5 runs vs. newest run | 0.099 vs. 0.094 | 100% | < 0.001 | 0.002 |
+  | Ceiling (actual window weather) vs. mean of 5 runs | 0.105 vs. 0.099 | 92% | 0.085 | 0.091 |
+
+  0.001 is the smallest p 1,000 resamples or permutations can show.
+
+- **Meaning:**
+  - **Overlapping bars don't mean "not significant".** Every model's score rises and falls with the same storms, so the single-score ranges are wide. The paired differences are not: every comparison against the official forecasts, and the gain from adding forecasts, is significant at p ≤ 0.001.
+  - **The gap between real forecasts and perfect weather knowledge is not significant** (p ≈ 0.09). On 2025, the averaged HRRR runs can't be told apart from knowing the window's weather in advance.
+
+### E24. Does canopy help in Missouri, in Illinois, or both?
+- **Question:** The tree finding on the pages is a correlation: canopy goes with storm damage in Missouri (r = +0.43), not in Illinois (−0.10). Does *knowing* the canopy improve the model in each state?
+- **Setup:** The E18 model (2 h ahead, no HRRR forecasts) with and without the canopy features, 3 seeds, trained 2020–2023 and scored on 2024. Done two ways (`ml/canopy_by_state.py`, `canopy_by_state.csv`):
+  - **Pooled:** one model for both states, scored on each state separately.
+  - **By state:** a model trained and scored on one state only.
+- **Result:** the change in onset PR-AUC from adding canopy:
+
+  | Setup | Missouri | Illinois |
+  |---|---|---|
+  | Pooled model, scored per state | +0.4% (−2.7% to +3.3%; better with 2 of 3 seeds) | **+3.0%** (+1.0% to +6.0%; 3 of 3) |
+  | Model for one state only | −1.9% (−3.6% to +0.8%; 1 of 3) | +2.9% (−3.7% to +6.7%; 2 of 3) |
+
+- **Meaning:**
+  - **The opposite of the correlation.** Canopy helps the model a little in Illinois and not in Missouri.
+  - **A plausible reading:** in Missouri, heavy canopy comes with the rest of the Ozarks (rural, hilly, older lines, few customers per county), which the model already learns from housing, density and county size. Canopy then adds nothing new there. In mostly treeless Illinois, the few wooded counties (river bluffs and valleys) stand out from their neighbours in a way the other features don't capture.
+  - **Small effects.** All of these are within a few percent, close to the seed noise. The supported claim is: trees are a small, real signal overall (E7, E15), and the county correlation is not evidence that they matter more in Missouri.
+
 ---
 
 ## Open experiments

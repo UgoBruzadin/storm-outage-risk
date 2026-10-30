@@ -1,19 +1,19 @@
 """Static figures for the project page (site/assets/), drawn from the same data as the dashboard.
 
-  storm-replay.jpg    predicted risk vs actual outages, biggest 2025 storm block
-  accuracy.jpg        per county, 2025: share of new outages caught, and actual vs expected
+  accuracy.jpg        per county, 2025, 2 hours ahead: share of new outages caught, and actual vs predicted
   map.jpg             outage hours per customer per year, 2020–2025 scorecard
-  results.jpg         onset PR-AUC of the model, its ablations and the comparisons
+  results.jpg         onset PR-AUC 2 hours ahead with storm-day ranges, and by lead time
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
+  value.jpg           what staging crews on each forecast was worth in 2025 (ml/value_hourly.py)
+  social.jpg          1200x630 link-preview card (og:image): the March 2025 storm, risk decided 2 hours ahead
+  storm.mp4           the March 2025 storm hour by hour, for social posts
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
-  value.jpg           what acting on each forecast was worth in 2025 (ml/value.py): relative value and dollars
-  social.jpg          1200x630 link-preview card (og:image) for both pages: the March 2025 storm at its peak
-  storm.mp4           the March 2025 storm played period by period, predicted vs actual, for social posts
 
-Reads data/app/ (pixi run export-app), ml/results/ and the warehouse (read-only).
-Usage: pixi run python scripts/make_site_figures.py
-Then bump the ?v= on the image links in site/index.html, or browsers keep showing the old files.
+Reads data/app/ (pixi run export-app, then python -m ml.export_hourly), ml/results/ and the warehouse
+(read-only), and data/cache/forecast_ensemble_2025.parquet (python -m ml.forecast_ensemble).
+Usage: pixi run python scripts/make_site_figures.py [--story]
+Then bump the ?v= on the image links in site/writeup/index.html, or browsers keep showing the old files.
 """
 import json
 import subprocess
@@ -114,49 +114,32 @@ def save(fig, name):
     plt.close(fig)
 
 
-def storm_replay(gdf, preds, storms, meta):
-    block = storms.sort_values("customers_out", ascending=False).block_start.iloc[0]
-    now = gdf.merge(preds[preds.block_start == block], on="region_fips")
-    vmax_p = max(2 * meta["alert_threshold"], now.prob.max())
-    vmax_o = max(10, now.peak_pct_out.max())
-    fig, (a, b), (ca, cb) = map_figure(2)
-    county_map(a, now, "prob", BLUE, 0, vmax_p)
-    county_map(b, now, "peak_pct_out", ORANGE, 0, vmax_o)
-    ticks = np.arange(0, vmax_p + 1e-9, 0.2)
-    colorbar(fig, ca, BLUE, 0, vmax_p, "Predicted probability of ≥ 5% out", ticks, [f"{t:.0%}" for t in ticks])
-    colorbar(fig, cb, ORANGE, 0, vmax_o, "Actual peak share of customers out (%)")
-    a.set_title("Predicted risk", loc="left", fontsize=13, fontweight="bold")
-    b.set_title("What happened", loc="left", fontsize=13, fontweight="bold")
-    when = pd.Timestamp(block)
-    fig.suptitle(f"{when:%-d %B %Y}, {when:%H}–{when + pd.Timedelta(hours=6):%H} UTC: a storm the model never saw",
-                 x=fig.axes[0].get_position().x0, ha="left", fontsize=15, fontweight="bold", y=0.985)
-    save(fig, "storm-replay.jpg")
-
-
-def accuracy(gdf, preds, meta):
-    onsets = preds[preds.is_onset].assign(flagged=lambda d: d.prob >= meta["onset_alert_threshold"])
-    onsets["caught"] = onsets.flagged & (onsets.y == 1)
-    stats = onsets.groupby("region_fips").agg(new=("y", "sum"), expected=("prob", "sum"), caught=("caught", "sum"))
-    df = gdf.merge(stats.reset_index(), on="region_fips", how="left").fillna({"new": 0, "caught": 0})
-    df["share_caught"] = df.caught / df.new.where(df.new > 0)
-    df["log_ratio"] = np.log2((df.new / df.expected).clip(0.25, 4))
-    judged = df.new >= MIN_EVENTS
+def accuracy(gdf):
+    """Per county, 2025, the headline model (ml/export_hourly.py): share of new outages caught at the headline
+    alert share, and actual outage windows against the sum of predicted probabilities."""
+    meta = json.loads((APP / "meta_hourly.json").read_text())
+    stats = pd.read_parquet(APP / "county_hourly.parquet")
+    df = gdf.merge(stats, on="region_fips", how="left").fillna({"new_outages": 0, "caught": 0})
+    df["share_caught"] = df.caught / df.new_outages.where(df.new_outages > 0)
+    df["log_ratio"] = np.log2((df.actual / df.expected).clip(0.25, 4))
+    judged = df.new_outages >= MIN_EVENTS
     fig, (a, b), (ca, cb) = map_figure(2)
     county_map(a, df, "share_caught", BLUE, 0, 1, judged)
     county_map(b, df, "log_ratio", DIVERGING, -2, 2, judged)
-    colorbar(fig, ca, BLUE, 0, 1, "Share of new outages flagged", [0, 0.25, 0.5, 0.75, 1],
+    colorbar(fig, ca, BLUE, 0, 1, "Share of new outages caught in time", [0, 0.25, 0.5, 0.75, 1],
              ["0%", "25%", "50%", "75%", "100%"])
-    colorbar(fig, cb, DIVERGING, -2, 2, "Actual ÷ expected new outages", [-2, -1, 0, 1, 2],
+    colorbar(fig, cb, DIVERGING, -2, 2, "Actual ÷ predicted outage windows", [-2, -1, 0, 1, 2],
              ["¼×", "½×", "1×", "2×", "4×"])
-    total = int(df.new.sum())
+    total = int(df.new_outages.sum())
     a.set_title(f"Caught: {df.caught.sum() / total:.0%} of {total:,} new outages", loc="left", fontsize=13,
                 fontweight="bold")
     b.set_title("Underrated (orange) or overrated (blue)", loc="left", fontsize=13, fontweight="bold")
     x0 = a.get_position().x0
-    fig.suptitle(f"Accuracy by county, {meta['test_year']}", x=x0, ha="left", fontsize=15, fontweight="bold",
-                 y=0.985)
-    fig.text(x0, 0.015, f"New outages of ≥ {meta['threshold_pct']:g}% of customers. Hatched: fewer than "
-             f"{MIN_EVENTS} in the county, too few to judge.", color=MUTED, fontsize=9)
+    fig.suptitle(f"Accuracy by county, {meta['test_year']}, {meta['lead_hours']} hours ahead", x=x0, ha="left",
+                 fontsize=15, fontweight="bold", y=0.985)
+    fig.text(x0, 0.015, f"New outages of ≥ {meta['threshold_pct']:g}% of customers; alerts on the riskiest "
+             f"{meta['headline_share']:.2%} of county-hours. Hatched: fewer than {MIN_EVENTS} new outages, too few "
+             "to judge.", color=MUTED, fontsize=9)
     save(fig, "accuracy.jpg")
 
 
@@ -171,49 +154,54 @@ def burden_map(gdf):
 
 
 def results():
-    """Onset PR-AUC at >= 5%: this project's models against baselines and comparisons, both splits."""
-    def scores(name):
-        d = pd.read_csv(RESULTS / f"benchmark_{name}.csv")
-        d["split"] = d["split"].str.split("(").str[0]
-        return d[d.threshold_pct == 5]
-
-    official, final, wn = scores("official"), scores("final_2025"), scores("weathernext")
-    pick = [  # (label, frame, model, features, this project's)
-        ("Historical average", official, "climatology", "-", False),
-        ("NWS warnings", official, "nws_warnings", "-", False),
-        ("SPC outlook", official, "spc_outlook", "-", False),
-        ("Warnings + outlook", official, "official", "-", False),
-        ("weathernext's setup", wn, "xgboost", "weathernext", False),
-        ("Weather only", final, "xgboost", "weather", True),
-        ("Final model", final, "xgboost", "weather+place+recent", True),
-    ]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200, sharey=True)
-    for ax, split, title in zip(axes, ["time", "county"], ["Next year (2025)", "Unseen counties"], strict=True):
-        vals, rate = [], None
-        for label, d, model, features, ours in pick:
-            row = d[(d.split == split) & (d.model == model) & (d.features == features)].iloc[0]
-            vals.append((label, row.onset_pr_auc, ours))
-            rate = row.onset_event_rate
-        y = np.arange(len(vals))[::-1]
-        ax.barh(y, [v for _, v, _ in vals], height=0.68, color=[BLUE[4] if o else "#c3c2b7" for *_, o in vals],
-                edgecolor=SURFACE, linewidth=2)
-        for yi, (_, v, _) in zip(y, vals, strict=True):
-            ax.text(v + 0.002, yi, f"{v:.3f}", va="center", fontsize=10, color=INK)
-        ax.axvline(rate, color=MUTED, linestyle=":", linewidth=1.2)
-        ax.text(rate, -0.85, " no skill", color=MUTED, fontsize=8.5, va="center")
-        ax.set_ylim(-1.2, len(vals) - 0.5)
-        ax.set_yticks(y, [label for label, *_ in vals], fontsize=10.5, color=INK)
-        ax.set_xlim(0, 0.125)
-        ax.set_title(title, loc="left", fontsize=13, fontweight="bold")
-        ax.grid(axis="x", color=LINE, linewidth=0.6)
+    """Left: onset PR-AUC 2 hours ahead with 95% storm-day ranges (ladder.parquet). Right: by lead time
+    (moving_window_2025.csv), with the HRRR forecast version at 2 hours."""
+    ladder = pd.read_parquet(APP / "ladder.parquet")
+    lead = pd.read_parquet(APP / "lead_time.parquet")
+    meta = json.loads((APP / "meta_hourly.json").read_text())
+    fig, (a, b) = plt.subplots(1, 2, figsize=(11.5, 4.6), dpi=200, gridspec_kw={"width_ratios": [1.15, 1]})
+    y = np.arange(len(ladder))[::-1]
+    for yi, r in zip(y, ladder.itertuples(), strict=True):
+        ours, ceiling = r.model == meta["headline_model"], "ceiling" in r.model
+        color = BLUE[4] if ours else (HATCH if r.model == "Warnings + outlook" else BLUE[2])
+        a.barh(yi, r.onset_pr_auc, height=0.62, color="none" if ceiling else color,
+               edgecolor=MUTED if ceiling else SURFACE, linestyle="--" if ceiling else "-", linewidth=1.4)
+        a.plot([r.lo, r.hi], [yi, yi], color=INK_2, linewidth=1.3)
+        a.plot([r.lo, r.lo], [yi - 0.12, yi + 0.12], color=INK_2, linewidth=1.3)
+        a.plot([r.hi, r.hi], [yi - 0.12, yi + 0.12], color=INK_2, linewidth=1.3)
+        extra = "" if r.model == "Warnings + outlook" else f"  {r.ratio_vs_official:.1f}× official"
+        a.text(r.hi + 0.003, yi, f"{r.onset_pr_auc:.3f}{extra}", va="center", fontsize=9.5, color=INK,
+               fontweight="bold" if ours else "normal")
+    a.set_yticks(y, [LADDER_LABELS[m] for m in ladder.model], fontsize=10, color=INK)
+    a.set_xlim(0, 0.215)
+    a.set_xlabel("PR-AUC on new ≥ 5% outages, 2 hours ahead (bars: 95% range)")
+    a.set_title("How early can you know?", loc="left", fontsize=13, fontweight="bold")
+    a.tick_params(axis="y", length=0)
+    runs = [("Warnings + outlook (rate table)", "Warnings + outlook alone", HATCH),
+            ("Model: weather + place + recent", "Model, weather so far only", ORANGE[3]),
+            ("+ neighbours (final)", "Model + warnings + outlook", BLUE[4])]
+    for run, label, color in runs:
+        d = lead[lead.run == run].sort_values("lead_hours")
+        b.plot(d.lead_hours, d.onset_pr_auc, marker="o", color=color, linewidth=2.2, markersize=5,
+               markeredgecolor=SURFACE, label=label)
+    f = ladder[ladder.model == meta["headline_model"]].iloc[0]
+    b.scatter([2], [f.onset_pr_auc], s=90, color=BLUE[5], edgecolor=SURFACE, linewidth=1.5, zorder=4,
+              label="Model + last five HRRR forecasts")
+    b.set_xticks([0, 1, 2, 3, 6], ["0 h", "1 h", "2 h", "3 h", "6 h"])
+    b.set_ylim(0, 0.11)
+    b.set_xlabel("hours between the decision and the 6 hours it predicts")
+    b.set_title("Looking further ahead", loc="left", fontsize=13, fontweight="bold")
+    b.legend(frameon=False, fontsize=9, loc="lower left", labelcolor=INK)
+    for ax in (a, b):
+        ax.grid(axis="x" if ax is a else "y", color=LINE, linewidth=0.6)
         ax.set_axisbelow(True)
-        ax.tick_params(axis="y", length=0)
-        for side in ("top", "right", "left"):
+        for side in ("top", "right"):
             ax.spines[side].set_visible(False)
-        ax.set_xlabel("PR-AUC on new ≥ 5% outages")
-    fig.suptitle("The model against what's already available", x=0.02, ha="left", fontsize=15, fontweight="bold")
-    fig.text(0.02, -0.04, "Blue: this project's models. Gray: baselines and comparisons. Official forecasts as known "
-             "at the block's start; the models see the block's weather.", color=MUTED, fontsize=9)
+    a.spines["left"].set_visible(False)
+    fig.suptitle(f"New outages, {meta['test_year']}: a year the model never saw", x=0.02, ha="left", fontsize=15,
+                 fontweight="bold")
+    fig.text(0.02, -0.04, "95% ranges from resampling 2025's storm days. Ratios to warnings + outlook are paired "
+             "(same resampled days), so they are much firmer than any single score.", color=MUTED, fontsize=9)
     fig.tight_layout()
     save(fig, "results.jpg")
 
@@ -227,11 +215,6 @@ LADDER_LABELS = {"Warnings + outlook": "NWS warnings + SPC outlook alone",
                  "Perfect weather (ceiling)": "Ceiling: knowing the weather in advance"}
 HOURLY_VALUE = [  # (column in ml/results/value_hourly_2025.csv, label), drawn top to bottom
     ("perfect", "Perfect foresight"), ("model", "Model, weather observed so far"), ("official", "Warnings + outlook")]
-VALUE_FORECASTS = [  # (column in ml/results/value_*.csv, label), drawn top to bottom
-    ("perfect", "Perfect forecast"), ("model", "This model"), ("official", "Warnings + outlook"),
-    ("spc_outlook", "SPC outlook"), ("nws_warnings", "NWS warnings"), ("climatology", "Historical average")]
-
-
 def money(millions):
     """−14.9 -> '−\\$14.9M' (escaped: matplotlib reads a bare $ as math)."""
     if abs(millions) < 0.05:
@@ -240,52 +223,35 @@ def money(millions):
 
 
 def value_figure():
-    """Left: relative economic value over the cost/loss ratio. Right: net savings in 2025 under the four
-    typical-customer-mix scenarios, a range per forecast with each scenario a dot."""
-    curves = pd.read_csv(RESULTS / "value_curves_2025.csv")
-    dollars = pd.read_csv(RESULTS / "value_2025.csv").query("mix == 'typical mix'")
-    fig, (a, b) = plt.subplots(1, 2, figsize=(11, 4.6), dpi=200, gridspec_kw={"width_ratios": [1, 1.15]})
-    styles = {"model": (BLUE[4], "-", 2.4), "official": (INK_2, "-", 1.6), "spc_outlook": (MUTED, "--", 1.4),
-              "nws_warnings": (HATCH, "-", 1.4)}
-    for col, label in VALUE_FORECASTS:
-        if col not in styles:
-            continue
-        color, ls, lw = styles[col]
-        a.plot(curves.cost_loss, curves[col].clip(lower=0), color=color, linestyle=ls, linewidth=lw,
-               label=f"{label}, best {curves[col].max():.2f}")
-    a.legend(frameon=False, fontsize=9.5, loc="upper right", labelcolor=INK)
-    a.set_xscale("log")
-    a.set_xticks([0.003, 0.01, 0.03, 0.1, 0.3], ["0.3%", "1%", "3%", "10%", "30%"])
-    a.set_ylim(0, 0.6)
-    a.set_xlabel("staging cost as a share of the loss it avoids")
-    a.set_title("Share of a perfect forecast's value", loc="left", fontsize=13, fontweight="bold")
-    a.grid(axis="y", color=LINE, linewidth=0.6)
-
-    y = np.arange(len(VALUE_FORECASTS))[::-1]
-    for yi, (col, _) in zip(y, VALUE_FORECASTS, strict=True):
+    """Net savings in 2025 from staging crews on alert episodes 2 hours ahead (ml/value_hourly.py), the four
+    typical-customer-mix scenarios as dots on a range per forecast."""
+    dollars = pd.read_csv(RESULTS / "value_hourly_2025.csv").query("mix == 'typical mix'")
+    fig, b = plt.subplots(figsize=(10, 3.4), dpi=200)
+    y = np.arange(len(HOURLY_VALUE))[::-1]
+    for yi, (col, _) in zip(y, HOURLY_VALUE, strict=True):
         v = dollars[col] / 1e6
         color = BLUE[4] if col == "model" else (MUTED if col == "perfect" else HATCH)
         b.plot([v.min(), v.max()], [yi, yi], color=color, linewidth=7, solid_capstyle="round", alpha=0.45)
         b.scatter(v, [yi] * len(v), color=color, s=26, zorder=3, edgecolor=SURFACE, linewidth=1)
-        b.text(v.max() + 2, yi, f"{money(v.min())} to {money(v.max())}", va="center", fontsize=9, color=INK)
+        if v.max() < 0:                       # all losses: label left of the range, clear of the zero line
+            b.text(v.min() - 2, yi, f"{money(v.min())} to {money(v.max())}", va="center", ha="right", fontsize=9.5,
+                   color=INK)
+        else:
+            b.text(v.max() + 2, yi, f"{money(v.min())} to {money(v.max())}", va="center", fontsize=9.5, color=INK)
     b.axvline(0, color=INK_2, linewidth=0.8)
-    b.set_yticks(y, [label for _, label in VALUE_FORECASTS], fontsize=10.5, color=INK)
-    b.set_xlim(-65, 140)
+    b.set_yticks(y, [label for _, label in HOURLY_VALUE], fontsize=10.5, color=INK)
+    b.set_xlim(-55, 160)
     b.set_xlabel("net savings in 2025, $ millions (customer outage costs avoided − staging costs)")
-    b.set_title("Estimated savings from staging crews", loc="left", fontsize=13, fontweight="bold")
     b.grid(axis="x", color=LINE, linewidth=0.6)
+    b.set_axisbelow(True)
     b.tick_params(axis="y", length=0)
-    for ax in (a, b):
-        ax.set_axisbelow(True)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-    b.spines["left"].set_visible(False)
-    fig.suptitle("What acting on each forecast was worth in 2025", x=0.02, ha="left", fontsize=15, fontweight="bold")
-    fig.text(0.02, -0.06, "Right: each dot is one scenario (a staged crew shortens outages by 10% or 25%; staging "
-             "costs \\$5,000 or \\$20,000 per county per 6 hours), typical customer mix, outage costs from "
-             "Berkeley Lab's ICE models.\nThe model sees each period's weather as it happened, so these are "
-             "best-case estimates.",
-             color=MUTED, fontsize=9)
+    for side in ("top", "right", "left"):
+        b.spines[side].set_visible(False)
+    fig.suptitle("Estimated savings from staging crews two hours ahead, 2025", x=0.02, ha="left", fontsize=14,
+                 fontweight="bold")
+    fig.text(0.02, -0.1, "Each dot is one scenario: a staged crew shortens outages by 10% or 25%; staging costs "
+             "\\$5,000 or \\$20,000 per county per 6 hours. Typical customer mix; outage costs from Berkeley Lab's "
+             "ICE models.\nThe model here is the version without HRRR forecasts.", color=MUTED, fontsize=9)
     fig.tight_layout()
     save(fig, "value.jpg")
 
@@ -324,6 +290,15 @@ def canopy_scatter(gdf):
     fig.text(0.01, -0.02, "One dot per county. Storm hit rate: share of blocks with a NOAA storm report that had "
              "≥ 1% of customers out, 2020–2025.", color=MUTED, fontsize=8.5)
     save(fig, "canopy-scatter.jpg")
+
+
+def canopy_effect():
+    """Mean relative change in onset PR-AUC from adding canopy, pooled model scored per state, over seeds."""
+    d = pd.read_csv(RESULTS / "canopy_by_state.csv").query("setup == 'pooled'")
+    t = d.pivot_table(index=["state", "seed"], columns="features", values="onset_pr_auc")
+    effect = (t["with canopy"] / t["without canopy"] - 1).groupby(level=0)
+    return {state: {"mean": round(float(e.mean()), 3), "better": int((e > 0).sum()), "seeds": int(e.size)}
+            for state, e in effect}
 
 
 def story_data(gdf):
@@ -419,11 +394,15 @@ def story_data(gdf):
                     "lo": round(float(r.lo), 3), "hi": round(float(r.hi), 3),
                     "ratio": round(float(r.ratio_vs_official), 2), "ratio_lo": round(float(r.ratio_vs_official_lo), 2),
                     "ratio_hi": round(float(r.ratio_vs_official_hi), 2),
+                    "better": round(float(getattr(r, "better_vs_official", float("nan"))), 3),
                     "ours": r.model == meta["headline_model"], "ceiling": "ceiling" in r.model}
                    for r in ladder.itertuples()],
         "lead_time": [{"label": label, "points": [{"lead": int(r.lead_hours), "value": round(float(r.onset_pr_auc), 3)}
                                                   for r in lead_time[lead_time.run == run].itertuples()]}
                       for run, label in runs.items()],
+        # paired storm-day permutation tests (ml/significance.py)
+        "significance": {f"{r.challenger} vs {r.reference}": round(float(r.p_permutation), 3)
+                         for r in pd.read_csv(RESULTS / "significance_2025.csv").itertuples()},
         "alerts": {"base_rate": round(meta["event_rate"], 4), "share": meta["headline_share"],
                    "new_outages": meta["n_new_outages"], "decisions": meta["n_decisions"],
                    **{k: {"caught": round(at[m]["caught"], 3), "precision": round(at[m]["precision"], 3),
@@ -441,7 +420,9 @@ def story_data(gdf):
                    "hit": [round(float(v), 4) for v in canopy.storm_hit_rate],
                    "r": {state: round(float(np.corrcoef(g.canopy_mean_pct, g.storm_hit_rate)[0, 1]), 2)
                          for state, g in canopy.groupby("state")} | {
-                       "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)}},
+                       "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)},
+                   # what knowing the canopy adds to the model, per state (ml/canopy_by_state.py: pooled model, 2024)
+                   "model": canopy_effect()},
         "value": {
             "forecasts": [{"key": col, "label": label, "ours": col == "model",
                            "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
@@ -558,17 +539,15 @@ if __name__ == "__main__":
         storm_clip(gdf, frames)
         print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB), social.jpg, storm.mp4")
         sys.exit()
-    preds = pd.read_parquet(APP / "predictions.parquet")
-    meta = json.loads((APP / "meta.json").read_text())
-    storm_replay(gdf, preds, pd.read_parquet(APP / "storms.parquet"), meta)
-    accuracy(gdf, preds, meta)
+    accuracy(gdf)
     burden_map(gdf)
     results()
     canopy_map(gdf)
     canopy_scatter(gdf)
     value_figure()
-    social_card(gdf, preds)
-    storm_clip(gdf, preds)
     story = story_data(gdf)
+    frames = json.loads(story.read_text())
+    social_card(gdf, frames)
+    storm_clip(gdf, frames)
     print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
           ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))

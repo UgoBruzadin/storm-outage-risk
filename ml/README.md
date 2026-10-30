@@ -36,6 +36,10 @@ the git commit).
 | `forecast_test.py` | the moving-window model with HRRR forecasts of the window it predicts, with storm-day ranges | change `LEAD` or `RUN_AGE` |
 | `forecast_ensemble.py` | a probability range per decision from the HRRR runs issued 2–6 h before | change `RUN_AGES` |
 | `uncertainty.py` | paired bootstrap over storm days: 95% ranges for scores and differences | change `N_RESAMPLES` |
+| `significance.py` | paired tests between models: storm-day bootstrap and permutation p-values | change `COMPARISONS` |
+| `canopy_by_state.py` | does canopy help the model in Missouri, Illinois or both | — |
+| `audit.py` | checks for look-ahead, clock and leakage problems (docs/audit.md) | — |
+| `export_hourly.py` | the hourly results the site and dashboard read | change `HEADLINE` or `SHARES` |
 
 Every experiment, its result and what it means: [docs/experiments.md](../docs/experiments.md).
 

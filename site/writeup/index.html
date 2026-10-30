@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storm Outage Risk — Missouri &amp; Illinois</title>
-<meta name="description" content="Which counties lose power when a storm hits, and why the same storm hits some places harder. A county-level outage model built on public data.">
+<meta name="description" content="Which counties will lose power in the next few hours? A county-level outage model for Missouri and Illinois, built on public data and real weather forecasts, tested two hours ahead on 2025.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ugobruzadin.github.io/storm-outage-risk/writeup/">
 <meta property="og:title" content="Storm Outage Risk: Missouri &amp; Illinois">
-<meta property="og:description" content="Which counties lose power when a storm hits, and why the same storm hits some places harder. A county-level outage model built on public data.">
+<meta property="og:description" content="Two hours ahead, a county-level outage model ranks new outages 2.5× better than official warnings alone (95% range 2.1–3.4×), tested on 2025. The full write-up: data traps, the look-ahead mistake, ranges, and what it would be worth.">
 <meta property="og:image" content="https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: predicted outage risk by county beside the share of customers who actually lost power.">
+<meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: outage risk by county, decided two hours ahead, beside the share of customers who actually lost power.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <style>
@@ -105,52 +105,60 @@ pre .c { color: var(--muted); }
 </style>
 </head>
 <body>
+
 <main>
 
 <section class="hero">
   <h1>⚡ Storm Outage Risk</h1>
-  <p class="lede">When a storm moves through, which counties will lose power? This model ranks every county by how
-    likely the storm is to cause outages there, which tells utilities and emergency managers where repair crews will
-    be needed.</p>
+  <p class="lede">When a storm moves through, which counties will lose power in the next few hours? This model ranks
+    every county, every hour, by its risk of a new outage two hours ahead, using only what a utility would know at
+    the time, including the weather forecasts available then. That tells utilities and emergency managers where to
+    send repair crews before the lines come down.</p>
   <div class="buttons">
     <a class="btn" href="../">← The two-minute story</a>
     <a class="btn primary" href="https://storm-outage-risk.streamlit.app">Open the live dashboard</a>
     <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk">Code on GitHub</a>
   </div>
   <div class="stats">
-    <div class="stat"><b>216</b><span>counties covered across Missouri and Illinois</span></div>
-    <div class="stat"><b>6 years</b><span>of storms and outages (2020–2025), in 6-hour steps</span></div>
-    <div class="stat"><b>25×</b><span>more likely than average: county-periods above an alert level set in advance
-      had a major new outage (5%+ of customers)</span></div>
-    <div class="stat"><b>1 in 4</b><span>major new outages caught by those top alerts</span></div>
+    <div class="stat"><b>216</b><span>counties across Missouri and Illinois, every hour, 2020–2025</span></div>
+    <div class="stat"><b>2.5×</b><span>better than NWS warnings and SPC outlooks alone at ranking new outages two
+      hours ahead (95% range 2.1–3.4×)</span></div>
+    <div class="stat"><b>31×</b><span>more likely than average: county-hours the model alerted on were followed by a
+      major new outage 16% of the time</span></div>
+    <div class="stat"><b>31%</b><span>of 2025's 1,624 major new outages caught in time, alerting on 0.75% of
+      county-hours</span></div>
   </div>
   <div class="abstract">
     <h2>Summary</h2>
     <p><strong>The problem.</strong> Before severe weather, utilities send repair crews to wait near where they expect
-      damage. Forecasts say when a storm will arrive, but not where it will do the most damage. The same storm can cut
-      power to 2% of one county and 40% of the next.</p>
-    <p><strong>What I built.</strong> A model that estimates, for every county and every 6-hour period, the chance
-      that a significant share of customers lose power. It combines public weather data (wind, gusts, rain, ice, storm
-      instability) with what each place is like (size, tree cover, housing age, density) and whether it already had
-      outages in the past day.</p>
-    <p><strong>How well it works.</strong> I tested it on 2025 (1 January to 31 December), a year it never trained on.
-      With an alert level fixed on 2024, it flagged about 1% of county-periods; those were 25× more likely than
-      average to have a major new outage, and they caught about a quarter of all of them. Weather does most of the work; local factors add a little. The model beats National Weather Service
-      warnings and Storm Prediction Center outlooks used alone, and adding those forecasts to the model improves it by
-      another 15%.</p>
-    <p><strong>What it would be worth.</strong> If a utility had sent repair crews ahead of storms wherever the
-      model pointed in 2025, it would have avoided an estimated $4–39 million in outage costs, depending on
-      assumptions about crews. Acting on the official forecasts the same way would mostly have lost money.</p>
-    <p><strong>One caveat.</strong> The model currently sees the weather as it actually happened, not as it was
-      forecast, so these scores are the best case for planning ahead. Feeding it forecasts made hours in advance is
-      the next step.</p>
+      damage. Forecasts say when a storm will arrive, but not where it will cut the power. The same storm can take out
+      2% of one county and 40% of the next.</p>
+    <p><strong>What I built.</strong> A model that, every hour, estimates for every county the chance that at least
+      5% of its customers lose power in the six hours starting two hours later. It uses only what is known at that
+      moment: the weather so far, the latest HRRR weather forecasts, the warnings and outlooks in force, outages so
+      far in the county and its neighbours, and what the place is like (tree cover, housing, density).</p>
+    <p><strong>How well it works.</strong> Tested on 2025, a year it never trained on, it ranks new outages 2.5× better
+      than official warnings and outlooks alone (95% range 2.1–3.4×). Alerting on the riskiest 0.75% of
+      county-hours, 16% of its alerts were followed by a major new outage, 31 times the average, and they caught 31%
+      of all of them. Every prediction comes with a range from the last five forecast runs, and the ranges are honest:
+      outages followed about as often as predicted.</p>
+    <p><strong>The trap I fell into.</strong> The first version scored better still, but it summarized the weather
+      <em>during</em> the hours it was predicting, which nobody knows in advance. Rebuilt so that every input is known
+      at the decision, its score fell by a third; real forecasts win most of that back. A separate audit then checked
+      that no input sees the future.</p>
+    <p><strong>What it would be worth.</strong> Staging crews wherever the model pointed in 2025 would have been worth
+      from about break-even to $30 million, depending on assumptions about crews. That estimate is for the model
+      without HRRR forecasts; acting on the official forecasts the same way loses money in every scenario.</p>
     <p><strong>Where the effort went.</strong> Mostly into making the numbers trustworthy. Public data hides traps:
-      gaps that look like "no outages", and one county's outages reported under its neighbour's code. There's also a
-      model that looks great just by predicting outages that are already underway. Each trap is written up below, with
-      the code that fixes it.</p>
+      gaps that look like "no outages", one county's outages reported under its neighbour's code, and a model that
+      looks great by predicting outages already underway, or by seeing the storm it is supposed to forecast. Each is
+      written up below, with the code that fixes it.</p>
     <ul class="toc">
       <li><a href="#story">How it started</a></li>
-      <li><a href="#findings">What I found</a></li>
+      <li><a href="#question">The question, asked honestly</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#sure">How sure is it?</a></li>
+      <li><a href="#findings">What it learned</a></li>
       <li><a href="#compare">How it compares</a></li>
       <li><a href="#value">What it would be worth</a></li>
       <li><a href="#pitfalls">Pitfalls, with code</a></li>
@@ -165,73 +173,204 @@ pre .c { color: var(--muted); }
   whether bad weather lined up with outages in St. Louis. It did, and it raised a better question. When a storm
   crosses the state, which counties go dark, and why does the same storm take out 2% of one county and 40% of the
   next? My guess was trees, old dense canopy over overhead lines, and old housing. Testing that guess honestly turned
-  out to be the hard part.</p>
-<p>This project predicts, for every county and every 6-hour block, whether at least 1%, 5% or 10% of customers lose
-  power, from storm ingredients (wind, gusts, wind shear, instability, rain, ice) and from what each place is like:
-  tree canopy, housing age, density, and its own outage history. Partway through I found a related project,
-  <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>, forecasts county outages from weather
-  forecasts and evaluates on random days. This one differs where it matters for an honest answer: place features, splits by
-  time and by county, and scoring <strong>new</strong> outages separately from ongoing ones.</p>
+  out to be the hard part, and so did a second question I hadn't asked at first: how far ahead can anyone know?</p>
+<p>Partway through I found a related project,
+  <a href="https://github.com/biplovbhandari/weathernext-outage-forecasting">weathernext-outage-forecasting</a>, which
+  forecasts county outages from weather forecasts and evaluates on random days. This one differs where it matters for
+  an honest answer: place features, splits by time and by county, scoring <strong>new</strong> outages separately
+  from ongoing ones, and every input fixed at the moment of the decision.</p>
 
 <figure>
-  <img src="../assets/storm-replay.jpg?v=3" alt="Two county maps of Missouri and Illinois for 15 March 2025, 00 to 06 UTC: predicted outage risk in blue, highest across south-central and eastern Missouri, and the actual peak share of customers out in orange, worst in southeastern Missouri." loading="lazy">
-  <figcaption>The biggest outage block of 2025, during the 14–15 March tornado outbreak. The model had never seen
-    2025; its highest risk falls on the band of Missouri counties that lost the most power.</figcaption>
+  <img src="../assets/social.jpg?v=5" alt="Two county maps of Missouri and Illinois for the evening of 14 March 2025: the risk of a new outage decided at 4 PM from the forecasts available then, highest across eastern and southern Missouri, beside the worst share of customers out between 6 PM and midnight, with the largest outages in east-central and southeastern Missouri. Counties already out are gray." loading="lazy">
+  <figcaption>The 14–15 March 2025 tornado outbreak, a storm the model never trained on. Left: the risk for 6 PM to
+    midnight, decided at 4 PM from the forecasts available then. Right: what happened. Gray counties were already
+    out, so there was nothing new to predict. The story page plays the whole storm hour by hour.</figcaption>
 </figure>
 
-<h2 id="findings">What I found</h2>
-<p>Outages last: a county that is out now will likely still be out in six hours, and a model can look accurate by
-  learning only that. The useful part is the <strong>new outage</strong>, one that starts after six calm hours, so
-  every result below is scored on new outages only.</p>
-<p>Scores are <strong>PR-AUC</strong>: how well the model puts real outages ahead of false alarms. Random guessing
-  scores the outage rate itself (0.005 for 5% outages), so the final model's 0.106 is about 20× better than chance.</p>
-
+<h2 id="question">The question, asked honestly</h2>
+<p>A utility decides at some hour whether to send crews somewhere for the next few hours. So the model makes a
+  decision every hour, for every county, about the six hours that start two hours later: the time it takes to get a
+  crew in place. Every input must be known at that hour:</p>
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Outage size</th><th>New-outage rate</th><th>Historical average</th><th>Weather only</th><th>+ place</th><th>+ recent outages</th></tr></thead>
+  <thead><tr><th>Input</th><th>As of the decision</th></tr></thead>
   <tbody>
-    <tr class="group"><td colspan="6">Next year — trained on 2020–2024, tested on 2025</td></tr>
-    <tr><td>≥ 1% of customers</td><td>1.97%</td><td>0.032</td><td>0.116</td><td>0.145</td><td class="best">0.153</td></tr>
-    <tr><td>≥ 5%</td><td>0.53%</td><td>0.009</td><td>0.068</td><td>0.091</td><td class="best">0.106</td></tr>
-    <tr><td>≥ 10%</td><td>0.26%</td><td>0.005</td><td>0.047</td><td>0.062</td><td class="best">0.083</td></tr>
-    <tr class="group"><td colspan="6">Unseen counties — 5-fold split by county, 2020–2025</td></tr>
-    <tr><td>≥ 1%</td><td>1.73%</td><td>0.016</td><td>0.109</td><td>0.110</td><td class="best">0.122</td></tr>
-    <tr><td>≥ 5%</td><td>0.46%</td><td>0.004</td><td>0.070</td><td>0.071</td><td class="best">0.086</td></tr>
-    <tr><td>≥ 10%</td><td>0.22%</td><td>0.002</td><td>0.054</td><td>0.054</td><td class="best">0.068</td></tr>
+    <tr><td>Weather so far (HRRR: gusts, wind aloft, shear, storm energy, rain, ice)</td><td>the 6 hours before</td></tr>
+    <tr><td>Weather forecast for the window (HRRR runs, as issued)</td><td>runs issued 2–6 hours before</td></tr>
+    <tr><td>NWS warnings, SPC Day 1 outlook</td><td>issued before, in force</td></tr>
+    <tr><td>Outages in the county and within 100 km / upwind</td><td>the hour before</td></tr>
+    <tr><td>Place: tree canopy, housing age, density, size</td><td>fixed</td></tr>
   </tbody>
 </table>
 </div>
-<p class="fix">XGBoost, 800 trees of depth 4. Settings were chosen on 2024 (trained on 2020–2023) and checked over
-  five random seeds; 2025 was scored once.</p>
+<p>It wasn't built this way at first. The first version worked in fixed 6-hour blocks and summarized the weather
+  <em>during</em> each block: the strongest gust, the total rain. That's not a bug in the code, and it scored 0.106,
+  2.4× the official forecasts. But it answers "given the weather that actually happened, which counties lost
+  power?", and nobody has that weather two hours ahead. Moving the weather to before the decision showed how much
+  of the score came from seeing the storm itself:</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>6-hour blocks, new ≥ 5% outages, 2025</th><th>PR-AUC</th></tr></thead>
+  <tbody>
+    <tr><td>Weather during the block (the first version)</td><td>0.106</td></tr>
+    <tr><td>Weather up to the block's start</td><td>0.043</td></tr>
+    <tr><td>Weather up to the block's start + warnings + outlook</td><td>0.084</td></tr>
+    <tr><td>Weather up to 1 / 2 / 3 / 6 hours before the block</td><td>0.027 / 0.025 / 0.023 / 0.020</td></tr>
+    <tr><td>Warnings + outlook alone</td><td>0.044</td></tr>
+  </tbody>
+</table>
+</div>
+<p>So the model was rebuilt on an hourly table of 15 million county-hours, where each decision sees only what came
+  before it, and then given the one thing the first version had for free: what the weather would do in the window.
+  Not the weather that happened, but the HRRR forecast as it was issued, read from the University of Utah's archive
+  of every hourly run.</p>
 
+<h2 id="results">Results: two hours ahead</h2>
+<p>Scores are <strong>PR-AUC</strong> on new outages: how well real outages rank ahead of false alarms. Guessing at
+  random scores the outage rate itself, about 0.005. Trained on 2020–2024, with features and settings chosen on 2024,
+  tested once on 2025.</p>
+<figure>
+  <img src="../assets/results.jpg?v=5" alt="Left: horizontal bars of PR-AUC on new outages two hours ahead, with 95% ranges: warnings plus outlook alone 0.039; the model with weather observed so far 0.068, 1.7 times official; with the latest HRRR forecast 0.094, 2.4 times; with the last five HRRR forecasts 0.099, 2.5 times; and the ceiling of knowing the weather in advance 0.105, 2.7 times. Right: score against hours ahead from 0 to 6: the model with warnings and outlook falls from 0.090 to 0.050, the model with weather so far only from 0.058 to 0.023, warnings and outlook alone from 0.047 to 0.031, with the HRRR forecast version at 0.099 two hours ahead." loading="lazy">
+</figure>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>New ≥ 5% outages, 2 hours ahead, 2025</th><th>PR-AUC (95% range)</th><th>vs. warnings + outlook (95% range)</th></tr></thead>
+  <tbody>
+    <tr><td>NWS warnings + SPC outlook alone</td><td>0.039 (0.020–0.063)</td><td>1×</td></tr>
+    <tr><td>Model, weather observed so far</td><td>0.068 (0.040–0.103)</td><td>1.7× (1.5–2.3×)</td></tr>
+    <tr><td>Model + latest HRRR forecast</td><td>0.094 (0.054–0.145)</td><td>2.4× (2.0–3.2×)</td></tr>
+    <tr><td>Model + last five HRRR forecasts</td><td class="best">0.099 (0.056–0.154)</td><td class="best">2.5× (2.1–3.4×)</td></tr>
+    <tr><td>Ceiling: knowing the window's weather</td><td>0.105 (0.060–0.161)</td><td>2.7× (2.3–3.6×)</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="fix">1,756,605 decisions (every county-hour of 2025 not already in an outage), 1,624 new outages. XGBoost,
+  800 trees of depth 4; the model with forecasts is the same model given 15 more features, the window's weather, and
+  trained on the weather that actually happened.</p>
 <ul>
-  <li><strong>Weather predicts new outages 6–24× better than chance</strong>, and the advantage grows with outage
-    size.</li>
-  <li><strong>More years of storms helped more than any feature.</strong> Training on 2020–2024 instead of 2024 alone
-    lifted every score by 17–28% on the same 2025 test.</li>
-  <li><strong>Place helps for known counties, not new ones.</strong> County size, housing and canopy add 25–34% on the
-    next year but almost nothing on unseen counties: the model learns which counties are fragile more than why.</li>
-  <li><strong>On new outages the model is a weather model.</strong> Its top features are surface wind, the block's
-    minimum temperature (ice and cold-season storms), county size and wind × rain. Scored on every period instead, the
-    previous period's outage is the top feature, seven times any weather or place feature: it is predicting outages
-    already underway.</li>
-  <li><strong>Large outages are the most predictable relative to their rarity.</strong> Of the 1% of calm
-    county-periods the model ranks riskiest, about 1 in 7 become a ≥ 5% outage (26× the average), and together they
-    catch 26% of all new ≥ 5% outages. Ranking a year after the fact isn't something a live system can do, so the
-    alert level is also fixed in advance, as the top 1% of a 2024 validation run: on 2025 it flags 1.1% of calm
-    county-periods, 13% of them become a ≥ 5% outage (25×), and they catch 27%.</li>
-  <li><strong>Tuning barely matters.</strong> The top ten settings on 2024 sit within ±1.2% of each other, the same as
-    the spread across random seeds. Up-weighting rare events hurt.</li>
-  <li><strong>Tree canopy is why I compare across models and seeds.</strong> With LightGBM on one year of data,
-    removing canopy cost 12–22% of PR-AUC; with XGBoost the effect shrank or reversed. With five years and five seeds
-    it settled: removing canopy lowers the score with every seed in three of four settings, by 2–3%. A small, real
-    effect, and still an association, not a cause.</li>
-  <li><strong>Two ideas didn't make it.</strong> Rain in the days before a storm (wet ground uproots trees) helped in
-    some settings and hurt in others across seeds, and each county's outage history over the previous three years
-    added nothing on the validation year. Both are left out of the final model.</li>
+  <li><strong>Real forecasts recover about 85% of what perfect knowledge would add.</strong> From 0.068 with only the
+    weather so far to 0.099 with forecasts, against 0.105 with the actual weather: 1.46× (1.26–1.67×), paired on the
+    same storm days.</li>
+  <li><strong>Averaging the last five runs beats the newest run alone</strong> (0.099 against 0.094, better on the
+    same days). Each run places the storm a little differently; the average is steadier.</li>
+  <li><strong>Every difference above is significant</strong> (paired storm-day permutation test, p ≤ 0.002), except
+    one: the ceiling is not significantly better than the model with real forecasts (p = 0.09). On 2025, the
+    averaged forecasts can't be told apart from knowing the weather in advance.</li>
+  <li><strong>Weather that has already happened fades within hours.</strong> On its own it beats the official
+    forecasts only at 0–1 hour ahead. Warnings and outlooks fade slowly, because they are forecasts. Combining them
+    beats both at every lead, by 1.6–1.9×.</li>
+  <li><strong>Neighbours help more the further ahead.</strong> Outages and storms in counties within 100 km and
+    upwind added 3% two hours ahead and 6% six hours ahead, with every seed: storms in Missouri mostly arrive from the
+    west and southwest.</li>
 </ul>
 
-<h3>Where the trees are</h3>
+<h3>If a utility acted on it</h3>
+<p>To compare alerts fairly, every version alerts on the same share of county-hours, its own riskiest 0.75%.
+  (Fixing the alert level on 2024 instead works for the versions trained and tested on the same kind of weather, but
+  forecasts push more hours over a level set on actual weather, which would flatter the forecast versions.)</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Alerts on 0.75% of county-hours, 2025</th><th>Alerts that were real</th><th>New outages caught</th><th>Alert spells</th></tr></thead>
+  <tbody>
+    <tr><td>Warnings + outlook alone¹</td><td>15.8%</td><td>10%</td><td>538</td></tr>
+    <tr><td>Model, weather observed so far</td><td>12.7%</td><td>27%</td><td>3,159</td></tr>
+    <tr><td>Model + latest HRRR forecast</td><td>15.7%</td><td class="best">33%</td><td>4,695</td></tr>
+    <tr><td>Model + last five HRRR forecasts</td><td class="best">16.1%</td><td>31%</td><td class="best">3,050</td></tr>
+    <tr><td>Ceiling</td><td>16.8%</td><td>33%</td><td>3,236</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="fix">Base rate: 0.52% of county-hours were followed by a new outage. An alert spell is a run of consecutive
+  alerted hours in one county, roughly one crew call-out. ¹ The rate table gives many hours the same probability, so
+  it can only be cut at 0.29% of hours.</p>
+<p>The newest run catches a few more outages; the average of five makes a third fewer call-outs, because alerts stop
+  switching on and off as successive runs move a storm around. Which is better is a dispatch choice, not a modelling
+  one. The official forecasts are about as precise, but they point at far fewer places, so they miss two-thirds of
+  what the model catches.</p>
+
+<h2 id="sure">How sure is it?</h2>
+<h3>How sure is the score?</h3>
+<p>One year's score depends on a handful of big storm days. Resampling 2025's storm days (12 UTC to 12 UTC, so an
+  evening storm isn't cut at midnight) a thousand times gives the ranges above: any single score is uncertain, 0.099
+  could plausibly be anywhere from 0.056 to 0.154. But every version wins and loses on the same days, so the
+  comparisons are much tighter: with forecasts, 2.5× the official forecasts, never less than 2.1× in 95% of
+  resamples. Claims on these pages are phrased as comparisons for that reason. Resampling hours instead of days would
+  have given ranges several times too narrow (pitfall 13).</p>
+<p>Overlapping ranges don't mean "not significant", so the differences were tested directly, two ways, each paired
+  over 2025's 366 storm days: the share of 1,000 resamples in which one model beats the other, and a permutation test
+  that swaps the two models' predictions on randomly chosen storm days 1,000 times.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Comparison, 2 hours ahead</th><th>Better in resamples</th><th>p (permutation)</th></tr></thead>
+  <tbody>
+    <tr><td>Model, weather so far vs. warnings + outlook</td><td>100%</td><td>0.001</td></tr>
+    <tr><td>Model + last five HRRR forecasts vs. warnings + outlook</td><td>100%</td><td>0.001</td></tr>
+    <tr><td>With forecasts vs. without</td><td>100%</td><td>0.001</td></tr>
+    <tr><td>Last five runs vs. the newest run</td><td>100%</td><td>0.002</td></tr>
+    <tr><td>Ceiling vs. last five runs</td><td>92%</td><td>0.09</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="fix">0.001 is the smallest p 1,000 permutations can show. Code: <code>ml/significance.py</code>.</p>
+<h3>How sure is each prediction?</h3>
+<p>The runs issued 2, 3, 4, 5 and 6 hours before a decision all forecast the same window, each with its own errors.
+  Feeding each through the model gives five probabilities: the average is the prediction, the lowest and highest are
+  its range. Grouped by prediction, outages followed about as often as predicted, inside the range every time:</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Predicted chance</th><th>County-hours</th><th>Average range</th><th>An outage followed</th></tr></thead>
+  <tbody>
+    <tr><td>0.2%</td><td>1,405,544</td><td>0.18–0.21%</td><td>0.19%</td></tr>
+    <tr><td>0.7%</td><td>213,353</td><td>0.6–0.8%</td><td>0.66%</td></tr>
+    <tr><td>1.4%</td><td>77,674</td><td>1.1–1.9%</td><td>1.5%</td></tr>
+    <tr><td>3.1%</td><td>41,328</td><td>2.0–4.8%</td><td>3.0%</td></tr>
+    <tr><td>6.9%</td><td>13,128</td><td>4.0–11.6%</td><td>6.4%</td></tr>
+    <tr><td>13.9%</td><td>6,617</td><td>8.0–22.5%</td><td>13.0%</td></tr>
+    <tr><td>32.5%</td><td>3,992</td><td>22.7–43.6%</td><td>26.5%</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Only the riskiest group runs high (32.5% predicted, 26.5% happened): the model learned from the weather that
+  actually happened and takes the forecasts a little too literally. The range carries information too: among
+  low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one.</p>
+<h3>Did anything see the future?</h3>
+<p>After the first version's mistake, the pipeline was audited before publishing (<a href="https://github.com/UgoBruzadin/storm-outage-risk/blob/main/docs/audit.md">docs/audit.md</a>):</p>
+<ul>
+  <li>For 20,000 random decisions, every input and the label recomputed from the raw tables with explicit time
+    filters matched what the model was given, 100%. All 2,226 warning flags in 2025 had a warning issued before the
+    hour and still in force.</li>
+  <li>Scoring the raw gust and warning signals at offsets from 12 hours before to 12 hours after the decision, skill
+    peaks exactly over the predicted window: the sources agree on the clock.</li>
+  <li>Retrained on shuffled outcomes, the model scores 1.3–1.4× chance, against 13× for the real one; the small excess
+    comes from rare weather, not a leak.</li>
+  <li>Forecast error grows steadily with the forecast hour, and missing data is spread evenly between storm and calm
+    days.</li>
+</ul>
+
+<h2 id="findings">What it learned</h2>
+<ul>
+  <li><strong>More years of storms helped more than any feature.</strong> Training on 2020–2024 instead of 2024 alone
+    lifted every score by 17–28% on the same 2025 test. Adding 2018–2019 as well, once the counties EAGLE-I wasn't
+    tracking those years were dropped, changed nothing.</li>
+  <li><strong>Neighbours and forecasts help; history doesn't.</strong> Time since a county's last outage, rain in the
+    previous 72 hours, and each county's outage record over three years all added nothing or hurt on the validation
+    year, over five seeds.</li>
+  <li><strong>Place helps for known counties, not new ones.</strong> County size, housing and canopy add 25–34% on the
+    next year but almost nothing on unseen counties: the model learns which counties are fragile more than why.</li>
+  <li><strong>Tree canopy is a small, real effect, just not where the map suggests.</strong> Removing it lowers the
+    score by about 3% overall, with every seed. Tested state by state, it improves the model in Illinois (+3.0%,
+    3 of 3 seeds) and barely in Missouri (+0.4%), the opposite of the county correlation below. Still an
+    association, not a cause.</li>
+  <li><strong>Tuning barely matters, and bigger is worse.</strong> Deeper trees or more of them overfit this rare an
+    event, by up to 22%.</li>
+</ul>
+
+<h3>Trees matter, just not the way I expected</h3>
+<p>I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But Missouri's most wooded
+  counties are the Ozarks, also remote, hilly and sparsely served, and the model already sees that through housing,
+  density and county size. Given the tree data, it barely improves in Missouri (+0.4%) and improves a little in
+  Illinois (+3.0%), where the few wooded river counties stand out from the farmland around them. Code:
+  <code>ml/canopy_by_state.py</code>.</p>
 <div class="grid2">
   <figure>
     <img src="../assets/canopy-map.jpg?v=3" alt="Map of Missouri and Illinois counties shaded green by average tree canopy: the Ozark counties of southern Missouri are darkest, near 70%, while central Illinois farm counties such as Champaign are near 2%." loading="lazy">
@@ -247,12 +386,13 @@ pre .c { color: var(--muted); }
   </figure>
 </div>
 
-<h3>Where it works, and where it doesn't</h3>
+<h3 id="where">Where it works, and where it doesn't</h3>
 <figure>
-  <img src="../assets/accuracy.jpg?v=4" alt="Two county maps for 2025. Left: share of each county's new outages that the model flagged, mostly between 10% and 50%. Right: actual new outages divided by the number the model expected, orange where it underrated a county and blue where it overrated one; hatched counties had fewer than three new outages." loading="lazy">
-  <figcaption>Per county, 2025. Left: the share of new outages that fell in a block the model flagged. Right: actual
-    new outages against the number the model expected. Orange counties had more outages than expected. Most of
-    northern Illinois had too few outages to judge (hatched). The same view is on the dashboard's Accuracy tab.</figcaption>
+  <img src="../assets/accuracy.jpg?v=5" alt="Two county maps for 2025, two hours ahead. Left: share of each county's new outages caught in time by the alerts, mostly between 10% and 60%. Right: actual outage windows divided by the sum of predicted probabilities, orange where the model underrated a county and blue where it overrated one; hatched counties had fewer than three new outages." loading="lazy">
+  <figcaption>Per county, 2025, two hours ahead, with alerts on the riskiest 0.75% of county-hours. Left: the share
+    of new outages caught in time. Right: actual outage windows against what the probabilities added up to; orange
+    counties had more than predicted. Northern Illinois had too few outages to judge (hatched). The same view is on
+    the dashboard.</figcaption>
 </figure>
 
 <h3>The resilience scorecard</h3>
@@ -281,50 +421,20 @@ pre .c { color: var(--muted); }
   All 216 counties are on the dashboard's Resilience scorecard.</p>
 
 <h2 id="compare">How it compares</h2>
-<p>A model is only worth something next to what people already use. Three comparisons, each scored the same way as
-  everything else on this page: new outages of at least 5% of customers, PR-AUC, same data.</p>
-<figure>
-  <img src="../assets/results.jpg?v=3" alt="Horizontal bar charts of PR-AUC on new outages of at least 5% of customers, for the next year and for unseen counties. The historical average, NWS warnings, the SPC outlook, warnings plus outlook and weathernext's setup score between 0.004 and 0.058; this project's weather-only model scores about 0.07 and the final model 0.106 next year and 0.086 on unseen counties." loading="lazy">
-</figure>
-
 <h3>Against the official forecasts</h3>
 <p>A utility watching a storm already has NWS warnings (severe thunderstorm, tornado, high wind, winter) and SPC's Day 1
-  convective outlook. Each becomes a baseline: the historical outage rate for every combination of warnings in force,
-  or for every outlook risk level, learned on the training year.</p>
-<p>The two sides know different things, so the comparison is about information, not a fair race. The official
-  forecasts are taken as they stood <strong>when the block started</strong>: the latest outlook (issued 0.6–10 hours
-  earlier) and the warnings already in force. The model's HRRR weather describes the block itself, close to what
-  actually happened. It knows the storm arrived; the forecasts had to anticipate it.</p>
-<div class="table-wrap">
-<table>
-  <thead><tr><th>New ≥ 5% outages</th><th>Known</th><th>Next year</th><th>Unseen counties</th><th>Top-1% hit rate, next year</th></tr></thead>
-  <tbody>
-    <tr><td>Historical average (county × month)</td><td>in advance</td><td>0.009</td><td>0.004</td><td>1.7%</td></tr>
-    <tr><td>NWS warnings in force at block start</td><td>in advance</td><td>0.024</td><td>0.020</td><td>5.9%</td></tr>
-    <tr><td>SPC Day 1 outlook</td><td>in advance</td><td>0.033</td><td>0.023</td><td>8.6%</td></tr>
-    <tr><td>Warnings + outlook</td><td>in advance</td><td>0.044</td><td>0.039</td><td>9.2%</td></tr>
-    <tr><td>This model</td><td>during the block</td><td>0.106</td><td>0.086</td><td>13.9%</td></tr>
-    <tr><td>This model + warnings + outlook as features</td><td>during the block</td><td class="best">0.122</td><td class="best">0.100</td><td class="best">14.5%</td></tr>
-  </tbody>
-</table>
-</div>
-<ul>
-  <li><strong>The model scores 2.4× the official forecasts</strong> on the next year and 2.2× on unseen counties, at
-    every outage size.</li>
-  <li><strong>Official forecasts still add to the model.</strong> Given the warnings and outlook as inputs, it gains
-    15% on the next year and 16% on unseen counties. Forecasters know things a single HRRR point per county misses,
-    such as a high-wind or ice-storm warning issued hours ahead. Trained on 2024 alone the gain was 29%: with more
-    years of storms, the model learns more of it on its own.</li>
-  <li><strong>Counting warnings honestly matters.</strong> A first version that counted any warning touching the
-    block made warnings look nearly twice as good. Of 1,445 new ≥ 5% outages in 2025, 335 had a severe thunderstorm
-    or tornado warning somewhere in the block but only 65 had one in force at its start; the rest were issued as the
-    storm, and often the outage, arrived.</li>
-  <li><strong>The fair race is still open.</strong> Matching the outlook's lead time means feeding the model weather
-    forecasts made hours before the block. That is the next step on the roadmap.</li>
-</ul>
+  convective outlook. Turned into a baseline, they give the historical outage rate for every combination of warnings
+  in force and outlook risk level, learned on 2020–2024 and taken exactly as they stood at each decision. That is the
+  first row of the results above: 0.039 two hours ahead. The model with forecasts scores 2.5× that (2.1–3.4×), and
+  uses the warnings and outlook as inputs too: on their own, the model's weather features beat them only an hour or
+  two ahead, and together they beat both at every lead.</p>
+<p>Counting warnings honestly matters. A first version that counted any warning touching the 6-hour block made
+  warnings look nearly twice as good. Of 1,445 new ≥ 5% outage blocks in 2025, 335 had a severe thunderstorm or
+  tornado warning somewhere in the block but only 65 had one in force at its start; the rest were issued as the storm,
+  and often the outage, arrived.</p>
 
 <h3>Against weathernext-outage-forecasting's setup</h3>
-<p>The related project publishes no scores, so its setup is reproduced here on this project's data, from its code:
+<p>Compared on the first, 6-hour version of the model, where its setup fits. The related project publishes no scores, so its setup is reproduced here on this project's data, from its code:
   weather features only (mapped to the closest HRRR fields), a boosted tree and a logistic regression with
   balanced class weights, the same ≥ 5% label, and an 80/20 split by hash of county + date.</p>
 <div class="table-wrap">
@@ -360,24 +470,14 @@ pre .c { color: var(--muted); }
   only.</p>
 
 <h2 id="value">What it would be worth</h2>
-<p>A better score only matters if it changes a decision. The decision here: before a storm, a utility can send repair
-  crews to wait in a county. Staging costs money every time. It pays off only if that county then loses power,
-  because restoration starts sooner and customers are out for less time. So the question is: if a utility had staged
-  crews wherever each forecast pointed in 2025, how much would it have saved?</p>
+<p>A better score only matters if it changes a decision. The decision here: two hours before a storm window, a
+  utility can send repair crews to wait in a county. Staging costs money every time. It pays off only if that county
+  then loses power, because restoration starts sooner and customers are out for less time. So the question is: if a
+  utility had staged crews wherever each forecast pointed in 2025, how much would it have saved?</p>
 <figure>
-  <img src="../assets/value.jpg?v=1" alt="Left: share of a perfect forecast's value against the staging cost as a share of the loss it avoids. The model peaks at 0.52, warnings plus outlook at 0.34, the SPC outlook at 0.31 and NWS warnings at 0.09. Right: estimated net savings in 2025 under four scenarios: the model saves 3.5 to 38.8 million dollars, while warnings plus outlook, the SPC outlook, NWS warnings and the historical average range from a loss of 57.7 million to a gain of 2.0 million." loading="lazy">
+  <img src="../assets/value.jpg?v=2" alt="Estimated net savings in 2025 from staging crews two hours ahead, four scenarios each: perfect foresight 18.6 to 124.0 million dollars, the model with weather observed so far from a loss of 0.5 million to a gain of 30.5 million, and warnings plus outlook from a loss of 19.1 million to a loss of 3.2 million." loading="lazy">
 </figure>
-
-<h3>Without dollar figures</h3>
-<p>Forecasters value forecasts with the cost-loss model. Staging costs <em>C</em>; an outage you weren't ready for
-  costs <em>L</em> more than one you were. A forecast is worth acting on when its probability exceeds <em>C/L</em>.
-  Its <strong>relative value</strong> is the share of a perfect forecast's savings it captures, over the better of
-  "never stage" and "always stage": 1 is perfect, 0 is no better than either. The model reaches 0.52, against 0.34
-  for warnings and outlook together, 0.31 for the outlook and 0.09 for warnings, and it is ahead at every cost-loss
-  ratio (left panel). This part needs no assumptions about money.</p>
-
-<h3>In dollars</h3>
-<p>Turning value into dollars takes four inputs. Two come from published data, two are assumptions, so the
+<p>Turning outages into dollars takes four inputs. Two come from published data, two are assumptions, so the
   estimate is a range over four scenarios.</p>
 <div class="table-wrap">
 <table>
@@ -393,46 +493,43 @@ pre .c { color: var(--muted); }
   </tbody>
 </table>
 </div>
-<p>Each outage's length and the number of customers affected come from EAGLE-I. Every forecast stages by the same
-  rule, using only 2020–2024 data: stage when its probability times the county's average avoidable loss per new
-  outage is at least the staging cost.</p>
+<p>Each outage's length and the number of customers affected come from EAGLE-I. A crew is staged for an alert spell
+  (consecutive alerted hours in a county), from two hours after its first alert to the end of its last window, and
+  charged for every 6 hours of that, rounded up. It is ready for any new outage that starts in that span. Every
+  forecast stages by the same rule, set on 2020–2024 data only: stage when its probability times the county's average
+  avoidable loss per new outage is at least the staging cost.</p>
 <div class="table-wrap">
 <table>
   <thead><tr><th>Net savings in 2025</th><th>Shortened 10%, $5k</th><th>10%, $20k</th><th>25%, $5k</th><th>25%, $20k</th></tr></thead>
   <tbody>
-    <tr><td>Perfect forecast (the ceiling)</td><td>$33.3M</td><td>$11.6M</td><td>$99.5M</td><td>$77.8M</td></tr>
-    <tr><td>This model</td><td class="best">$8.6M</td><td class="best">$3.5M</td><td class="best">$38.8M</td><td class="best">$18.3M</td></tr>
-    <tr><td>Warnings + outlook</td><td>−$0.6M</td><td>−$2.4M</td><td>−$14.9M</td><td>−$12.7M</td></tr>
-    <tr><td>SPC outlook</td><td>−$1.4M</td><td>−$3.9M</td><td>−$18.9M</td><td>−$10.7M</td></tr>
-    <tr><td>NWS warnings</td><td>$2.0M</td><td>$0.0M</td><td>−$57.7M</td><td>−$26.8M</td></tr>
-    <tr><td>Historical average</td><td>−$1.5M</td><td>$0.0M</td><td>−$9.5M</td><td>−$2.5M</td></tr>
+    <tr><td>Perfect foresight (the ceiling)</td><td>$42.9M</td><td>$18.6M</td><td>$124.0M</td><td>$99.7M</td></tr>
+    <tr><td>Model, weather observed so far</td><td class="best">$5.0M</td><td class="best">−$0.5M</td><td class="best">$30.5M</td><td class="best">$8.7M</td></tr>
+    <tr><td>Warnings + outlook</td><td>−$3.2M</td><td>−$6.9M</td><td>−$17.9M</td><td>−$19.1M</td></tr>
   </tbody>
 </table>
 </div>
 <ul>
-  <li><strong>The estimate: $4–39 million saved in 2025</strong> across Missouri and Illinois, where acting on the
-    official forecasts would mostly have lost money. The new outages of 2025 cost customers an estimated $1.1
-    billion; the model's alerts would have avoided 0.3–3% of that.</li>
-  <li><strong>The official forecasts lose money because they point at too many places.</strong> In the 25%, $5k
-    scenario the model stages crews 2,383 times; warnings and outlook together would stage them 11,697 times and NWS
-    warnings 17,502 times, mostly in counties that kept their power.</li>
-  <li><strong>Checked generously.</strong> The official forecasts were fitted only on periods with no outage under way, so their
-    probabilities answer the same question as the model's. Given each forecast's best possible cutoff in
-    hindsight, chosen on 2025 itself, the model still saves about three times as much ($40.8M against $13.7M for
-    warnings and outlook, in the 25%, $5k scenario). The model's own rule comes within 10% of its best cutoff,
-    so its probabilities can be used as they are.</li>
+  <li><strong>The estimate: from about break-even to $30 million in 2025</strong> across Missouri and Illinois. It is
+    a small loss only when crews help little and staging is expensive. Acting on the official forecasts by the same
+    rule loses money in every scenario: they point at too many places.</li>
+  <li><strong>The rule is close to the best it could be.</strong> Given each forecast's best cutoff in hindsight,
+    chosen on 2025 itself, the model would save $35.2M in the 25%, $5k scenario against $30.5M by its own rule, and
+    the official forecasts $12.5M at best.</li>
   <li><strong>Businesses carry the value.</strong> Counting only what outages cost households, staging never pays,
-    even with a perfect forecast: a home loses about $14 in an 8-hour outage. Almost all the avoided cost is
+    even with perfect foresight: a home loses about $14 in an 8-hour outage. Almost all the avoided cost is
     businesses', so the estimate moves with the customer mix.</li>
-  <li><strong>What the estimate is not.</strong> It counts customers' losses, not the utility's own costs. It covers
-    one year, and like every score here it is a best case, because the model sees each period's weather as it
-    happened. With forecast weather it would be lower.</li>
+  <li><strong>For the model without forecasts.</strong> The forecast version ranks better and makes fewer call-outs,
+    but the dollar rule uses its probabilities directly, and above 20% they run high (see How sure is it?). Its
+    estimate waits for a calibration step fitted on 2024 forecasts.</li>
+  <li><strong>What the estimate is not.</strong> It counts customers' losses, not the utility's own costs, and it
+    covers one year.</li>
 </ul>
-<p>Code: <code>ml/value.py</code>; results in <code>ml/results/value_2025.csv</code>.</p>
+<p>Code: <code>ml/value_hourly.py</code>; results in <code>ml/results/value_hourly_2025.csv</code>.</p>
 
 <h2 id="pitfalls">Pitfalls, with code</h2>
 <p>Each of these produced a plausible-looking wrong answer before it was caught. The fixes live in the dbt models
-  and Python modules named on each card, and most are guarded by a test.</p>
+  and Python modules named on each card, and most are guarded by a test. Cards 1–10 were found on the first, 6-hour
+  version of the model; the fixes carry over to the hourly one.</p>
 
 <div class="pitfall">
   <span class="tag">Data · dbt/models/intermediate/int_eaglei__blocks_6h.sql</span>
@@ -518,7 +615,8 @@ values = values[values &lt;= 100]           <span class="c"># 254/255 = no data;
     blocks jumps to 0.42. That is a real forecast, of whether an outage will continue, but it answers a different
     question from this project's: which calm county goes dark next. Mixing the two inflates the score fourfold and
     hides how well the model does on the question that matters for staging crews. Scored only on <strong>new
-    outages</strong> (blocks whose previous six hours were calm), the same model scores 0.106.</p>
+    outages</strong> (blocks whose previous six hours were calm), the same model scores 0.106. (That 0.106 also
+    saw each block's own weather: card 11.)</p>
 <pre><code>df["is_onset"] = df["prev_block_pct_out"].notna() &amp; (df["prev_block_pct_out"] &lt; threshold_pct)
 <span class="c"># every benchmark reports both: pr_auc (all blocks) and onset_pr_auc (new outages only)</span></code></pre>
   <div class="table-wrap">
@@ -597,30 +695,104 @@ WHERE m.has_weather AND m.peak_pct_out IS NOT NULL
 ORDER BY m.region_fips, m.block_start    <span class="c">-- a fixed order: row subsampling depends on it</span></code></pre>
 </div>
 
+<div class="pitfall">
+  <span class="tag">Modeling · dbt/models/marts/mart_study__region_1h.sql</span>
+  <h3>11. The model saw the storm it was predicting</h3>
+  <p>The first version summarized the weather <em>during</em> each 6-hour block it scored: the block's strongest gust
+    and total rain. No row leaked into another and every test passed, but the model was answering "given this storm,
+    who loses power?", not "who will lose power?". It scored 0.106; with weather only up to the block's start, 0.043.
+    The hourly table makes the boundary explicit in the window frames: features look only backwards from the
+    decision, labels only forwards from two hours after it.</p>
+<pre><code>max(gust_ms) OVER w6                AS gust_max_ms,   <span class="c">-- the 6 hours BEFORE the decision</span>
+max(pct_out) OVER f2                AS fut_max_pct_2  <span class="c">-- the label: 2 to 7 hours AFTER it</span>
+...
+WINDOW w  AS (PARTITION BY region_fips ORDER BY hour),
+       w6 AS (w ROWS BETWEEN 6 PRECEDING AND 1 PRECEDING),
+       f2 AS (w ROWS BETWEEN 2 FOLLOWING AND 7 FOLLOWING)</code></pre>
+  <p class="fix">The window's weather comes back only as a forecast issued before the decision. <code>ml/audit.py</code>
+    recomputes every input from the raw tables to check that it stays that way.</p>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Evaluation · ml/forecast_test.py</span>
+  <h3>12. An alert level set on one kind of input flatters another</h3>
+  <p>The alert level was fixed on 2024 as the top 1% of the model's scores, with the weather that actually happened as
+    input. Fed forecasts on 2025, more hours crossed it: 1.25% instead of 0.75%, with 7,393 alert spells instead of
+    3,151. The forecast version "caught" 41% of new outages, against 27%, partly just by alerting more. Alerts are now
+    compared at one shared alert share; the cutoff uses each version's own scores and never the outcomes.</p>
+<pre><code>cut = np.quantile(p, 1 - EQUAL_SHARE)        <span class="c"># each version's own top 0.75% of 2025 hours</span>
+flagged = p &gt; cut                            <span class="c"># strictly above: ties can't widen the alert list</span></code></pre>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Model + latest HRRR forecast</th><th>Hours alerted</th><th>Caught</th><th>Alert spells</th></tr></thead>
+    <tbody>
+      <tr><td>Level fixed on 2024 (actual weather)</td><td>1.25%</td><td>41%</td><td>7,393</td></tr>
+      <tr><td>Same share as the other versions</td><td>0.75%</td><td>33%</td><td>4,695</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Evaluation · ml/uncertainty.py</span>
+  <h3>13. Hours aren't independent, storm days are</h3>
+  <p>The test year has 1.76 million decisions, which makes any range computed over them look tiny. But the hours of
+    one storm rise and fall together, and a few storm days decide most of the score. Ranges come from resampling whole
+    storm days, 12 UTC to 12 UTC as SPC counts them, and every model is scored on the same resampled days, so
+    differences between models get their own, much tighter, ranges.</p>
+<pre><code>def storm_day(hours):
+    return (pd.to_datetime(hours) - pd.Timedelta(hours=12)).dt.floor("D")   <span class="c"># 12 UTC to 12 UTC</span>
+
+counts = rng.multinomial(n_days, np.full(n_days, 1 / n_days), size=1000)  <span class="c"># days drawn per resample</span>
+w = counts[i][day_of_row]                                                 <span class="c"># each row weighs as its day</span></code></pre>
+  <p class="fix">A test checks the weighted score against scikit-learn's <code>average_precision_score</code> with the
+    same weights.</p>
+</div>
+
+<div class="pitfall">
+  <span class="tag">Data · ml/audit.py</span>
+  <h3>14. Three sources, three clocks?</h3>
+  <p>Outages come from EAGLE-I, weather from HRRR, warnings from NWS. If one of them were in local time instead of
+    UTC, every feature would be five or six hours off and nothing would fail. The check: score one raw signal against
+    the label with the signal moved hour by hour. Skill must peak where the signal overlaps the predicted window.</p>
+<pre><code>for offset in range(-12, 13):
+    at = df.block_start + pd.Timedelta(hours=offset + 5)     <span class="c"># the 6 hours from decision + offset</span>
+    v = rolling_6h_max_gust.stack().reindex(pd.MultiIndex.from_arrays([at, df.region_fips]))
+    rows.append({"offset_hours": offset, "pr_auc": average_precision_score(df.y[ok], v[ok])})</code></pre>
+  <p class="fix">Gusts peak at +1 hour and warnings at +2, where the window starts: the clocks agree.</p>
+</div>
+
 <h2 id="built">How it's built</h2>
 <div class="pipeline">
-  <div class="step"><b>Ingest</b><span>Python scripts download outages, HRRR storm ingredients, storm reports, NWS warnings, SPC outlooks, tree canopy rasters and Census tables.</span></div>
-  <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 47 tests, a 3.5M-row modeling table.</span></div>
-  <div class="step"><b>Model</b><span>A YAML-driven benchmark suite: baselines, logistic, XGBoost, LightGBM; three splits; a validation year; seed repeats; MLflow tracking.</span></div>
-  <div class="step"><b>Serve</b><span>Streamlit dashboard on precomputed Parquet, packaged with Docker; CI on GitHub Actions.</span></div>
+  <div class="step"><b>Ingest</b><span>Python scripts download outages, HRRR weather and the HRRR forecast archive (4
+    map tiles per run, 216 points kept), storm reports, NWS warnings, SPC outlooks, tree canopy rasters and Census
+    tables.</span></div>
+  <div class="step"><b>Transform</b><span>dbt on DuckDB: staging → intermediate → marts, 61 tests, a 15-million-row
+    hourly table with backward-looking features and forward-looking labels.</span></div>
+  <div class="step"><b>Model</b><span>XGBoost and baselines; a validation year; seed repeats; storm-day bootstrap
+    ranges; an audit for look-ahead and leakage; MLflow tracking.</span></div>
+  <div class="step"><b>Serve</b><span>Streamlit dashboard and this site on precomputed files, packaged with Docker; CI
+    on GitHub Actions.</span></div>
 </div>
-<p>Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, LightGBM, MLflow, geopandas, rasterio, Streamlit, Plotly,
-  Docker, GitHub Actions.</p>
+<p>Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, MLflow, geopandas, rasterio, numcodecs, Streamlit, Plotly,
+  D3, Docker, GitHub Actions. Every experiment and its result is logged in
+  <a href="https://github.com/UgoBruzadin/storm-outage-risk/blob/main/docs/experiments.md">docs/experiments.md</a>.</p>
 
 <h3 id="limits">Limitations</h3>
 <div class="note">
-  <p><strong>The weather is short-range, not a 24–48 hour forecast</strong> — the HRRR archive is close to observed
-    weather, so the scores are an upper bound for planning a day ahead, and the model sees each block's weather while
-    the official forecasts it is compared with were issued before the block. The final test is a single year (2025);
-    the spread across seeds shows model noise (about ±1%) but not year-to-year variation, so there are no confidence
-    intervals yet. Each county has a single weather point. EAGLE-I coverage is patchier before 2020, which limits how
-    far back training can go; 2018–2019 weather is downloading.</p>
+  <p><strong>One test year.</strong> 2025's ranges cover which storms happened to hit, not how different another year
+    could be; testing on 2023 and 2024 too is the next step. <strong>Archive timestamps.</strong> The model uses each
+    hour's weather and outage counts as soon as the hour ends; in practice HRRR analyses arrive about an hour late
+    (the forecast runs already allow two hours). <strong>Trained on actual weather.</strong> The forecast version is
+    scored on forecasts but learned from what happened, so its highest probabilities run high and its dollar value is
+    not yet estimated. <strong>One weather point per county</strong>, and EAGLE-I coverage that is patchy before
+    2020.</p>
 </div>
 
 <footer>
   <p>Data: U.S. DOE / Oak Ridge National Laboratory EAGLE-I power outage data
     (<a href="https://doi.org/10.13139/ORNLNCCS/1975202">doi:10.13139/ORNLNCCS/1975202</a>); NOAA HRRR via
-    <a href="https://open-meteo.com">Open-Meteo</a>; NOAA NCEI Storm Events; NWS warnings and SPC outlooks via the
+    <a href="https://open-meteo.com">Open-Meteo</a> and the University of Utah HRRR archive on AWS; NOAA NCEI Storm Events; NWS warnings and SPC outlooks via the
     <a href="https://mesonet.agron.iastate.edu">Iowa Environmental Mesonet</a>; USFS / NLCD Tree Canopy Cover; U.S. Census
     Bureau ACS and TIGER boundaries. Map tiles © OpenStreetMap contributors, © CARTO.</p>
   <p>Ugo Bruzadin Nunes · <a href="https://github.com/UgoBruzadin/storm-outage-risk">github.com/UgoBruzadin/storm-outage-risk</a> · MIT License</p>

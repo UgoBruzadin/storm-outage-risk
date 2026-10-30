@@ -130,6 +130,7 @@ def ladder(pred):
             ratio = auc[label] / auc[ref]
             r[f"ratio_vs_{key}"] = r["onset_pr_auc"] / average_precision_score(pred.y, pred[MODELS[ref]])
             r[f"ratio_vs_{key}_lo"], r[f"ratio_vs_{key}_hi"] = interval(ratio)
+            r[f"better_vs_{key}"] = float((ratio > 1).mean())        # share of resamples where this one wins
         rows.append(r)
         print({k: round(v, 3) if isinstance(v, float) else v for k, v in r.items()}, flush=True)
     return pd.DataFrame(rows)
