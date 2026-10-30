@@ -33,7 +33,9 @@ the git commit).
 | `moving_window.py` | the main benchmark: a decision every hour about the 6 hours starting 0–6 h later, every input known by then | change `FEATURES` or `RUNS` |
 | `hourly_ablation.py`, `hourly_tune.py` | feature and settings decisions for the moving-window model, on 2024, over seeds | change `CONFIGS` or `GRID` |
 | `value_hourly.py` | `value.py` for the moving-window model, staging crews on alert episodes | — |
-| `forecast_test.py` | the moving-window model with HRRR forecasts of the window it predicts | change `LEAD` or `RUN_AGE` |
+| `forecast_test.py` | the moving-window model with HRRR forecasts of the window it predicts, with storm-day ranges | change `LEAD` or `RUN_AGE` |
+| `forecast_ensemble.py` | a probability range per decision from the HRRR runs issued 2–6 h before | change `RUN_AGES` |
+| `uncertainty.py` | paired bootstrap over storm days: 95% ranges for scores and differences | change `N_RESAMPLES` |
 
 Every experiment, its result and what it means: [docs/experiments.md](../docs/experiments.md).
 

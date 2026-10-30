@@ -10,9 +10,11 @@ The question: **will a county's power outage start (≥ 5% of customers out, fro
 
 | Version | What the model knows | Onset PR-AUC (2025) | vs. warnings + outlook | Status |
 |---|---|---|---|---|
-| Perfect-weather ceiling | The weather during the 6 hours it predicts | 0.106 | 2.4× (0.044) | Best case: nobody knows that weather in advance |
-| **Forecast-ready, 2 h ahead** | Weather up to the decision, warnings and outlook in force, neighbouring counties, outages so far | **0.068** | **1.7×** (0.039) | **Main result** |
-| Forecast-ready, 2 h ahead, with HRRR forecasts | As above, plus what the HRRR run issued 2 h before the decision predicted for the window | 0.094 | 2.4× (0.039) | First run, one seed: [E19](#e19-hrrr-forecasts-as-issued) |
+| Perfect-weather ceiling | The weather during the 6 hours it predicts | 0.105 (0.056–0.159) | 2.7× (2.2–3.6×) | Best case: nobody knows that weather in advance |
+| **Forecast-ready, 2 h ahead** | Weather up to the decision, warnings and outlook in force, neighbouring counties, outages so far | **0.068 (0.039–0.103)** | **1.7× (1.5–2.3×)** | **Main result** |
+| Forecast-ready, 2 h ahead, with HRRR forecasts | As above, plus what the HRRR run issued 2 h before the decision predicted for the window | 0.094 (0.051–0.145) | 2.4× (2.0–3.3×) | [E19](#e19-hrrr-forecasts-as-issued) |
+
+Ranges are 95% storm-day bootstrap ranges on 2025. The 6-hour ceiling of E12 scored 0.106; on the moving-window rows of E19 it scores 0.105. Ratios are paired: both models are scored on the same resampled days.
 
 At 2 hours ahead, the forecast-ready model alerts on 0.74% of calm county-hours. 12.8% of its alerts are followed by a new outage, about 24× the 0.52% base rate. It caught 27% of 2025's 1,624 new outages in time.
 
@@ -23,6 +25,7 @@ At 2 hours ahead, the forecast-ready model alerts on 0.74% of calm county-hours.
 - **Alert level** is the top 1% of the same model's scores on the 2024 validation year, fixed before 2025 is scored.
 - **Alert episodes** are runs of consecutive alerted hours in one county, roughly one crew call-out each.
 - **Seeds:** differences under about 2% are within the noise between random seeds. Feature and setting decisions use 3–5 seeds.
+- **Ranges** (from E19 on) are 95% bootstrap ranges over 2025's storm days. One year's absolute score is uncertain, because a few storm days decide most of it. Differences between models scored on the same days are much more certain.
 
 ## Data and setup
 
@@ -185,20 +188,34 @@ The second framing, built to answer the question a utility actually faces. A dec
 - **Question:** The forecast-ready model only knows weather that has already happened. How much does adding what HRRR *predicted* for the window add, and how much of the gap to the 0.106 ceiling is reachable in practice?
 - **Setup:** Each hourly HRRR run's forecasts for the following 13 hours, from the University of Utah's hrrrzarr archive, at the same 216 points (`ingest/fetch_hrrr_forecast.py`). The first version is cheap: 2025 only. A model trained on perfect window weather is scored three ways on 2025: with the actual window weather, with the archive's 1-hour forecasts (a control for the change of data source), and with the forecast from the run issued 2 hours before the decision. Training on forecasts would need the training years too.
   The model is the E18 final model plus 15 window-weather features: the same summaries (max gust, total rain, …) over the 6 hours it predicts. It is trained on 2020–2024 with the weather that actually happened. The alert level is fixed on 2024 the same way. The forecast for a decision at hour *h* comes from the run issued at *h* − 2, which is complete by *h*. Its forecast hours 4–9 cover the window. The download is ~30 MB of map tiles per run, 2024-12-31 to 2025-12-31, 829 MB kept. 16 of 8,784 runs are missing from the archive, so 1,759,405 of the 1,768,412 decisions are scored, the same rows for every version (`ml/forecast_test.py`, `forecast_test_2025.csv`).
-- **Result (2025, 2 h ahead):**
+- **Result (2025, 2 h ahead).** 95% ranges come from a paired bootstrap over storm days (12 UTC to 12 UTC, 1,000 resamples, `ml/uncertainty.py`). "Same alert share" means each version alerts on its own top 0.75% of 2025 hours, the forecast-ready model's share at its frozen level. That cutoff uses the scores only, never the outcomes, so the versions are compared like for like.
 
-  | Window weather | Onset PR-AUC | Alerts (share of hours) | Alert precision | Caught | Alert episodes |
-  |---|---|---|---|---|---|
-  | None (the E18 model) | 0.068 | 0.75% | 12.8% | 27% | 3,151 |
-  | Actual (ceiling) | 0.105 | 1.03% | 14.3% | 37% | 4,255 |
-  | HRRR 1-hour forecasts (control) | 0.102 | 1.23% | 13.2% | 41% | 4,780 |
-  | **HRRR forecast issued 2 h before the decision** | **0.094** | 1.25% | 11.9% | 41% | 7,393 |
+  | Window weather | Onset PR-AUC | Caught, same alert share | Precision, same alert share | Alert episodes, same alert share |
+  |---|---|---|---|---|
+  | Warnings + outlook alone (no window weather) | 0.039 (0.019–0.062) | 10% (2–23%)¹ | 15.8%¹ | 538¹ |
+  | None (the E18 model) | 0.068 (0.039–0.103) | 27% (16–38%) | 12.7% (8.8–16.5%) | 3,165 |
+  | Actual (ceiling) | 0.105 (0.056–0.159) | 33% (22–44%) | 16.8% (11.9–21.1%) | 3,238 |
+  | HRRR 1-hour forecasts (control) | 0.102 (0.057–0.150) | 33% (22–43%) | 16.7% (11.8–21.5%) | 3,146 |
+  | **HRRR forecast issued 2 h before the decision** | **0.094 (0.051–0.145)** | **33% (22–43%)** | **15.7% (11.0–20.2%)** | 4,703 |
+
+  ¹ The rate table gives many hours the same probability, so it can't be cut at exactly 0.75%; it alerts on 0.29% of hours at both cutoffs.
+
+  Paired differences (same resampled days):
+
+  | Comparison | Onset PR-AUC ratio, 95% range |
+  |---|---|
+  | With HRRR forecasts vs. the E18 model | 1.38× (1.18–1.58) |
+  | The E18 model vs. warnings + outlook | 1.73× (1.49–2.32) |
+  | With HRRR forecasts vs. warnings + outlook | 2.38× (1.98–3.25) |
+
+  At each model's frozen level (set on 2024 with actual weather), the forecast version alerts on 1.25% of hours instead of 0.75%, with 7,393 episodes, and catches 41%. That comparison is not like for like, which is why the same-alert-share columns are the ones to quote.
 
 - **Meaning:**
-  - **Real forecasts recover about 70% of the gap** between the forecast-ready model and the ceiling: 0.068 → 0.094, against 0.105. That is 2.4× warnings + outlook alone (0.039).
+  - **Real forecasts recover about 70% of the gap** between the forecast-ready model and the ceiling: 0.068 → 0.094, against 0.105. The gain is clear: the paired range (1.18–1.58×) stays well above 1.
+  - **At the same number of alert hours,** forecasts catch 33% of new outages instead of 27%, and alerts are right 15.7% of the time instead of 12.7%. They do spread those hours over more episodes (4,703 against 3,165): alerts switch on and off as successive runs move a storm around, which means more crew call-outs for the same alert time.
   - The control scores close to the ceiling (0.102), so the change of data source costs little. The rest of the drop is forecast error.
-  - **The alert counts are not like-for-like.** The alert level was set with actual weather, and forecasts push more hours above it: 1.25% of hours instead of 0.75%, and more than twice the episodes. "Caught" rises partly because the model alerts more. Onset PR-AUC doesn't depend on the level, so it is the fair comparison. A fair alert comparison needs the level set on 2024 forecasts, which means downloading 2024.
-  - **Limits:** one seed. The model never saw a forecast in training, so it trusts forecasts as if they were observations; training on forecasts should do at least as well. A run issued 2 h earlier is a realistic delay, but a utility using the newest run would do slightly better.
+  - **One year's score is uncertain; the comparisons are not.** Every single score has a wide range (0.068 could be anywhere from 0.039 to 0.103), because a few big storm days decide most of a year. But the models win and lose on the same days, so the paired ratios are much tighter. Claims should be phrased as comparisons ("1.7× the official forecasts, 95% range 1.5–2.3×"), not as absolute scores.
+  - **Limits:** the model never saw a forecast in training, so it treats forecasts as if they were observations. That mostly affects calibration (E21), not ranking. A run issued 2 h earlier is a realistic delay.
 
 ### E20. What staging crews would be worth, forecast-ready (2 h ahead)
 - **Question:** E11 again, with the forecast-ready model and crews staged on alert episodes.
@@ -214,16 +231,52 @@ The second framing, built to answer the question a utility actually faces. A dec
 
 - **Meaning:** From roughly break-even to $30M in 2025, depending on the assumptions. It's a small loss only when crews help little and staging is expensive. Staging on the official forecasts by the same rule loses money in every scenario. For residential customers alone, staging never pays, because their outage costs are too small per customer. These are estimates: the crew effect and staging cost are assumptions, so the range matters more than any single figure.
 
+### E21. A probability range from several HRRR runs
+- **Question:** Can each prediction come with a range, not just a number? And does averaging several runs beat the newest one?
+- **Setup:** At decision hour *h*, the runs issued 2, 3, 4, 5 and 6 hours before *h* all forecast the same window. The E19 model is fed each in turn, giving five probabilities per decision (a time-lagged ensemble). The range is the lowest to the highest of the five. Scored on 1,761,636 decisions in 2025 that have all five runs, with storm-day ranges (`ml/forecast_ensemble.py`, `forecast_ensemble_2025.csv`, `forecast_ensemble_bins_2025.csv`).
+- **Result: older runs score lower, and their average scores higher.**
+
+  | Forecast used | Onset PR-AUC | vs. newest run (paired) |
+  |---|---|---|
+  | Run issued 2 h before (newest) | 0.094 (0.054–0.145) | |
+  | 3 / 4 / 5 / 6 h before | 0.091 / 0.090 / 0.089 / 0.089 | each lower, every range below 0 |
+  | **Mean of the 5 runs** | **0.099 (0.056–0.154)** | **+0.002 to +0.011** |
+
+  Same alert share (0.75% of hours):
+
+  | Forecast used | Caught | Precision | Alert episodes |
+  |---|---|---|---|
+  | Newest run | 33.5% (23–43%) | 15.7% | 4,706 |
+  | Mean of the 5 runs | 30.7% (20–41%) | 16.1% | 3,058 |
+
+  Paired, the mean catches 1.7–4.1 points fewer new outages.
+
+- **Result: the ranges are honest.**
+
+  | Mean probability | Decisions | Mean | Outages that followed | Average range |
+  |---|---|---|---|---|
+  | ≤ 0.5% | 1,405,544 | 0.19% | 0.19% | 0.18–0.21% |
+  | 0.5–1% | 213,353 | 0.68% | 0.66% | 0.59–0.82% |
+  | 1–2% | 77,674 | 1.4% | 1.5% | 1.1–1.9% |
+  | 2–5% | 41,328 | 3.1% | 3.0% | 2.0–4.8% |
+  | 5–10% | 13,128 | 6.9% | 6.4% | 4.0–11.6% |
+  | 10–20% | 6,617 | 13.9% | 13.0% | 8.0–22.5% |
+  | over 20% | 3,992 | 32.5% | 26.5% | 22.7–43.6% |
+
+- **Meaning:**
+  - **Averaging the runs is the better ranking,** recovering about 85% of the gap to the ceiling (0.068 → 0.099, against 0.105). It also cuts the alert flicker: fewer call-outs than even the E18 model (3,058 against 3,165), each right a little more often. The cost is a slower reaction. Older runs haven't seen a storm that just formed, so the mean catches a few points fewer new outages. **Newest run** = catch more, more call-outs. **Mean** = fewer, steadier call-outs. That's a dispatch choice, not a modelling one.
+  - **The probabilities are well calibrated** up to about 20%, even though the model never saw a forecast in training: outages followed about as often as predicted. Above 20% it is overconfident (32.5% predicted, 26.5% happened). That is the expected effect of training on actual weather. It matters for the dollar rule only at the top end, and calibration on 2024 forecasts would fix it.
+  - **The range is a usable per-decision uncertainty.** In every bin, the share of outages that followed falls inside the average range. A dispatcher could see "7%, range 4–12%" instead of a bare 7%. The range does carry information: at low probabilities, a wide range (one run shows a storm) means more outages than a narrow one (0.26% against 0.12%). At high probabilities a wide range means fewer (11.9% against 14.2% at 10–20%). It works as a measure of how sure the forecast is.
+
 ---
 
 ## Open experiments
 
 | Test | Why | Notes |
 |---|---|---|
-| HRRR forecasts, seeds and a 2024 alert level | E19 is one seed, and its alert level was set without forecasts | 2024 forecasts: another ~6 hours of download, ~0.8 GB kept |
+| 2024 forecasts: alert level and calibration | The frozen alert level was set without forecasts; probabilities above 20% are overconfident (E21) | Download running |
 | HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
 | One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
-| Storm-day bootstrap intervals | Give every 2025 score a confidence interval; storms, not hours, are the independent units | |
 | Held-out storms | Split by storm instead of by year | |
 | Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | |

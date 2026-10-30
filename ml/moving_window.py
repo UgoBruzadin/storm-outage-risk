@@ -63,13 +63,18 @@ def fit_predict(model, spec, train, test):
     return fitted.predict_proba(test[cols])[:, 1]
 
 
-def caught(test, flagged, onsets, lead):
-    """Share of onset hours inside the window of at least one flagged decision hour."""
+def caught_flags(test, flagged, onsets, lead):
+    """For each onset hour: inside the window of at least one flagged decision hour?"""
     alerts = test.loc[flagged, ["region_fips", "block_start"]]
     hits = set()
     for offset in range(lead, lead + 6):                  # the outage hour = decision hour + offset
         hits |= set(zip(alerts.region_fips, alerts.block_start + pd.Timedelta(hours=offset), strict=True))
-    return sum((r, h) in hits for r, h in zip(onsets.region_fips, onsets.hour, strict=True)) / len(onsets)
+    return [(r, h) in hits for r, h in zip(onsets.region_fips, onsets.hour, strict=True)]
+
+
+def caught(test, flagged, onsets, lead):
+    """Share of onset hours inside the window of at least one flagged decision hour."""
+    return sum(caught_flags(test, flagged, onsets, lead)) / len(onsets)
 
 
 def episodes(test, flagged):

@@ -207,3 +207,18 @@ def test_load_reads_only_the_years_asked_for(tmp_path):
     assert set(df["year"]) == {2020, 2022}
     first_2022 = df[df["block_start"] == pd.Timestamp("2022-01-01")].iloc[0]
     assert first_2022["prev_block_pct_out"] == 2.0          # the last 2021 block, outside the years asked for
+
+
+def test_bootstrap_pr_auc_matches_sklearn_with_day_weights():
+    from sklearn.metrics import average_precision_score
+
+    from ml.uncertainty import day_weights, pr_auc_resamples, storm_day
+    rng = np.random.default_rng(1)
+    p = rng.random(5000).round(2)                      # ties on purpose
+    y = (rng.random(5000) < p * 0.2).astype(int)
+    hours = pd.Series(pd.Timestamp("2025-01-01") + pd.to_timedelta(rng.integers(0, 24 * 60, 5000), unit="h"))
+    days = storm_day(hours)
+    counts, codes = day_weights(days, n=3)
+    for c, got in zip(counts, pr_auc_resamples(y, p, codes, counts), strict=True):
+        assert np.isclose(got, average_precision_score(y, p, sample_weight=c[codes]))
+    assert (days.dt.hour == 0).all() and (hours - days >= pd.Timedelta(hours=12)).all()
