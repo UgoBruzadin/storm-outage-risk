@@ -198,7 +198,7 @@ pixi run export-app && pixi run app   # dashboard at http://localhost:8501
 | `tests/` | pytest: benchmark machinery and dashboard pages |
 | `scripts/` | download queue, Hugging Face publishing |
 | `legacy/` | the first St. Louis hourly prototype |
-| `docs/` | [data dictionary](docs/data-dictionary.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [experiments](docs/experiments.md), [development guide](docs/development.md), [roadmap](docs/roadmap.md) |
+| `docs/` | [data dictionary](docs/data-dictionary.md), [data notes](docs/data-notes.md), [decisions](docs/decisions.md), [experiments](docs/experiments.md), [audit](docs/audit.md), [development guide](docs/development.md), [roadmap](docs/roadmap.md) |
 
 ## Data sources
 

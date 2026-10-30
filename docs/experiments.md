@@ -268,6 +268,23 @@ The second framing, built to answer the question a utility actually faces. A dec
   - **The probabilities are well calibrated** up to about 20%, even though the model never saw a forecast in training: outages followed about as often as predicted. Above 20% it is overconfident (32.5% predicted, 26.5% happened). That is the expected effect of training on actual weather. It matters for the dollar rule only at the top end, and calibration on 2024 forecasts would fix it.
   - **The range is a usable per-decision uncertainty.** In every bin, the share of outages that followed falls inside the average range. A dispatcher could see "7%, range 4–12%" instead of a bare 7%. The range does carry information: at low probabilities, a wide range (one run shows a storm) means more outages than a narrow one (0.26% against 0.12%). At high probabilities a wide range means fewer (11.9% against 14.2% at 10–20%). It works as a measure of how sure the forecast is.
 
+### E22. Pipeline audit
+- **Question:** Before publishing, is anything still seeing the future, or otherwise wrong in a way the scores wouldn't show?
+- **Setup:** Five checks (`ml/audit.py`, full write-up in [audit.md](audit.md)):
+  - every input and label recomputed from the raw tables with explicit time filters,
+  - each raw signal scored at offsets from −12 h to +12 h to check the clocks,
+  - the model retrained on shuffled outcomes,
+  - forecast error by forecast hour,
+  - what's missing in 2025.
+- **Result:**
+  - 100% agreement on every recomputed input and label, including all 2,226 warning flags.
+  - Skill peaks at +1 to +2 h, where the window is.
+  - Shuffled outcomes score 1.3–1.4× the base rate, explained by rare weather and below an outcome-free "unusual weather" score (1.9×). The real model scores 13×.
+  - Forecast error grows steadily with the forecast hour.
+  - Unknown hours are spread evenly across storm and calm days.
+  - 99.8% of new outages had a decision that could catch them.
+- **Meaning:** No look-ahead, clock or leakage problem found. The E19–E21 results stand.
+
 ---
 
 ## Open experiments

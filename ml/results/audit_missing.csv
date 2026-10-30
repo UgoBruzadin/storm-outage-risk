@@ -1,0 +1,3 @@
+storm_day,region_hours,share_untracked,share_no_weather,share_label_unknown,share_outage_unknown,new_outages,new_outages_reachable
+False,1187136,0.0,0.0,0.04463936735133969,0.05480500970402717,1624,1620
+True,705024,0.0,0.0,0.04502825435729847,0.056294537490922295,1624,1620

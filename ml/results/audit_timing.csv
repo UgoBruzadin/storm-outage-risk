@@ -1,0 +1,12 @@
+check,n,agree,max_abs_diff
+"weather: max gust, the 6 h before the decision",20000,1.0,0.0
+"weather: total rain, the 6 h before the decision",20000,1.0,0.0
+outages: the hour before the decision,20000,1.0,0.0
+outages: worst hour of the 24 h before,20000,1.0,0.0
+"neighbours: worst outage within 100 km, the hour before",20000,1.0,0.0
+label: worst hour of h+2 ... h+7,20000,1.0,0.0
+"label: the hour before the window (h+1), selection only",20000,1.0,0.0
+"warnings: every 2025 flag has a warning issued before h, still in force",2226,1.0,
+outlook: category from the latest product issued before h,20000,1.0,0.0
+"forecast: max gust from the run issued at h-2, valid h+2 ... h+7",2000,1.0,0.0
+forecast: run issued before the decision,2000,1.0,
