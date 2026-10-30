@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storm Outage Risk, in Two Minutes</title>
-<meta name="description" content="Which Missouri and Illinois counties lose power when a storm hits: the project in eight animated screens.">
+<meta name="description" content="How early can you know which counties will lose power in a storm? A county-level outage model for Missouri and Illinois, tested two hours ahead on a year it never saw.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ugobruzadin.github.io/storm-outage-risk/">
-<meta property="og:title" content="Which counties lose power when a storm hits?">
-<meta property="og:description" content="A county-level model, built on public data, that flags which Missouri and Illinois counties will lose power in the next six hours. Tested on a year it never saw.">
+<meta property="og:title" content="Which counties will lose power in the next storm, two hours ahead?">
+<meta property="og:description" content="A county-level outage model built on public data and real weather forecasts. Two hours ahead, it ranks new outages 2.5× better than official warnings alone (95% range 2.1–3.4×), tested on 2025.">
 <meta property="og:image" content="https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: predicted outage risk by county beside the share of customers who actually lost power.">
+<meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: outage risk by county, decided two hours ahead, beside the share of customers who actually lost power.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <style>
@@ -20,21 +20,21 @@
   color-scheme: light;
   --bg: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
   --line: #e1e0d9; --grid: #ecebe5; --accent: #2a78d6; --warm: #eb6834; --idle: #e4e3dc; --other: #c3c2b7;
-  --il: #2a78d6; --mo: #eb6834;
+  --il: #2a78d6; --mo: #eb6834; --green: #1baf7a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --line: #2c2c2a; --grid: #232321; --accent: #3987e5; --warm: #d95926; --idle: #2c2c2a; --other: #55554f;
-    --il: #3987e5; --mo: #d95926;
+    --il: #3987e5; --mo: #d95926; --green: #199e70;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
   --line: #2c2c2a; --grid: #232321; --accent: #3987e5; --warm: #d95926; --idle: #2c2c2a; --other: #55554f;
-  --il: #3987e5; --mo: #d95926;
+  --il: #3987e5; --mo: #d95926; --green: #199e70;
 }
 * { box-sizing: border-box; }
 html { scroll-snap-type: y mandatory; -webkit-text-size-adjust: 100%; }
@@ -65,16 +65,14 @@ strong { color: var(--ink); }
 /* storm */
 .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
 .map h3 { font-size: 1rem; margin: 0 0 6px; }
-.map svg { max-height: 46svh; width: auto; max-width: 100%; margin: 0 auto; }
+.map svg { max-height: 44svh; width: auto; max-width: 100%; margin: 0 auto; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
 .county { stroke: var(--surface); stroke-width: .5; }
 .state { fill: none; stroke: var(--ink-2); stroke-width: 1; pointer-events: none; }
 .controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 .play { font: 600 .9rem system-ui, sans-serif; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   border-radius: 999px; padding: 7px 16px; cursor: pointer; }
-.steps { display: flex; gap: 6px; }
-.steps button { width: 30px; height: 6px; border: 0; border-radius: 3px; background: var(--line); cursor: pointer; padding: 0; }
-.steps button.on { background: var(--ink-2); }
+.scrub { flex: 1; min-width: 160px; accent-color: var(--accent); }
 .when { font-variant-numeric: tabular-nums; font-weight: 600; }
 .mlegend { display: none; align-items: center; gap: 6px; font-size: .72rem; color: var(--muted); margin-top: 4px; }
 .mlegend i { flex: 1; height: 6px; border-radius: 3px; }
@@ -82,8 +80,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 /* pipeline */
 .pipe { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; }
-.sources { display: grid; gap: 12px; }
-.src { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px;
+.sources { display: grid; gap: 10px; }
+.src { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px;
   opacity: 0; transform: translateX(-24px); transition: opacity .6s, transform .6s; }
 .src b { display: block; }
 .src span { font-size: .85rem; color: var(--muted); }
@@ -97,14 +95,15 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   font-weight: 600; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .played .src { opacity: 1; transform: none; }
 .played .table-card { opacity: 1; transform: none; }
-.src:nth-child(2) { transition-delay: .15s; } .src:nth-child(3) { transition-delay: .3s; } .src:nth-child(4) { transition-delay: .45s; }
+.src:nth-child(2) { transition-delay: .12s; } .src:nth-child(3) { transition-delay: .24s; }
+.src:nth-child(4) { transition-delay: .36s; } .src:nth-child(5) { transition-delay: .48s; }
 
 /* charts */
 .axis text { fill: var(--muted); font-size: 14px; }
 .axis path, .axis line { stroke: var(--line); }
 .gridline line { stroke: var(--grid); }
 .label { fill: var(--ink); font-size: 16px; }
-#savings .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+#savings .label, #lead-chart .label, #calib .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
 .waffles { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
@@ -138,12 +137,11 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .waffle svg { max-height: 19svh; width: auto; max-width: 100%; }
   .waffle h3 b { font-size: 1.25rem; }
   .next { gap: 8px; margin-bottom: 16px; }
-  .next div { font-size: .88rem; }
+  .next div { font-size: .88rem; padding: 10px 12px; }
   .controls { margin-top: 8px; gap: 8px 12px; }
   .totals { font-size: .85rem; }
-  .src { padding: 9px 14px; }
+  .src { padding: 8px 14px; }
   .table-card { padding: 18px; }
-  .next div { padding: 10px 12px; }
   .waffles, .next { grid-template-columns: 1fr; }
   .pipe { grid-template-columns: 1fr; }
   .flow { display: none; }
@@ -168,16 +166,17 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <main>
 <section class="slide" id="storm" data-title="The storm">
   <p class="kicker">14–15 March 2025 · Missouri and Illinois</p>
-  <h1>One storm. Some counties went dark; the next one over barely flickered.</h1>
-  <p class="lead">Forecasts tell utilities <em>when</em> a storm will hit. Repair crews need to know <em>where</em>.
-    This model ranks every county, every six hours, by its risk of losing power. Here it is on a storm it never saw.</p>
+  <h1>Which counties will lose power in the next few hours?</h1>
+  <p class="lead">Forecasts tell utilities <em>when</em> a storm will hit. Repair crews need to know <em>where</em>, early
+    enough to get there. Every hour, this model looks two hours ahead and ranks every county by its risk of a new outage
+    in the following six, using only what was known at the time. Here it is on a storm it never saw.</p>
   <div class="maps">
-    <div class="map"><h3>Predicted risk</h3><svg id="map-pred" viewBox="0 0 460 470" role="img" aria-label="Predicted outage risk by county"></svg></div>
-    <div class="map"><h3>What happened: share of customers out</h3><svg id="map-actual" viewBox="0 0 460 470" role="img" aria-label="Actual share of customers out by county"></svg></div>
+    <div class="map"><h3>Risk, decided 2 hours before</h3><svg id="map-pred" viewBox="0 0 460 470" role="img" aria-label="Outage risk by county, decided two hours ahead"></svg></div>
+    <div class="map"><h3>What happened: worst share of customers out</h3><svg id="map-actual" viewBox="0 0 460 470" role="img" aria-label="Worst share of customers out by county in the same six hours"></svg></div>
   </div>
   <div class="controls">
     <button class="play" type="button">▶ Play</button>
-    <div class="steps" role="group" aria-label="Six-hour periods"></div>
+    <input class="scrub" type="range" min="0" value="0" step="1" aria-label="Hour of the storm">
     <span class="when"></span>
     <span class="totals"></span>
   </div>
@@ -185,23 +184,24 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 <section class="slide" id="data" data-title="The data">
   <p class="kicker">The data</p>
-  <h2>Four public sources, one table.</h2>
-  <p class="lead">Every county, every six hours, from late 2014 to 2025: what the weather did, what the place is like,
-    what forecasters said, and how many customers lost power.</p>
+  <h2>Five public sources, one table.</h2>
+  <p class="lead">Every county, every hour, 2020 to 2025: what the weather did, what forecasters predicted, what the place
+    is like, and how many customers lost power.</p>
   <div class="pipe">
     <div class="sources">
       <div class="src"><b>Outages, every 15 minutes</b><span>DOE EAGLE-I</span></div>
       <div class="src"><b>Weather, every hour</b><span>NOAA HRRR via Open-Meteo</span></div>
+      <div class="src"><b>Weather forecasts, as issued</b><span>NOAA HRRR archive (University of Utah)</span></div>
+      <div class="src"><b>Official warnings and outlooks</b><span>NWS, SPC via the Iowa Environmental Mesonet</span></div>
       <div class="src"><b>What each place is like</b><span>Tree canopy, Census housing</span></div>
-      <div class="src"><b>Official forecasts</b><span>NWS warnings, SPC outlooks</span></div>
     </div>
-    <svg class="flow" viewBox="0 0 90 200" aria-hidden="true">
-      <path d="M0 25 C45 25 45 100 90 100"/><path d="M0 75 C45 75 45 100 90 100"/>
-      <path d="M0 125 C45 125 45 100 90 100"/><path d="M0 175 C45 175 45 100 90 100"/>
+    <svg class="flow" viewBox="0 0 90 250" aria-hidden="true">
+      <path d="M0 25 C45 25 45 125 90 125"/><path d="M0 75 C45 75 45 125 90 125"/><path d="M0 125 L90 125"/>
+      <path d="M0 175 C45 175 45 125 90 125"/><path d="M0 225 C45 225 45 125 90 125"/>
     </svg>
     <div class="table-card">
       <div class="big" id="periods">0</div>
-      <div>county × 6-hour periods</div>
+      <div>county-hours</div>
       <div class="tests" id="tests"></div>
     </div>
   </div>
@@ -225,12 +225,36 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
     outages only.</p>
   <svg id="persistence" role="img" aria-label="Score on every period versus on new outages only"></svg>
   <p class="note">Score: PR-AUC, how well real outages are ranked ahead of false alarms. Random guessing scores the
-    outage rate itself, about 0.005.</p>
+    outage rate itself, about 0.005. Measured on the first, 6-hour version of the model.</p>
 </section>
 
-<section class="slide" id="alerts" data-title="The result">
-  <p class="kicker">The result · 2025, a year the model never saw</p>
-  <h2 id="alerts-title">The model's top alerts are far more likely to be real.</h2>
+<section class="slide" id="peek" data-title="It saw the storm">
+  <p class="kicker">Trap 3 · the one I fell into</p>
+  <h2>My first model saw the storm coming, because it saw the storm.</h2>
+  <p class="lead">The first version summarized the weather <em>during</em> the hours it was predicting. That's not a
+    leak in the code, but nobody knows that weather in advance. Rebuilt so that every input is known at the moment of
+    the decision, the score dropped by a third. Real forecasts win most of it back.</p>
+  <svg id="timeline" role="img" aria-label="What each version of the model knows, relative to the decision and the six hours it predicts"></svg>
+</section>
+
+<section class="slide" id="ladder" data-title="The result">
+  <p class="kicker">The result · two hours ahead, 2025, a year the model never saw</p>
+  <h2 id="ladder-title">How early can you know?</h2>
+  <svg id="ladder-chart" role="img" aria-label="Score on new outages, 2025, with 95% ranges, for each version"></svg>
+  <p class="note" id="ladder-note"></p>
+</section>
+
+<section class="slide" id="lead" data-title="Lead time">
+  <p class="kicker">Looking further ahead</p>
+  <h2>Weather that has already happened fades within hours. Forecasts carry further.</h2>
+  <svg id="lead-chart" role="img" aria-label="Score on new outages against hours ahead, for each version"></svg>
+  <p class="note">Score on new outages of ≥ 5% of customers in the 6 hours that start this many hours after the decision,
+    2025. The HRRR forecast versions were tested 2 hours ahead.</p>
+</section>
+
+<section class="slide" id="alerts" data-title="Alerts">
+  <p class="kicker">If a utility acted on it</p>
+  <h2 id="alerts-title">Its alerts were far more likely to be real.</h2>
   <div class="waffles">
     <div class="waffle"><h3 id="w1-h"></h3><svg id="waffle-avg" viewBox="0 0 400 252" role="img"></svg></div>
     <div class="waffle"><h3 id="w2-h"></h3><svg id="waffle-model" viewBox="0 0 400 252" role="img"></svg></div>
@@ -238,12 +262,11 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="note" id="alerts-note"></p>
 </section>
 
-<section class="slide" id="compare" data-title="Comparison">
-  <p class="kicker">Against what exists today</p>
-  <h2>Better than the forecasts utilities already use.</h2>
-  <svg id="bars" role="img" aria-label="Score on new outages, 2025, for each approach"></svg>
-  <p class="note">Score on new outages of ≥ 5% of customers, 2025. Official forecasts as they stood at the start of each
-    period; the model sees that period's weather as it happened, so this is its best case.</p>
+<section class="slide" id="ranges" data-title="Ranges">
+  <p class="kicker">How sure is each alert?</p>
+  <h2>Every prediction comes with a range, and the ranges are honest.</h2>
+  <p class="lead" id="ranges-lead"></p>
+  <svg id="calib" role="img" aria-label="Predicted probability against how often an outage followed, with the range of the five most recent forecasts"></svg>
 </section>
 
 <section class="slide" id="where" data-title="Where it works">
@@ -263,21 +286,21 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <section class="slide" id="value" data-title="What it's worth">
   <p class="kicker">What it's worth · an estimate for 2025</p>
   <h2 id="value-title">Worth millions where the official forecasts lose money.</h2>
-  <p class="lead">Suppose a utility had sent repair crews to wait wherever each forecast pointed. Crews cost money every
-    time, and pay off when the power goes out, because it comes back sooner. Each dot is one scenario.</p>
+  <p class="lead">Suppose a utility had sent repair crews to wait wherever each forecast pointed, two hours ahead. Crews
+    cost money every time, and pay off when the power goes out, because it comes back sooner. Each dot is one scenario.</p>
   <svg id="savings" role="img" aria-label="Estimated net savings in 2025 from staging crews on each forecast, four scenarios each"></svg>
   <p class="note">Net savings: what outages cost homes and businesses (Berkeley Lab's outage-cost models) that staged
     crews avoid, minus the cost of staging. Scenarios: crews shorten outages by 10% or 25%; staging costs $5,000 or
-    $20,000 per county per 6 hours. Every forecast stages by the same rule, using 2020–2024 data only. Best case: the
-    model sees each period's weather as it happened.</p>
+    $20,000 per county per 6 hours. Every forecast stages by the same rule, set on 2020–2024 data. Estimated for the
+    model without HRRR forecasts; the estimate for the forecast version needs its probabilities calibrated first.</p>
 </section>
 
 <section class="slide" id="end" data-title="What's next">
   <p class="kicker">What's next</p>
-  <h2>From replaying storms to forecasting them.</h2>
+  <h2>From one test year to a live forecast.</h2>
   <div class="next">
-    <div><b>Forecasts, not observations</b>Feed the model weather forecasts made hours before each storm, so it can
-      be judged on equal terms with official outlooks.</div>
+    <div><b>More test years</b>Each year is decided by a handful of storms. Testing on 2023 and 2024 as well shows
+      how much the result moves from year to year.</div>
     <div><b>A live test</b>Publish predictions before storms happen, and score them when the outage data comes out.</div>
     <div><b>Better place data</b>Which utility serves each county, and trees near power lines rather than county-wide.</div>
   </div>
@@ -286,8 +309,9 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
     <a class="btn" href="writeup/">Read the full write-up</a>
     <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk">Code on GitHub</a>
   </div>
-  <p class="note">Ugo Bruzadin Nunes · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo, NOAA Storm Events, NWS and
-    SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau.</p>
+  <p class="note">Ugo Bruzadin Nunes · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo and the University of Utah
+    HRRR archive, NOAA Storm Events, NWS and SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy,
+    U.S. Census Bureau.</p>
 </section>
 </main>
 
@@ -307,6 +331,7 @@ const RAMPS = {
 const ramp = name => RAMPS[isDark() ? "dark" : "light"][name];
 const fmt = d3.format(",");
 const pct = d3.format(".0%");
+const pct1 = d3.format(".1%");
 const signed = v => (v > 0 ? "+" : "−") + Math.abs(v).toFixed(2);
 const stateAbbr = s => (s === "Missouri" ? "MO" : "IL");
 const tip = document.querySelector(".tip");
@@ -347,6 +372,7 @@ addEventListener("scroll", () => {
 
 // a chart's drawing width: its container's, at least 320
 const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getBoundingClientRect().width || 900));
+const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 d3.json("data/story.json").then(data => {
   const features = data.counties.map(c => ({ type: "Feature", id: c.id, properties: c, geometry: c.geometry }));
@@ -359,7 +385,10 @@ d3.json("data/story.json").then(data => {
   const charts = [
     ["#heartbeat", animate => heartbeat(data, animate)],
     ["#persistence", animate => persistence(data, animate)],
-    ["#bars", animate => compare(data, animate)],
+    ["#timeline", animate => timeline(data, animate)],
+    ["#ladder-chart", animate => ladder(data, animate)],
+    ["#lead-chart", animate => leadTime(data, animate)],
+    ["#calib", animate => calibration(data, animate)],
     ["#savings", animate => savings(data, animate)],
     ["#map-acc", animate => accuracy(data, features, states, fc, animate)],
     ["#scatter", animate => trees(data, animate)],
@@ -382,6 +411,13 @@ function countyMap(svg, features, states, fc, width, height) {
   return counties;
 }
 
+function hatch(svg, id) {
+  const p = svg.append("defs").append("pattern").attr("id", id).attr("width", 6).attr("height", 6)
+    .attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)");
+  p.append("rect").attr("width", 6).attr("height", 6).attr("fill", "var(--idle)");
+  p.append("line").attr("y2", 6).attr("stroke", "var(--other)").attr("stroke-width", 1.5);
+}
+
 function legend(svg, x, y, w, colors, domain, ticks, format, title) {
   const id = "g" + Math.random().toString(36).slice(2);
   const grad = svg.append("defs").append("linearGradient").attr("id", id);
@@ -400,18 +436,20 @@ function legend(svg, x, y, w, colors, domain, ticks, format, title) {
 
 function storm(data, features, states, fc) {
   const pred = d3.select("#map-pred"), actual = d3.select("#map-actual");
+  hatch(pred, "hatch-out");
+  hatch(actual, "hatch-out-2");
   const pc = countyMap(pred, features, states, fc, 460, 410);
   const ac = countyMap(actual, features, states, fc, 460, 410);
-  const maxP = d3.max(data.storm.flatMap(s => s.prob));
-  const maxO = d3.max(data.storm.flatMap(s => s.pct));
-  const colorP = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, maxP]);
-  const colorO = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, maxO]);
-  legend(pred, 80, 445, 300, () => ramp("blue"), [0, maxP], [0, 0.2, 0.4, 0.6, 0.8].filter(t => t <= maxP), pct,
-    "probability of ≥ 5% out");
-  legend(actual, 80, 445, 300, () => ramp("orange"), [0, maxO], [0, 20, 40, 60, 80].filter(t => t <= maxO), d => d + "%",
-    "share of customers out");
+  const maxP = Math.min(0.6, d3.max(data.storm.flatMap(s => s.prob)));
+  const maxO = 25;     // worst share out: 5% is an outage here, so the scale tops out at 25% and clamps
+  const colorP = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, maxP]).clamp(true);
+  const colorO = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, maxO]).clamp(true);
+  legend(pred, 80, 445, 300, () => ramp("blue"), [0, maxP], [0, 0.2, 0.4, 0.6].filter(t => t <= maxP), pct,
+    "chance of a new outage (≥ 5% out) · hatched: already out");
+  legend(actual, 80, 445, 300, () => ramp("orange"), [0, maxO], [0, 5, 10, 15, 20, 25], d => d + (d === 25 ? "%+" : "%"),
+    "worst share of customers out in the 6 hours · hatched: already out");
   // a compact legend under each map, shown on phones instead of the in-map one
-  const mlegends = [[pred, () => ramp("blue"), "0%", pct(maxP)], [actual, () => ramp("orange"), "0%", Math.round(maxO) + "%"]]
+  const mlegends = [[pred, () => ramp("blue"), "0%", pct(maxP)], [actual, () => ramp("orange"), "0%", maxO + "%+"]]
     .map(([svg, colors, lo, hi]) => {
       const box = d3.select(svg.node().parentNode).append("div").attr("class", "mlegend");
       box.append("span").text(lo); const bar = box.append("i"); box.append("span").text(hi);
@@ -419,26 +457,34 @@ function storm(data, features, states, fc) {
       paint(); return paint;
     });
   repaint.push(...mlegends);
-  const buttons = d3.select(".steps").selectAll("button").data(data.storm).join("button").attr("type", "button")
-    .attr("aria-label", d => when(d.start)).on("click", (e, d) => { stop(); show(data.storm.indexOf(d)); });
+  const scrub = document.querySelector(".scrub");
+  scrub.max = data.storm.length - 1;
+  scrub.addEventListener("input", () => { stop(); show(+scrub.value); });
   let i = 0, timer = null;
+  const clock = (t, opts) => new Date(t).toLocaleString("en-US", { timeZone: "America/Chicago", ...opts });
   function when(start) {
-    return new Date(start).toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "short", hour: "numeric" }) + " CDT";
+    const t = new Date(start), decided = new Date(t - data.lead * 3600e3), end = new Date(+t + 6 * 3600e3);
+    return `${clock(t, { weekday: "short", hour: "numeric" })}–${clock(end, { hour: "numeric" })} CDT · ` +
+      `decided ${clock(decided, { hour: "numeric" })}`;
   }
   function show(k, animate = true) {
     i = k;
     const s = data.storm[k];
-    const dur = animate && !REDUCE ? 600 : 0;
-    pc.transition().duration(dur).attr("fill", (d, j) => (s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
-    ac.transition().duration(dur).attr("fill", (d, j) => (s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
-    buttons.classed("on", (d, j) => j === k);
-    d3.select(".when").text(when(s.start) + " (6 hours)");
-    d3.select(".totals").text(`Missouri ${fmt(s.out_mo)} out · Illinois ${fmt(s.out_il)} out`);
+    const dur = animate && !REDUCE ? 350 : 0;
+    pc.transition().duration(dur).attr("fill", (d, j) => (s.already[j] ? "url(#hatch-out)" :
+      s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
+    ac.transition().duration(dur).attr("fill", (d, j) => (s.already[j] ? "url(#hatch-out-2)" :
+      s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
+    scrub.value = k;
+    d3.select(".when").text(when(s.start));
+    d3.select(".totals").text(`Out now: Missouri ${fmt(s.out_mo)} · Illinois ${fmt(s.out_il)}`);
   }
   const tipHtml = (d, j) => {
     const s = data.storm[i];
-    return `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` +
-      `Predicted ${s.prob[j] == null ? "–" : pct(s.prob[j])} · actual ${s.pct[j] == null ? "unknown" : s.pct[j] + "% out"}`;
+    const risk = s.already[j] ? "already out when the window began" : s.prob[j] == null ? "no prediction" :
+      `risk ${pct(s.prob[j])} (five latest forecasts: ${pct(s.low[j])}–${pct(s.high[j])})`;
+    return `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>${risk}<br>` +
+      `worst in the 6 hours: ${s.pct[j] == null ? "unknown" : s.pct[j] + "% out"}`;
   };
   [pc, ac].forEach(sel => sel.on("pointermove", (e, d) => showTip(e, tipHtml(d, features.indexOf(d))))
     .on("pointerleave", hideTip));
@@ -448,7 +494,7 @@ function storm(data, features, states, fc) {
     if (timer) { stop(); return; }
     if (i === data.storm.length - 1) show(0);
     button.textContent = "❚❚ Pause";
-    timer = setInterval(() => { if (i >= data.storm.length - 1) { stop(); return; } show(i + 1); }, 1400);
+    timer = setInterval(() => { if (i >= data.storm.length - 1) { stop(); return; } show(i + 1); }, 650);
   }
   button.addEventListener("click", play);
   repaint.push(() => show(i, false));
@@ -463,9 +509,9 @@ function pipeline(data) {
   const big = document.querySelector("#periods");
   onEnter(el, () => {
     el.classList.add("played");
-    if (REDUCE) { big.textContent = fmt(data.pipeline.periods); return; }
+    if (REDUCE) { big.textContent = fmt(data.pipeline.hours); return; }
     d3.select(big).transition().delay(900).duration(1600).ease(d3.easeCubicOut)
-      .tween("text", () => { const n = d3.interpolateRound(0, data.pipeline.periods); return t => { big.textContent = fmt(n(t)); }; });
+      .tween("text", () => { const n = d3.interpolateRound(0, data.pipeline.hours); return t => { big.textContent = fmt(n(t)); }; });
   });
 }
 
@@ -535,17 +581,170 @@ function persistence(data, animate) {
   });
 }
 
+// what each version knows, on a clock around the decision: weather it has seen, forecasts, and the 6 hours it predicts
+function timeline(data, animate) {
+  const still = REDUCE || !animate;
+  const L = data.lead, byKey = Object.fromEntries(data.ladder.map(d => [d.key, d]));
+  const W = widthOf("#timeline"), narrow = W < 600;
+  const rows = [
+    { name: "First version", score: byKey["Perfect weather (ceiling)"].value,
+      spans: [{ a: L, b: L + 6, kind: "seen-future", text: "the storm itself" }] },
+    { name: "Rebuilt: known at the decision", score: byKey["No forecasts"].value,
+      spans: [{ a: -6, b: 0, kind: "seen", text: "weather so far" }], marks: true },
+    { name: "Rebuilt + HRRR forecasts", score: byKey["With HRRR forecasts (mean of 5 runs)"].value, ours: true,
+      spans: [{ a: -6, b: 0, kind: "seen", text: "weather so far" },
+              { a: L, b: L + 6, kind: "forecast", text: "what the forecasts said" }], marks: true },
+  ];
+  const left = narrow ? 8 : 230, right = narrow ? 8 : 80, rowH = narrow ? 70 : 64, top = 54;
+  const H = top + rows.length * rowH + 28;
+  const svg = d3.select("#timeline").attr("viewBox", `0 0 ${W} ${H}`);
+  const x = d3.scaleLinear().domain([-7, L + 7]).range([left, W - right]);
+  // the window being predicted, and the decision
+  svg.append("rect").attr("x", x(L)).attr("width", x(L + 6) - x(L)).attr("y", top - 18).attr("height", rows.length * rowH + 8)
+    .attr("fill", "var(--warm)").attr("opacity", 0.08);
+  svg.append("text").attr("class", "label muted").attr("x", (x(L) + x(L + 6)) / 2).attr("y", top - 26)
+    .attr("text-anchor", "middle").style("font-size", "13px").text(narrow ? "predicted" : "the 6 hours being predicted");
+  svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", top - 18).attr("y2", top + rows.length * rowH - 10)
+    .attr("stroke", "var(--ink-2)").attr("stroke-width", 1.5);
+  svg.append("text").attr("class", "label").attr("x", narrow ? x(0) - 4 : x(0)).attr("y", top - 26)
+    .attr("text-anchor", narrow ? "end" : "middle")
+    .style("font-size", "13px").style("font-weight", 700).text("decision");
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${top + rows.length * rowH - 6})`)
+    .call(d3.axisBottom(x).tickValues([-6, 0, L, L + 6]).tickFormat(d => (d === 0 ? "now" : d > 0 ? `+${d} h` : `${d} h`)))
+    .select(".domain").remove();
+  const fill = { "seen": "var(--accent)", "seen-future": "var(--warm)", "forecast": "var(--accent)" };
+  const g = svg.selectAll("g.row").data(rows).join("g").attr("class", "row")
+    .attr("transform", (d, i) => `translate(0,${top + i * rowH})`).attr("opacity", still ? 1 : 0);
+  g.append("text").attr("class", "label").attr("x", narrow ? left : left - 14).attr("y", narrow ? -2 : 18)
+    .attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400))
+    .style("font-size", narrow ? "13px" : null).text(d => d.name);
+  g.each(function (d) {
+    const row = d3.select(this), y = narrow ? 6 : 4;
+    d.spans.forEach(s => {
+      row.append("rect").attr("x", x(s.a)).attr("width", x(s.b) - x(s.a)).attr("y", y).attr("height", 22).attr("rx", 4)
+        .attr("fill", fill[s.kind]).attr("opacity", s.kind === "forecast" ? 0.35 : 0.85)
+        .attr("stroke", s.kind === "forecast" ? "var(--accent)" : "none").attr("stroke-dasharray", "4 3");
+      if (!narrow) row.append("text").attr("class", "label").attr("x", x(s.a) + 6).attr("y", y + 16)
+        .style("font-size", "12px").style("fill", s.kind === "forecast" ? "var(--ink)" : "#fff").text(s.text);
+    });
+    if (d.marks) row.append("circle").attr("cx", x(0)).attr("cy", y + 11).attr("r", 5).attr("fill", "var(--ink-2)")
+      .append("title").text("warnings and outlook in force at the decision");
+    row.append("text").attr("class", "big-label").attr("x", narrow ? W - right : W - right + 12).attr("y", narrow ? -2 : y + 17)
+      .attr("text-anchor", narrow ? "end" : "start").style("font-size", narrow ? "15px" : null)
+      .style("fill", d.spans[0].kind === "seen-future" ? "var(--warm)" : null).text(d.score.toFixed(3));
+  });
+  if (still) return;
+  onEnter(document.querySelector("#peek"), () => g.transition().delay((d, i) => 300 + i * 700).duration(600).attr("opacity", 1));
+}
+
+function ladder(data, animate) {
+  const still = REDUCE || !animate;
+  const rows = data.ladder, ours = rows.find(d => d.ours);
+  document.querySelector("#ladder-title").textContent =
+    `With the forecasts available at the time, ${ours.ratio.toFixed(1)}× better than official warnings alone.`;
+  document.querySelector("#ladder-note").textContent = `Score on new outages of ≥ 5% of customers in the 6 hours ` +
+    `starting 2 hours after each decision, every county and hour of 2025 (${fmt(data.alerts.decisions)} decisions, ` +
+    `${fmt(data.alerts.new_outages)} new outages). Bars show 95% ranges from resampling 2025's storm days: one year's ` +
+    `score depends on a handful of storms, but every version wins and loses on the same days, so the comparison ` +
+    `(${ratioText(ours)} for the model with forecasts) is far firmer than any single score.`;
+  const W = widthOf("#ladder-chart"), narrow = W < 600, rowH = narrow ? 58 : 52, left = narrow ? 0 : 300;
+  const svg = d3.select("#ladder-chart").attr("viewBox", `0 0 ${W} ${24 + rows.length * rowH}`);
+  const x = d3.scaleLinear().domain([0, 0.17]).range([0, W - left - (narrow ? 58 : 150)]);
+  const g = svg.selectAll("g.row").data(rows).join("g").attr("class", "row")
+    .attr("transform", (d, i) => `translate(${left},${(narrow ? 24 : 12) + i * rowH})`);
+  g.append("text").attr("class", d => "label" + (d.ours ? "" : " muted")).attr("x", narrow ? 0 : -14).attr("y", narrow ? -4 : 22)
+    .attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400)).text(d => d.label);
+  const bh = narrow ? 22 : 28, by = narrow ? 2 : 3;
+  const bars = g.append("rect").attr("height", bh).attr("y", by).attr("rx", 4)
+    .attr("fill", d => (d.ceiling ? "none" : d.ours ? "var(--accent)" : d.key === "Warnings + outlook" ? "var(--other)" :
+      "color-mix(in srgb, var(--accent) 45%, var(--surface))"))
+    .attr("stroke", d => (d.ceiling ? "var(--muted)" : "none")).attr("stroke-dasharray", "5 4")
+    .attr("width", still ? d => x(d.value) : 0);
+  // 95% range whiskers
+  const whisk = g.append("g").attr("opacity", still ? 1 : 0);
+  whisk.append("line").attr("x1", d => x(d.lo)).attr("x2", d => x(d.hi)).attr("y1", by + bh / 2).attr("y2", by + bh / 2)
+    .attr("stroke", "var(--ink-2)").attr("stroke-width", 1.5);
+  whisk.selectAll("line.cap").data(d => [d.lo, d.hi]).join("line").attr("class", "cap")
+    .attr("x1", v => x(v)).attr("x2", v => x(v)).attr("y1", by + 5).attr("y2", by + bh - 5).attr("stroke", "var(--ink-2)")
+    .attr("stroke-width", 1.5);
+  const vals = g.append("text").attr("class", "label").attr("y", by + bh / 2 + 5).attr("x", d => x(d.hi) + 10)
+    .attr("opacity", still ? 1 : 0).style("font-weight", d => (d.ours ? 700 : 400))
+    .text(d => d.value.toFixed(3) + (narrow || d.key === "Warnings + outlook" ? "" : `  ·  ${d.ratio.toFixed(1)}× official`));
+  if (still) return;
+  onEnter(document.querySelector("#ladder"), () => {
+    bars.transition().delay((d, i) => i * 350).duration(800).ease(d3.easeCubicOut).attr("width", d => x(d.value));
+    whisk.transition().delay((d, i) => 600 + i * 350).duration(400).attr("opacity", 1);
+    vals.transition().delay((d, i) => 600 + i * 350).duration(400).attr("opacity", 1);
+  });
+}
+
+function leadTime(data, animate) {
+  const still = REDUCE || !animate;
+  const W = widthOf("#lead-chart"), narrow = W < 600, H = narrow ? 400 : 400;
+  const m = { l: narrow ? 44 : 56, r: narrow ? 12 : 250, t: 24, b: narrow ? 104 : 44 };
+  const svg = d3.select("#lead-chart").attr("viewBox", `0 0 ${W} ${H}`);
+  const x = d3.scaleLinear().domain([0, 6]).range([m.l, W - m.r]);
+  const y = d3.scaleLinear().domain([0, 0.11]).range([H - m.b, m.t]);
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat("")).select(".domain").remove();
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
+    .call(d3.axisBottom(x).tickValues([0, 1, 2, 3, 6]).tickFormat(d => d + " h"));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5))
+    .select(".domain").remove();
+  svg.append("text").attr("class", "label muted").attr("x", W - m.r).attr("y", H - m.b + 38).attr("text-anchor", "end")
+    .text("hours ahead");
+  const colors = ["var(--other)", "var(--warm)", "var(--accent)"];
+  const series = data.lead_time.map((s, k) => ({ ...s, color: colors[k] }));
+  const line = d3.line().x(p => x(p.lead)).y(p => y(p.value));
+  const paths = svg.selectAll("path.s").data(series).join("path").attr("class", "s").attr("fill", "none")
+    .attr("stroke", d => d.color).attr("stroke-width", d => (d.color === "var(--accent)" ? 3 : 2.2)).attr("d", d => line(d.points));
+  svg.selectAll("g.pts").data(series).join("g").attr("class", "pts").selectAll("circle").data(d => d.points.map(p => ({ ...p, s: d })))
+    .join("circle").attr("cx", p => x(p.lead)).attr("cy", p => y(p.value)).attr("r", 4.5).attr("fill", p => p.s.color)
+    .attr("stroke", "var(--surface)").attr("stroke-width", 1.5)
+    .on("pointermove", (e, p) => showTip(e, `<b>${p.s.label}</b>${p.lead} h ahead: ${p.value.toFixed(3)}`)).on("pointerleave", hideTip);
+  // the forecast version, tested at 2 h
+  const f = data.ladder.find(d => d.ours);
+  const star = svg.append("g").attr("opacity", still ? 1 : 0);
+  star.append("circle").attr("cx", x(2)).attr("cy", y(f.value)).attr("r", 8).attr("fill", "var(--accent)")
+    .attr("stroke", "var(--surface)").attr("stroke-width", 2);
+  star.append("text").attr("class", "label").attr("x", x(2) + 14).attr("y", y(f.value) - 8).style("font-weight", 700)
+    .text(narrow ? `+ HRRR forecasts: ${f.value.toFixed(3)}` : `+ last five HRRR forecasts: ${f.value.toFixed(3)}`);
+  // direct labels at the right end of each line (a legend on phones)
+  if (!narrow) {
+    svg.selectAll("text.end").data(series).join("text").attr("class", "label end")
+      .attr("x", x(6) + 12).attr("y", d => y(d.points[d.points.length - 1].value) + 5 + (d.color === "var(--warm)" ? 8 : d.color === "var(--other)" ? -4 : 0))
+      .style("fill", d => d.color).style("font-size", "14px").text(d => d.label);
+  } else {
+    const lg = svg.append("g").attr("transform", `translate(${m.l},${H - m.b + 50})`);
+    series.forEach((s, k) => {
+      lg.append("rect").attr("x", 0).attr("y", k * 18 - 6).attr("width", 14).attr("height", 4).attr("fill", s.color);
+      lg.append("text").attr("class", "label").attr("x", 20).attr("y", k * 18).style("font-size", "12px").text(s.label);
+    });
+  }
+  if (still) return;
+  paths.each(function () {
+    const len = this.getTotalLength();
+    d3.select(this).attr("stroke-dasharray", len).attr("stroke-dashoffset", len);
+  });
+  onEnter(document.querySelector("#lead"), () => {
+    paths.transition().delay((d, i) => i * 500).duration(1400).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
+    star.transition().delay(2200).duration(500).attr("opacity", 1);
+  });
+}
+
 function alerts(data) {
-  const a = data.alerts, cols = 40, r = 3.6, gap = 10;
-  const nAvg = Math.round(a.base_rate * 1000), nModel = Math.round(a.hit_rate * 1000);
+  const a = data.alerts, m = a.model, cols = 40, r = 3.6, gap = 10;
+  const nAvg = Math.round(a.base_rate * 1000), nModel = Math.round(m.precision * 1000);
   document.querySelector("#alerts-title").textContent =
-    `The model's top alerts were ${Math.round(a.hit_rate / a.base_rate)}× more likely to be real.`;
-  document.querySelector("#w1-h").innerHTML = `<b>${nAvg} in 1,000</b>average county-periods had a major new outage`;
-  document.querySelector("#w2-h").innerHTML = `<b>${nModel} in 1,000</b>of the periods the model flagged did`;
-  document.querySelector("#alerts-note").textContent = `Major = at least 5% of a county's customers. The alert level was ` +
-    `set on 2024, before 2025 was scored, and flagged ${d3.format(".1%")(a.flagged)} of periods. Those alerts caught ` +
-    `${pct(a.caught)} of all ${fmt(a.new_outages)} major new outages in 2025 (1 January to 31 December, ` +
-    `${fmt(a.calm_periods)} county-periods with no outage under way).`;
+    `Its alerts were ${Math.round(m.precision / a.base_rate)}× more likely to be real.`;
+  document.querySelector("#w1-h").innerHTML = `<b>${nAvg} in 1,000</b>calm county-hours were followed by a major new outage`;
+  document.querySelector("#w2-h").innerHTML = `<b>${nModel} in 1,000</b>of the hours the model alerted on were`;
+  document.querySelector("#alerts-note").textContent = `Major = at least 5% of a county's customers, in the 6 hours ` +
+    `starting 2 hours later. Alerts on the riskiest ${pct1(a.share)} of county-hours caught ${pct(m.caught)} of all ` +
+    `${fmt(a.new_outages)} major new outages in 2025, in ${fmt(m.episodes)} separate alert spells. Warnings + outlook ` +
+    `alone are about as precise (${pct(a.official.precision)}) but caught ${pct(a.official.caught)}. Using only the ` +
+    `newest forecast instead of the last five catches a little more (${pct(a.newest.caught)}) but alerts switch on ` +
+    `and off as each run moves the storm: ${fmt(a.newest.episodes)} spells.`;
   const grids = [["#waffle-avg", nAvg], ["#waffle-model", nModel]].map(([id, lit]) => {
     const svg = d3.select(id).attr("aria-label", `${lit} of 1,000 dots lit`);
     const order = d3.shuffle(d3.range(1000));
@@ -558,56 +757,74 @@ function alerts(data) {
     sel.filter(d => d.lit).transition().delay(d => 300 + d.rank * 9).duration(300).attr("fill", "var(--warm)")));
 }
 
-function compare(data, animate) {
+// predicted probability (mean of the five latest forecasts) against how often an outage followed
+function calibration(data, animate) {
   const still = REDUCE || !animate;
-  const W = widthOf("#bars"), narrow = W < 600, rowH = narrow ? 52 : 46, left = narrow ? 0 : 210;
-  const svg = d3.select("#bars").attr("viewBox", `0 0 ${W} ${16 + data.compare.length * rowH}`);
-  const x = d3.scaleLinear().domain([0, 0.12]).range([0, W - left - 60]);
-  // on phones each label sits above its bar
-  const g = svg.selectAll("g.row").data(data.compare).join("g").attr("class", "row")
-    .attr("transform", (d, i) => `translate(${left},${(narrow ? 22 : 10) + i * rowH})`);
-  g.append("text").attr("class", d => "label" + (d.ours ? "" : " muted")).attr("x", narrow ? 0 : -14).attr("y", narrow ? -2 : 22)
-    .attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400)).text(d => d.label);
-  const bh = narrow ? 22 : 30, by = narrow ? 4 : 2;
-  const bars = g.append("rect").attr("height", bh).attr("y", by).attr("rx", 4)
-    .attr("fill", d => (d.ours ? "var(--accent)" : "var(--other)")).attr("width", still ? d => x(d.value) : 0);
-  const vals = g.append("text").attr("class", "label").attr("y", by + bh / 2 + 5).attr("x", d => (still ? x(d.value) : 0) + 10)
-    .attr("opacity", still ? 1 : 0).text(d => d.value.toFixed(3));
+  const bins = data.calibration, ex = bins.find(b => b.mean > 0.05 && b.mean < 0.1) || bins[bins.length - 2];
+  document.querySelector("#ranges-lead").innerHTML = `The model is fed each of the five most recent HRRR forecasts in ` +
+    `turn, so every prediction comes with a low and a high. When it said about <strong>${pct(ex.mean)}</strong>, with ` +
+    `the forecasts spanning ${pct(ex.low)} to ${pct(ex.high)}, an outage followed <strong>${pct1(ex.observed)}</strong> ` +
+    `of the time. Each dot sits close to the diagonal and inside its range; only the riskiest group runs a little high.`;
+  const W = widthOf("#calib"), narrow = W < 600, H = narrow ? 340 : 420, m = { l: narrow ? 48 : 64, r: 20, t: 20, b: 48 };
+  const svg = d3.select("#calib").attr("viewBox", `0 0 ${W} ${H}`);
+  const x = d3.scaleLog().domain([0.001, 0.6]).range([m.l, W - m.r]);
+  const y = d3.scaleLog().domain([0.001, 0.6]).range([H - m.b, m.t]);
+  const ticks = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3];
+  const f = d => (d < 0.01 ? d3.format(".1%")(d) : pct(d));
+  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).tickValues(ticks).tickSize(-(W - m.l - m.r)).tickFormat("")).select(".domain").remove();
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(ticks).tickFormat(f));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).tickValues(ticks).tickFormat(f))
+    .select(".domain").remove();
+  svg.append("line").attr("x1", x(0.001)).attr("y1", y(0.001)).attr("x2", x(0.6)).attr("y2", y(0.6))
+    .attr("stroke", "var(--muted)").attr("stroke-dasharray", "4 4");
+  svg.append("text").attr("class", "label muted").attr("x", x(0.25)).attr("y", y(0.25) + 22).attr("text-anchor", "middle")
+    .style("font-size", "13px").text("perfectly calibrated");
+  svg.append("text").attr("class", "label muted").attr("x", W - m.r).attr("y", H - 6).attr("text-anchor", "end")
+    .text("predicted chance (mean of 5 forecasts)");
+  svg.append("text").attr("class", "label muted").attr("x", m.l + 6).attr("y", m.t + 4)
+    .text("how often an outage followed");
+  const g = svg.selectAll("g.bin").data(bins).join("g").attr("class", "bin").attr("opacity", still ? 1 : 0);
+  g.append("line").attr("x1", d => x(d.low)).attr("x2", d => x(d.high)).attr("y1", d => y(d.observed)).attr("y2", d => y(d.observed))
+    .attr("stroke", "var(--accent)").attr("stroke-width", 6).attr("stroke-linecap", "round").attr("opacity", 0.35);
+  g.append("circle").attr("cx", d => x(d.mean)).attr("cy", d => y(d.observed)).attr("r", narrow ? 6 : 7).attr("fill", "var(--accent)")
+    .attr("stroke", "var(--surface)").attr("stroke-width", 2)
+    .on("pointermove", (e, d) => showTip(e, `<b>Predicted ${f(d.mean)} (range ${f(d.low)}–${f(d.high)})</b>` +
+      `an outage followed ${f(d.observed)} of ${fmt(d.n)} county-hours`)).on("pointerleave", hideTip);
   if (still) return;
-  onEnter(document.querySelector("#compare"), () => {
-    bars.transition().delay((d, i) => i * 220).duration(800).ease(d3.easeCubicOut).attr("width", d => x(d.value));
-    vals.transition().delay((d, i) => i * 220).duration(800).ease(d3.easeCubicOut).attr("x", d => x(d.value) + 10).attr("opacity", 1);
-  });
+  onEnter(document.querySelector("#ranges"), () => g.transition().delay((d, i) => 200 + i * 220).duration(500).attr("opacity", 1));
 }
 
 function savings(data, animate) {
   const still = REDUCE || !animate;
-  const v = data.value, W = widthOf("#savings"), narrow = W < 600, rowH = narrow ? 42 : 44;
-  const left = narrow ? 0 : 180, right = narrow ? 8 : 150;
+  const v = data.value, W = widthOf("#savings"), narrow = W < 600, rowH = narrow ? 48 : 50;
+  const left = narrow ? 0 : 250, right = narrow ? 8 : 150;
   const model = v.forecasts.find(f => f.ours).scenarios;
-  document.querySelector("#value-title").textContent =
-    `An estimated $${d3.min(model).toFixed(0)}–${d3.max(model).toFixed(0)} million saved in 2025.`;
+  const lo = d3.min(model), hi = d3.max(model);
+  document.querySelector("#value-title").textContent = lo < 1
+    ? `From about break-even to $${hi.toFixed(1)} million saved in 2025.`
+    : `An estimated $${lo.toFixed(0)}–${hi.toFixed(0)} million saved in 2025.`;
   const svg = d3.select("#savings").attr("viewBox", `0 0 ${W} ${36 + v.forecasts.length * rowH}`);
   const all = v.forecasts.flatMap(f => f.scenarios);
   const x = d3.scaleLinear().domain([Math.min(0, d3.min(all)), d3.max(all)]).nice().range([left, W - right]);
   const money = m => (Math.abs(m) < 0.05 ? "$0" : `${m < 0 ? "−" : ""}$${Math.abs(m).toFixed(1)}M`);
   svg.append("g").attr("class", "gridline").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
-    .call(d3.axisBottom(x).ticks(narrow ? 4 : 7).tickSize(-(v.forecasts.length * rowH)).tickFormat(""))
+    .call(d3.axisBottom(x).ticks(narrow ? 4 : 5).tickSize(-(v.forecasts.length * rowH)).tickFormat(""))
     .select(".domain").remove();
   svg.append("g").attr("class", "axis").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
-    .call(d3.axisBottom(x).ticks(narrow ? 4 : 7).tickFormat(d => (d === 0 ? "0" : `${d < 0 ? "−" : ""}$${Math.abs(d)}M`)))
+    .call(d3.axisBottom(x).ticks(narrow ? 4 : 5).tickFormat(d => (d === 0 ? "0" : `${d < 0 ? "−" : ""}$${Math.abs(d)}M`)))
     .select(".domain").remove();
   svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 6).attr("y2", 16 + v.forecasts.length * rowH)
     .attr("stroke", "var(--ink-2)");
   const color = f => (f.ours ? "var(--accent)" : f.key === "perfect" ? "var(--muted)" : "var(--other)");
   const g = svg.selectAll("g.row").data(v.forecasts).join("g").attr("class", "row")
-    .attr("transform", (d, i) => `translate(0,${(narrow ? 28 : 22) + i * rowH})`);
+    .attr("transform", (d, i) => `translate(0,${(narrow ? 30 : 24) + i * rowH})`);
   g.append("text").attr("class", d => "label" + (d.ours ? "" : " muted")).attr("x", narrow ? 0 : left - 14)
     .attr("y", narrow ? -12 : 5).attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400))
     .text(d => d.label);
-  const lo = d => d3.min(d.scenarios), hi = d => d3.max(d.scenarios);
+  const lo_ = d => d3.min(d.scenarios), hi_ = d => d3.max(d.scenarios);
   const bands = g.append("rect").attr("y", -5).attr("height", 10).attr("rx", 5).attr("fill", color).attr("opacity", 0.35)
-    .attr("x", d => (still ? x(lo(d)) : x(0))).attr("width", d => (still ? x(hi(d)) - x(lo(d)) : 0));
+    .attr("x", d => (still ? x(lo_(d)) : x(0))).attr("width", d => (still ? x(hi_(d)) - x(lo_(d)) : 0));
   const dotsSel = g.selectAll("circle").data(d => d.scenarios.map((m, k) => ({ m, k, f: d }))).join("circle")
     .attr("r", narrow ? 4.5 : 5.5).attr("fill", d => color(d.f)).attr("stroke", "var(--surface)").attr("stroke-width", 1.5)
     .attr("cx", d => (still ? x(d.m) : x(0)))
@@ -616,14 +833,14 @@ function savings(data, animate) {
       showTip(e, `<b>${d.f.label}: ${money(d.m)}</b>crews shorten outages ${pct(s.cut)}, staging $${fmt(s.cost)} per county`);
     }).on("pointerleave", hideTip);
   const vals = g.append("text").attr("class", "label").attr("y", 5).attr("opacity", still ? 1 : 0)
-    .attr("x", d => (narrow ? W - right : x(hi(d)) + 12)).attr("text-anchor", narrow ? "end" : "start")
+    .attr("x", d => (narrow ? W - right : x(hi_(d)) + 12)).attr("text-anchor", narrow ? "end" : "start")
     .attr("dy", narrow ? -17 : 0).style("font-size", narrow ? "13px" : null)
-    .text(d => `${money(lo(d))} to ${money(hi(d))}`);
+    .text(d => `${money(lo_(d))} to ${money(hi_(d))}`);
   if (still) return;
   onEnter(document.querySelector("#value"), () => {
     const delay = (d, i) => 300 + i * 250;
     bands.transition().delay(delay).duration(900).ease(d3.easeCubicOut)
-      .attr("x", d => x(lo(d))).attr("width", d => x(hi(d)) - x(lo(d)));
+      .attr("x", d => x(lo_(d))).attr("width", d => x(hi_(d)) - x(lo_(d)));
     dotsSel.transition().delay(d => 300 + v.forecasts.indexOf(d.f) * 250).duration(900).ease(d3.easeCubicOut)
       .attr("cx", d => x(d.m));
     vals.transition().delay((d, i) => 900 + i * 250).duration(500).attr("opacity", 1);
@@ -636,12 +853,10 @@ function accuracy(data, features, states, fc, animate) {
   const svg = d3.select("#map-acc").attr("viewBox", `0 0 ${W} ${H}`);
   const judged = acc.new.map(n => n >= acc.min_events);
   const share = acc.new.map((n, j) => (judged[j] ? acc.caught[j] / n : null));
-  document.querySelector("#where-lead").textContent = `Darker counties had more of their new outages flagged. ` +
-    `Overall the model caught ${pct(d3.sum(acc.caught) / d3.sum(acc.new))} of them. Hatched counties had fewer than ` +
-    `${acc.min_events} new outages in 2025, too few to judge.`;
-  svg.append("defs").append("pattern").attr("id", "hatch").attr("width", 6).attr("height", 6)
-    .attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)")
-    .append("line").attr("y2", 6).attr("stroke", "var(--other)").attr("stroke-width", 1.5);
+  document.querySelector("#where-lead").textContent = `Darker counties had more of their new outages caught in time ` +
+    `by the alerts above. Overall the model caught ${pct(d3.sum(acc.caught) / d3.sum(acc.new))} of them. Hatched ` +
+    `counties had fewer than ${acc.min_events} new outages in 2025, too few to judge.`;
+  hatch(svg, "hatch");
   const counties = countyMap(svg, features, states, fc, W, H - 10);
   const color = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, 1]);
   const fill = (d, j) => (judged[j] ? color()(share[j]) : "url(#hatch)");
@@ -650,7 +865,7 @@ function accuracy(data, features, states, fc, animate) {
   counties.on("pointermove", (e, d) => {
     const j = features.indexOf(d);
     showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` +
-      (judged[j] ? `${acc.caught[j]} of ${acc.new[j]} new outages flagged` : `${acc.new[j]} new outages: too few to judge`));
+      (judged[j] ? `${acc.caught[j]} of ${acc.new[j]} new outages caught` : `${acc.new[j]} new outages: too few to judge`));
   }).on("pointerleave", hideTip);
   repaint.push(() => counties.attr("fill", fill));
   if (still) return;

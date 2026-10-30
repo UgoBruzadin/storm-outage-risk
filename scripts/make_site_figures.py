@@ -218,6 +218,15 @@ def results():
     save(fig, "results.jpg")
 
 
+STORM_HOURS = pd.date_range("2025-03-14 18:00", "2025-03-15 21:00", freq="h")   # the story page's storm, UTC
+THRESHOLD = 5
+LADDER_LABELS = {"Warnings + outlook": "NWS warnings + SPC outlook alone",
+                 "No forecasts": "Model, weather observed so far",
+                 "With HRRR forecasts (newest run)": "Model + latest HRRR forecast",
+                 "With HRRR forecasts (mean of 5 runs)": "Model + last five HRRR forecasts",
+                 "Perfect weather (ceiling)": "Ceiling: knowing the weather in advance"}
+HOURLY_VALUE = [  # (column in ml/results/value_hourly_2025.csv, label), drawn top to bottom
+    ("perfect", "Perfect foresight"), ("model", "Model, weather observed so far"), ("official", "Warnings + outlook")]
 VALUE_FORECASTS = [  # (column in ml/results/value_*.csv, label), drawn top to bottom
     ("perfect", "Perfect forecast"), ("model", "This model"), ("official", "Warnings + outlook"),
     ("spc_outlook", "SPC outlook"), ("nws_warnings", "NWS warnings"), ("climatology", "Historical average")]
@@ -317,9 +326,9 @@ def canopy_scatter(gdf):
     save(fig, "canopy-scatter.jpg")
 
 
-def story_data(gdf, preds, meta):
-    """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm,
-    the heartbeat example, headline results, per-county accuracy and canopy."""
+def story_data(gdf):
+    """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm
+    hour by hour, the heartbeat example, and the hourly results (ml/export_hourly.py)."""
     shapes = gpd.read_parquet(ROOT / "data" / "raw" / "geo" / "regions_study.parquet")
     # state outlines from the full-detail shapes: dissolving simplified counties leaves slivers
     # along shared borders, which then draw as stray lines
@@ -337,71 +346,95 @@ def story_data(gdf, preds, meta):
     counties = [{"id": r.region_fips, "name": r.region, "state": r.state, "geometry": rounded(r.geometry)}
                 for r in shapes.itertuples()]
     states = [{"name": name, "geometry": rounded(geom)} for name, geom in outlines.items()]
-
-    # the storm: seven 6-hour periods across 14–15 March 2025, values in county order
-    blocks = pd.date_range("2025-03-14 06:00", "2025-03-15 18:00", freq="6h")
-    storm = []
-    for b in blocks:
-        now = preds[preds.block_start == b].set_index("region_fips").reindex(order)
-        storm.append({
-            "start": b.isoformat() + "Z",
-            "prob": [None if pd.isna(v) else round(float(v), 3) for v in now.prob],
-            "pct": [None if pd.isna(v) else round(float(v), 1) for v in now.peak_pct_out],
-            "out_mo": int(now[now.index.str.startswith("29")].peak_out.sum()),
-            "out_il": int(now[now.index.str.startswith("17")].peak_out.sum()),
-        })
+    meta = json.loads((APP / "meta_hourly.json").read_text())
+    lead = meta["lead_hours"]
 
     con = duckdb.connect(str(ROOT / "data" / "warehouse.duckdb"), read_only=True)
     heartbeat = con.sql("""
         SELECT block_start, n_snapshots FROM intermediate.int_eaglei__blocks_6h
         WHERE block_start BETWEEN '2024-05-21' AND '2024-05-27' ORDER BY 1
     """).df()
-    n_periods = con.sql("SELECT count(*) FROM marts.mart_study__region_6h").fetchall()[0][0]
+    n_hours = con.sql("SELECT count(*) FROM marts.mart_study__region_1h WHERE year(hour) BETWEEN 2020 AND 2025") \
+        .fetchall()[0][0]
+    hours = con.sql(f"""
+        SELECT region_fips, hour, pct_out, pct_out * customers / 100 AS out FROM marts.mart_study__region_1h
+        WHERE hour BETWEEN TIMESTAMP '{STORM_HOURS[0] - pd.Timedelta(hours=1)}'
+                       AND TIMESTAMP '{STORM_HOURS[-1] + pd.Timedelta(hours=6)}'
+    """).df()
     con.close()
     tests = subprocess.run(["dbt", "ls", "--resource-type", "test", "--quiet"], cwd=ROOT, capture_output=True,
                            text=True).stdout.split()
+
+    # the storm, hour by hour: the risk decided LEAD hours before each hour t, for the 6 hours from t, beside
+    # the worst share out in those 6 hours. Regions already >= 5% out at t - 1 have nothing to predict.
+    ens = pd.read_parquet(ROOT / "data" / "cache" / "forecast_ensemble_2025.parquet")
+    ens = ens[ens.block_start.between(STORM_HOURS[0] - pd.Timedelta(hours=lead),
+                                      STORM_HOURS[-1] - pd.Timedelta(hours=lead))]
+    pct = hours.pivot(index="hour", columns="region_fips", values="pct_out").reindex(columns=order)
+    out = hours.pivot(index="hour", columns="region_fips", values="out").reindex(columns=order)
+    storm = []
+    for t in STORM_HOURS:
+        e = ens[ens.block_start == t - pd.Timedelta(hours=lead)].set_index("region_fips").reindex(order)
+        worst = pct.loc[t: t + pd.Timedelta(hours=5)].max()
+        already = pct.loc[t - pd.Timedelta(hours=1)] >= THRESHOLD
+        now = out.loc[t]
+        r3 = lambda v: None if pd.isna(v) else round(float(v), 3)          # noqa: E731
+        storm.append({
+            "start": t.isoformat() + "Z",
+            "prob": [r3(v) for v in e.p_mean], "low": [r3(v) for v in e.p_low], "high": [r3(v) for v in e.p_high],
+            "pct": [None if pd.isna(v) else round(float(v), 1) for v in worst],
+            "already": [bool(v) for v in already],
+            "out_mo": int(now[now.index.str.startswith("29")].sum()),
+            "out_il": int(now[now.index.str.startswith("17")].sum()),
+        })
 
     def scores(name):
         d = pd.read_csv(RESULTS / f"benchmark_{name}.csv")
         d["split"] = d["split"].str.split("(").str[0]
         return d[(d.threshold_pct == 5) & (d.split == "time")]
 
-    official, final, wn = scores("official"), scores("final_2025"), scores("weathernext")
-    pick = lambda d, model, features: d[(d.model == model) & (d.features == features)].iloc[0]  # noqa: E731
-    best = pick(final, "xgboost", "weather+place+recent")
-    weather = pick(final, "xgboost", "weather")
-    compare = [
-        {"label": "Historical average", "value": pick(official, "climatology", "-").onset_pr_auc, "ours": False},
-        {"label": "NWS warnings", "value": pick(official, "nws_warnings", "-").onset_pr_auc, "ours": False},
-        {"label": "SPC outlook", "value": pick(official, "spc_outlook", "-").onset_pr_auc, "ours": False},
-        {"label": "Warnings + outlook", "value": pick(official, "official", "-").onset_pr_auc, "ours": False},
-        {"label": "weathernext's setup", "value": pick(wn, "xgboost", "weathernext").onset_pr_auc, "ours": False},
-        {"label": "Weather only", "value": weather.onset_pr_auc, "ours": True},
-        {"label": "This model", "value": best.onset_pr_auc, "ours": True},
-    ]
+    final = scores("final_2025")
+    best = final[(final.model == "xgboost") & (final.features == "weather+place+recent")].iloc[0]
 
-    onsets = preds[preds.is_onset].assign(flagged=lambda d: d.prob >= meta["onset_alert_threshold"])
-    onsets["caught"] = onsets.flagged & (onsets.y == 1)
-    acc = onsets.groupby("region_fips").agg(new=("y", "sum"), expected=("prob", "sum"), caught=("caught", "sum"))
-    acc = acc.reindex(order)
+    ladder = pd.read_parquet(APP / "ladder.parquet")
+    lead_time = pd.read_parquet(APP / "lead_time.parquet")
+    runs = {"Warnings + outlook (rate table)": "Warnings + outlook alone",
+            "Model: weather + place + recent": "Model, weather so far only",
+            "+ neighbours (final)": "Model + warnings + outlook"}
+    at = meta["at_headline_share"]
+    calib = pd.read_parquet(APP / "calibration.parquet")
+    acc = pd.read_parquet(APP / "county_hourly.parquet").set_index("region_fips").reindex(order)
     canopy = gdf.set_index("region_fips").reindex(order)
+    dollars = pd.read_csv(RESULTS / "value_hourly_2025.csv").query("mix == 'typical mix'")
 
     data = {
         "counties": counties, "states": states,
-        "storm": storm,
+        "lead": lead, "storm": storm,
         "heartbeat": [{"start": r.block_start.isoformat() + "Z", "n": int(r.n_snapshots)}
                       for r in heartbeat.itertuples()],
-        "pipeline": {"periods": int(n_periods), "counties": len(order), "tests": len(tests)},
+        "pipeline": {"hours": int(n_hours), "counties": len(order), "tests": len(tests)},
+        # trap 2 is measured on the first, 6-hour version: every block against new outages only
         "persistence": {"all": round(float(best.pr_auc), 3), "new": round(float(best.onset_pr_auc), 3)},
-        # alerts at the cutoff fixed on the 2024 validation year (ml/export_app_data.py), not ranked after the fact
-        "alerts": {"base_rate": round(float(meta["onset_event_rate"]), 4),
-                   "hit_rate": round(float(meta["onset_alert_precision"]), 3),
-                   "caught": round(float(meta["onset_alert_recall"]), 3),
-                   "flagged": round(float(meta["onset_alert_share"]), 4),
-                   "new_outages": int(meta["test_onset_events"]), "calm_periods": int(meta["test_onset_blocks"])},
-        "compare": [dict(c, value=round(float(c["value"]), 3)) for c in compare],
+        "ladder": [{"label": LADDER_LABELS[r.model], "key": r.model, "value": round(float(r.onset_pr_auc), 3),
+                    "lo": round(float(r.lo), 3), "hi": round(float(r.hi), 3),
+                    "ratio": round(float(r.ratio_vs_official), 2), "ratio_lo": round(float(r.ratio_vs_official_lo), 2),
+                    "ratio_hi": round(float(r.ratio_vs_official_hi), 2),
+                    "ours": r.model == meta["headline_model"], "ceiling": "ceiling" in r.model}
+                   for r in ladder.itertuples()],
+        "lead_time": [{"label": label, "points": [{"lead": int(r.lead_hours), "value": round(float(r.onset_pr_auc), 3)}
+                                                  for r in lead_time[lead_time.run == run].itertuples()]}
+                      for run, label in runs.items()],
+        "alerts": {"base_rate": round(meta["event_rate"], 4), "share": meta["headline_share"],
+                   "new_outages": meta["n_new_outages"], "decisions": meta["n_decisions"],
+                   **{k: {"caught": round(at[m]["caught"], 3), "precision": round(at[m]["precision"], 3),
+                          "episodes": int(at[m]["episodes"])}
+                      for k, m in (("model", meta["headline_model"]), ("newest", "With HRRR forecasts (newest run)"),
+                                   ("official", "Warnings + outlook"), ("none", "No forecasts"))}},
+        "calibration": [{"mean": round(float(r.mean_probability), 4), "observed": round(float(r.outage_share), 4),
+                         "low": round(float(r.range_low), 4), "high": round(float(r.range_high), 4),
+                         "n": int(r.decisions)} for r in calib.itertuples()],
         "accuracy": {"min_events": MIN_EVENTS,
-                     "new": [int(v) for v in acc.new.fillna(0)],
+                     "new": [int(v) for v in acc.new_outages.fillna(0)],
                      "caught": [int(v) for v in acc.caught.fillna(0)],
                      "expected": [round(float(v), 2) for v in acc.expected.fillna(0)]},
         "canopy": {"pct": [round(float(v), 1) for v in canopy.canopy_mean_pct],
@@ -409,14 +442,12 @@ def story_data(gdf, preds, meta):
                    "r": {state: round(float(np.corrcoef(g.canopy_mean_pct, g.storm_hit_rate)[0, 1]), 2)
                          for state, g in canopy.groupby("state")} | {
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)}},
-    }
-    dollars = pd.read_csv(RESULTS / "value_2025.csv").query("mix == 'typical mix'")
-    data["value"] = {
-        "forecasts": [{"key": col, "label": label, "ours": col == "model",
-                       "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
-                      for col, label in VALUE_FORECASTS],
-        "scenarios": [{"cut": float(r.restoration_cut), "cost": int(r.staging_cost)} for r in dollars.itertuples()],
-        "outage_cost": round(float(dollars.outage_cost_2025.iloc[0]) / 1e6),
+        "value": {
+            "forecasts": [{"key": col, "label": label, "ours": col == "model",
+                           "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
+                          for col, label in HOURLY_VALUE],
+            "scenarios": [{"cut": float(r.restoration_cut), "cost": int(r.staging_cost)} for r in dollars.itertuples()],
+        },
     }
     out = ROOT / "site" / "data" / "story.json"
     out.parent.mkdir(exist_ok=True)
@@ -424,31 +455,31 @@ def story_data(gdf, preds, meta):
     return out
 
 
-MARCH_STORM = pd.date_range("2025-03-14 06:00", "2025-03-15 18:00", freq="6h")     # the story page's storm
-
-
 class StormFrame:
-    """The March 2025 storm on a 1200x630 canvas: predicted risk beside what happened, one 6-hour period at a
-    time. Counties are drawn once; draw(prob, pct, ...) only recolors them, so the clip can tween between periods."""
+    """The March 2025 storm on a 1200x630 canvas, hour by hour, from site/data/story.json: the risk decided two
+    hours ahead beside the worst share out in the same 6 hours. Counties are drawn once; draw(k, t) only recolors
+    them, so the clip can tween between hours. Regions already out when the window began are drawn gray."""
 
-    def __init__(self, gdf, preds):
-        self.order = gdf.region_fips.tolist()
-        steps = [preds[preds.block_start == b].set_index("region_fips").reindex(self.order) for b in MARCH_STORM]
-        self.prob = np.array([s.prob.to_numpy(float) for s in steps])
-        self.pct = np.array([s.peak_pct_out.to_numpy(float) for s in steps])
-        out = lambda s, state: int(s[s.index.str.startswith(state)].peak_out.sum())     # noqa: E731
-        self.out = [(out(s, "29"), out(s, "17")) for s in steps]                     # (Missouri, Illinois)
-        self.vmax_p = max(0.1, np.nanmax(self.prob))
-        self.vmax_o = max(10, np.nanmax(self.pct))
-        self.peak = int(np.nanargmax(np.nansum(self.pct, axis=1)))
+    def __init__(self, gdf, story):
+        frames = story["storm"]
+        self.lead = story["lead"]
+        self.when = [pd.Timestamp(f["start"]) for f in frames]
+        self.prob = np.array([[np.nan if v is None else v for v in f["prob"]] for f in frames], dtype=float)
+        self.pct = np.array([[np.nan if v is None else v for v in f["pct"]] for f in frames], dtype=float)
+        self.already = np.array([f["already"] for f in frames])
+        self.out = [(f["out_mo"], f["out_il"]) for f in frames]
+        self.vmax_p, self.vmax_o = 0.4, 25.0          # outages above 25% share the darkest color
+        self.peak = int(np.nanargmax(np.nansum(self.prob, axis=1)))       # the hour with the most risk ahead
 
         self.fig = plt.figure(figsize=(6, 3.15), dpi=200)
         parts = gdf.reset_index(drop=True).explode(index_parts=False)     # one patch per polygon part
         self.part_of = parts.index.to_numpy()                             # part -> county row
         self.maps = []
         for left, title, colors, vmax, step, label, fmt in [
-                (0.035, "Predicted risk", BLUE, self.vmax_p, 0.4, "probability of ≥ 5% out", lambda v: f"{v:.0%}"),
-                (0.52, "What happened", ORANGE, self.vmax_o, 40, "share of customers out", lambda v: f"{v:.0f}%")]:
+                (0.035, "Risk, decided 2 hours before", BLUE, self.vmax_p, 0.2, "chance of a new outage",
+                 lambda v: f"{v:.0%}"),
+                (0.52, "What happened in those 6 hours", ORANGE, self.vmax_o, 25, "worst share of customers out",
+                 lambda v: f"{v:.0f}%" + ("+" if v >= 25 else ""))]:
             ax = self.fig.add_axes([left, 0.13, 0.30, 0.6])         # the map fills ~0.30 of the width
             parts.plot(ax=ax, facecolor=SURFACE, edgecolor=SURFACE, linewidth=0.3)
             gdf.dissolve("state").boundary.plot(ax=ax, color=INK_2, linewidth=0.6)
@@ -465,47 +496,50 @@ class StormFrame:
             bar.ax.xaxis.label.set_fontsize(5.5)
             bar.ax.xaxis.set_label_position("top")
             self.maps.append((ax.collections[0], cmap(colors), plt.Normalize(0, vmax)))
-        self.fig.text(0.035, 0.94, "Which counties lose power when a storm hits?", fontsize=12.5, fontweight="bold",
-                      va="top")
+        self.fig.text(0.035, 0.94, "Which counties will lose power in the next few hours?", fontsize=12.5,
+                      fontweight="bold", va="top")
         self.subtitle = self.fig.text(0.035, 0.855, "", fontsize=7.5, color=INK_2, va="top")
         self.totals = self.fig.text(0.035, 0.085, "", fontsize=7, color=INK_2, va="top")
         self.fig.text(0.965, 0.085, "ugobruzadin.github.io/storm-outage-risk", fontsize=6.5, color=MUTED, ha="right",
                       va="top")
 
     def draw(self, k, t=0.0):
-        """Period k, blended a fraction t of the way toward period k + 1."""
-        nxt = min(k + 1, len(MARCH_STORM) - 1)
+        """Hour k, blended a fraction t of the way toward hour k + 1."""
+        nxt = min(k + 1, len(self.when) - 1)
+        step = nxt if t >= 0.5 else k
         for (patches, ramp, norm), values in zip(self.maps, (self.prob, self.pct), strict=True):
             v = (1 - t) * values[k] + t * values[nxt]
-            colors = ramp(norm(np.nan_to_num(v)))
+            colors = ramp(norm(np.clip(np.nan_to_num(v), 0, norm.vmax)))
             colors[np.isnan(v)] = plt.matplotlib.colors.to_rgba("#e4e3dc")
+            colors[self.already[step]] = plt.matplotlib.colors.to_rgba(HATCH)      # already out: not asked
             patches.set_facecolor(colors[self.part_of])
-        step = nxt if t >= 0.5 else k
-        when = MARCH_STORM[step].tz_localize("UTC").tz_convert("America/Chicago")
-        self.subtitle.set_text(f"{when:%-d %B %Y, %-I %p} CT, the next 6 hours. Model trained on 2020–2024; "
-                               "it never saw this storm.")
+        ct = self.when[step].tz_convert("America/Chicago")
+        decided = ct - pd.Timedelta(hours=self.lead)
+        self.subtitle.set_text(f"{ct:%-d %B, %-I %p}–{ct + pd.Timedelta(hours=6):%-I %p} CT, as seen at "
+                               f"{decided:%-I %p} from the forecasts available then. A storm it never trained on.")
         mo, il = self.out[step]
-        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}")
+        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}  ·  Gray: already out")
 
 
-def social_card(gdf, preds):
-    frame = StormFrame(gdf, preds)
+def social_card(gdf, story):
+    frame = StormFrame(gdf, story)
     frame.draw(frame.peak)
     frame.fig.savefig(OUT / "social.jpg", pil_kwargs={"quality": 90})      # no tight bbox: exactly 1200x630
     plt.close(frame.fig)
 
 
-def storm_clip(gdf, preds, fps=30, hold=1.0, tween=0.5):
-    """MP4 (H.264, needs ffmpeg) for LinkedIn and Reddit: each period held `hold` seconds, `tween` seconds of
-    blending to the next, and the last period held three times as long."""
+def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):
+    """MP4 (H.264, needs ffmpeg) for LinkedIn and Reddit: each hour held `hold` seconds, `tween` seconds of
+    blending to the next, and the last hour held five times as long."""
     from matplotlib.animation import FFMpegWriter
-    frame = StormFrame(gdf, preds)
+    frame = StormFrame(gdf, story)
+    n = len(frame.when)
     plan = []
-    for k in range(len(MARCH_STORM)):
-        plan += [(k, 0.0)] * int(fps * hold * (3 if k == len(MARCH_STORM) - 1 else 1))
-        if k < len(MARCH_STORM) - 1:
-            n = int(fps * tween)
-            plan += [(k, (i + 1) / (n + 1)) for i in range(n)]
+    for k in range(n):
+        plan += [(k, 0.0)] * int(fps * hold * (5 if k == n - 1 else 1))
+        if k < n - 1:
+            m = int(fps * tween)
+            plan += [(k, (i + 1) / (m + 1)) for i in range(m)]
     writer = FFMpegWriter(fps=fps, codec="libx264", extra_args=["-pix_fmt", "yuv420p", "-crf", "23"])
     with writer.saving(frame.fig, str(OUT / "storm.mp4"), dpi=200):
         for k, t in plan:
@@ -515,7 +549,15 @@ def storm_clip(gdf, preds, fps=30, hold=1.0, tween=0.5):
 
 
 if __name__ == "__main__":
+    import sys
     gdf = load()
+    if "--story" in sys.argv:                  # only the story page's data and the storm card and clip
+        story = story_data(gdf)
+        frames = json.loads(story.read_text())
+        social_card(gdf, frames)
+        storm_clip(gdf, frames)
+        print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB), social.jpg, storm.mp4")
+        sys.exit()
     preds = pd.read_parquet(APP / "predictions.parquet")
     meta = json.loads((APP / "meta.json").read_text())
     storm_replay(gdf, preds, pd.read_parquet(APP / "storms.parquet"), meta)
@@ -527,6 +569,6 @@ if __name__ == "__main__":
     value_figure()
     social_card(gdf, preds)
     storm_clip(gdf, preds)
-    story = story_data(gdf, preds, meta)
+    story = story_data(gdf)
     print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
           ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))
