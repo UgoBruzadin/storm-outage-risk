@@ -96,7 +96,8 @@ def fetch_run(run, points, pool):
         for t in tiles:
             cube = np.frombuffer(BLOSC.decode(raw[(name, t)]), dtype="<f4").reshape(-1, TILE, TILE)
             here = (trow == t[0]) & (tcol == t[1])
-            values[:, here] = cube[: len(FHOURS)][:, irow[here], icol[here]]   # index i = fhour i + 1
+            n = min(len(FHOURS), len(cube))           # a few runs store fewer hours: the rest stay unknown
+            values[:n, here] = cube[:n][:, irow[here], icol[here]]   # index i = fhour i + 1
         values[values == -9999.0] = np.nan
         out[name] = values.ravel()
     df = pd.DataFrame(out)
