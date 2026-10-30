@@ -55,7 +55,7 @@ a { color: var(--accent); }
 
 /* slides */
 .slide { min-height: 100svh; scroll-snap-align: start; display: flex; flex-direction: column; justify-content: center;
-  max-width: 1080px; margin: 0 auto; padding: 84px 24px 48px; }
+  max-width: 1080px; margin: 0 auto; padding: 84px 56px 48px; }   /* 56px: room for the section dots */
 .kicker { font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
 h1, h2 { font-size: clamp(1.9rem, 4.4vw, 3.1rem); line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 14px; }
 .lead { font-size: clamp(1.05rem, 2vw, 1.25rem); color: var(--ink-2); max-width: 62ch; margin: 0 0 24px; }
@@ -86,6 +86,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .src b { display: block; }
 .src span { font-size: .85rem; color: var(--muted); }
 .flow { width: 90px; }
+.flow-v { display: none; }
+.flow-v path { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 6; animation: flow 1.2s linear infinite; }
 .flow path { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 6; animation: flow 1.2s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -24; } }
 .table-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; text-align: center;
@@ -100,7 +102,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 
 /* the traps: one section, a sticky panel of cards; invisible scroll stops behind it open one card each */
 .traps { display: block; max-width: none; padding: 0; min-height: 0; scroll-snap-align: none; position: relative; }
-.traps-sticky { position: sticky; top: 0; height: 100svh; max-width: 1080px; margin: 0 auto; padding: 72px 24px 20px;
+.traps-sticky { position: sticky; top: 0; height: 100svh; max-width: 1080px; margin: 0 auto; padding: 72px 56px 20px;
   display: flex; flex-direction: column; justify-content: center; }
 .trap-steps { margin-top: -100svh; }
 .trap-steps div { height: 100svh; scroll-snap-align: start; }
@@ -125,8 +127,9 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 #savings .label, #lead-chart .label, #calib .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
-.waffles { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-.waffle h3 { font-size: 1rem; margin: 0 0 8px; font-weight: 600; color: var(--ink-2); }
+.waffles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 32px; }
+.waffle { display: grid; grid-template-rows: subgrid; grid-row: span 2; }
+.waffle h3 { font-size: 1rem; margin: 0 0 8px; font-weight: 600; color: var(--ink-2); align-self: end; }
 .waffle h3 b, .waffle h3 strong { color: var(--ink); font-size: 1.6rem; display: block; }
 .legend text { fill: var(--muted); font-size: 12px; }
 
@@ -162,10 +165,14 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .src { padding: 8px 14px; }
   .table-card { padding: 18px; }
   .waffles, .next { grid-template-columns: 1fr; }
-  .pipe { grid-template-columns: 1fr; }
+  .pipe { grid-template-columns: 1fr 34px; gap: 0; }   /* boxes, then a trunk down their right side into the card */
   .flow { display: none; }
+  .flow-v { display: block; width: 34px; height: 100%; }
+  .table-card { grid-column: 1 / -1; }
   .dots { display: none; }
   .slide { padding: 72px 16px 40px; }
+  .waffles { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 20px; }
+  .waffle { grid-template-rows: none; grid-row: auto; }
   .traps { padding: 0; }
   .traps-sticky { padding: 60px 12px 12px; }
   .card-head { font-size: .95rem; padding: 10px 12px; }
@@ -174,7 +181,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
   .src, .table-card, .card-body { transition: none; }
-  .flow path { animation: none; }
+  .flow path, .flow-v path { animation: none; }
 }
 </style>
 </head>
@@ -214,6 +221,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
       <path d="M0 25 C45 25 45 125 90 125"/><path d="M0 75 C45 75 45 125 90 125"/><path d="M0 125 L90 125"/>
       <path d="M0 175 C45 175 45 125 90 125"/><path d="M0 225 C45 225 45 125 90 125"/>
     </svg>
+    <!-- phones: each source's line runs right, then down a shared trunk into the card below -->
+    <svg class="flow-v" aria-hidden="true"></svg>
     <div class="table-card">
       <div class="big" id="periods">0</div>
       <div data-t="data.unit"></div>
@@ -355,10 +364,24 @@ function T(key, vars = {}) {
   return inline(raw).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 function Tp(key, vars) { const d = document.createElement("div"); d.innerHTML = T(key, vars); return d.textContent; }
+// phones: one line from the middle of each source box, right, then down the trunk into the card
+function verticalFlow() {
+  const svg = document.querySelector(".flow-v"), box = document.querySelector(".sources");
+  if (!svg || getComputedStyle(svg).display === "none") return;
+  const top = box.getBoundingClientRect().top, h = Math.round(box.getBoundingClientRect().height);
+  svg.setAttribute("viewBox", `0 0 34 ${h}`);
+  svg.innerHTML = [...box.children].map(b => {
+    const r = b.getBoundingClientRect(), y = Math.round(r.top - top + r.height / 2);
+    return `<path d="M0 ${y} H20 V${h}"/>`;
+  }).join("");
+}
+addEventListener("resize", verticalFlow);
+
 function applyText() {
   document.querySelectorAll("[data-t]").forEach(el => { el.innerHTML = T(el.dataset.t); });
   document.querySelector(".sources").innerHTML = TEXT.data.sources
     .map(d => `<div class="src"><b>${inline(d.what)}</b><span>${inline(d.from)}</span></div>`).join("");
+  verticalFlow();
   document.querySelector(".next").innerHTML = TEXT.end.next
     .map(d => `<div><b>${inline(d.title)}</b>${inline(d.text)}</div>`).join("");
 }
