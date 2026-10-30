@@ -32,3 +32,12 @@ def test_text_yaml_lists_have_their_fields():
     text = yaml.safe_load((SITE / "text.yaml").read_text())
     assert all({"what", "from"} <= set(s) for s in text["data"]["sources"])
     assert all({"title", "text"} <= set(n) for n in text["end"]["next"])
+
+
+def test_writeup_contents_links_point_to_headings():
+    md = (SITE / "writeup" / "writeup.md").read_text()
+    anchors = set(re.findall(r"^#{1,3} .+\{#([\w-]+)\}\s*$", md, flags=re.M))
+    links = set(re.findall(r"\]\(#([\w-]+)\)", md))
+    assert links, "found no contents links"
+    assert links <= anchors, f"links with no heading: {sorted(links - anchors)}"
+    assert md.count("\n:::") % 2 == 0 or md.count(":::") >= 2, "unbalanced ::: boxes"

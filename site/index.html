@@ -165,10 +165,12 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .src { padding: 8px 14px; }
   .table-card { padding: 18px; }
   .waffles, .next { grid-template-columns: 1fr; }
-  .pipe { grid-template-columns: 1fr 34px; gap: 0; }   /* boxes, then a trunk down their right side into the card */
+  .pipe { grid-template-columns: 1fr 50px; gap: 0; }   /* boxes, then a trunk down their right side into the card */
   .flow { display: none; }
-  .flow-v { display: block; width: 34px; height: 100%; }
-  .table-card { grid-column: 1 / -1; }
+  .flow-v { display: block; width: 50px; height: 100%; overflow: visible; }
+  .table-card { grid-column: 1 / -1; margin-top: 18px; padding: 14px; }
+  .table-card .big { font-size: 2rem; }
+  .table-card .tests { margin-top: 8px; }
   .dots { display: none; }
   .slide { padding: 72px 16px 40px; }
   .waffles { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 20px; }
@@ -364,15 +366,20 @@ function T(key, vars = {}) {
   return inline(raw).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
 }
 function Tp(key, vars) { const d = document.createElement("div"); d.innerHTML = T(key, vars); return d.textContent; }
-// phones: one line from the middle of each source box, right, then down the trunk into the card
+// phones: each source box sends its own line right, down its own lane (top box outermost, so no line crosses
+// another), and the lanes sweep together in curves of different widths into the card below
 function verticalFlow() {
   const svg = document.querySelector(".flow-v"), box = document.querySelector(".sources");
   if (!svg || getComputedStyle(svg).display === "none") return;
   const top = box.getBoundingClientRect().top, h = Math.round(box.getBoundingClientRect().height);
-  svg.setAttribute("viewBox", `0 0 34 ${h}`);
-  svg.innerHTML = [...box.children].map(b => {
-    const r = b.getBoundingClientRect(), y = Math.round(r.top - top + r.height / 2);
-    return `<path d="M0 ${y} H20 V${h}"/>`;
+  const n = box.children.length, gap = 18, end = h + gap, mid = 26, r = 6;      // gap: space above the card
+  svg.setAttribute("viewBox", `0 0 50 ${end}`);
+  svg.innerHTML = [...box.children].map((b, i) => {
+    const rect = b.getBoundingClientRect(), y = Math.round(rect.top - top + rect.height / 2);
+    const lane = 9 + (n - 1 - i) * 8;                         // x of this line's lane: top box furthest right
+    const bend = end - 16 - (n - 1 - i) * 10;                 // where it starts curving in: outer lanes earlier
+    return `<path d="M0 ${y} H${lane - r} Q${lane} ${y} ${lane} ${y + r} V${bend} ` +
+           `C${lane} ${end - 4} ${mid} ${end - 8} ${mid} ${end}"/>`;
   }).join("");
 }
 addEventListener("resize", verticalFlow);

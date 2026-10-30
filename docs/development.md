@@ -72,7 +72,7 @@ are minimal and lack geopandas, dbt and the ML libraries).
 
 ## Editing the site's text
 
-Every word on the story page is in `site/text.yaml`, in page order. Edit, save, and refresh: the page reads the file
+The write-up is `site/writeup/writeup.md` (Markdown; the conventions for boxes, captions and anchors are listed at the top of the file). Every word on the story page is in `site/text.yaml`, in page order. Edit, save, and refresh: the page reads the file
 directly. To preview locally, serve the folder (`python3 -m http.server -d site`, then http://localhost:8000).
 Placeholders such as `{ratio}` are numbers filled in from `site/data/story.json`; a comment above each says what it
 holds. `tests/test_site.py` fails if the page asks for a key the file doesn't have. The link-preview text (title,
