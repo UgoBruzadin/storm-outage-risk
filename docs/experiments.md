@@ -368,17 +368,40 @@ The second framing, built to answer the question a utility actually faces. A dec
   - **Neighbours are now neutral two hours ahead** (0.063 with, 0.064 without), though they still help six hours ahead (0.048 against 0.045) and with catching outages in time at 2 h (25% against 22%). They were chosen on 2024 under the old definition (E15); re-checking them on 2024 under the fresh one is open.
   - For display only, the story page's storm animation uses a version of the same model trained on every county-hour, ongoing outages included (`ml/display_model.py`), so its map tracks the outage map. It is never scored or quoted.
 
+### E27. Neighbours under the fresh definition
+- **Question:** On 2025, neighbours looked neutral two hours ahead (E26). Re-checked on the validation year, as the original choice was (E15)?
+- **Setup:** `hourly_ablation.py --configs 0,1 --tag fresh`, 2024, five seeds, fresh new outages (`hourly_ablation_lead2_fresh.csv`, `hourly_ablation_lead6_fresh.csv`).
+- **Result:** 2 h ahead 0.0469 → 0.0476 with neighbours (+1.5%, better with 4 of 5 seeds); 6 h ahead 0.0353 → 0.0384 (+9%, 5 of 5).
+- **Meaning:** Kept. The 2025 result was within year-to-year noise; on the validation year neighbours help at both leads, most further ahead.
+
+### E28. Calibrating the headline model on 2024 forecasts
+- **Question:** Above ~20% the headline model's probabilities run high (E21). Does a calibration map fitted on 2024, with 2024's HRRR forecasts, fix it, and what is the headline model worth in dollars?
+- **Setup:** The headline model trained on 2020–2023 and run on 2024 with the mean of 2024's five HRRR runs (909,774 decisions); an isotonic map from probability to outcome, and an alert level frozen at its top 0.75% of 2024 hours. Both applied to 2025 (`ml/calibrate_forecasts.py`, `calibration_forecasts_2025.csv`, `value_forecasts_2025.csv`).
+- **Result:**
+
+  | Predicted band | Raw: predicted → happened | Calibrated: predicted → happened |
+  |---|---|---|
+  | 0.5–1% | 0.7% → 0.7% | 0.7% → 0.7% |
+  | 5–10% | 7.0% → 6.5% | 5.9% → 8.1% |
+  | 10–20% | 13.9% → 13.1% | 11.9% → 19.6% |
+  | over 20% | 31.8% → 26.0% | 35.4% → 37.2% |
+
+  - Onset PR-AUC 0.094 raw, 0.089 calibrated (the map flattens probabilities into ties).
+  - **Alert level frozen on 2024 (7.5%):** on 2025 it alerts on 0.77% of hours, 14.8% of alerts real, 29.9% of new outages caught, 3,014 alert spells. That is almost the same as the same-share figures (0.75%, 15.1%, 30%).
+  - **Dollars, typical mix, four scenarios:** raw $0.7M to $24.4M; calibrated −$0.3M to $25.0M; the model without forecasts −$2.1M to $28.2M (E26).
+- **Meaning:**
+  - **Calibration not adopted.** It fixes the top band but undershoots the middle, because 2024's relation between forecasts and outages differs from 2025's. The raw probabilities are as good overall, and rank better.
+  - **The headline alert numbers hold with a level set in advance,** so they are achievable by a utility that fixes its alert level beforehand.
+  - **In dollars, the forecast version is worth about the same as the one without forecasts.** Its extra skill is mostly on medium-risk calls, which the staging rule rarely acts on. The dollar estimate is the least certain number on the pages: two of its four inputs are assumptions.
+
 ---
 
 ## Open experiments
 
 | Test | Why | Notes |
 |---|---|---|
-| 2024 forecasts: alert level and calibration | The frozen alert level was set without forecasts; probabilities above 20% are overconfident (E21) | 2024 forecasts downloaded; calibration step not built |
 | HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
 | One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
 | Held-out storms | Split by storm instead of by year | |
-| Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | Measured in E21 (calibrated to 20%, high above); fixing it is the row above |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | Counts per storm day in the dashboard (`storm_days.parquet`); the why is open |
-| Neighbours under the fresh definition | E26: neutral at 2 h, helpful at 6 h; chosen on 2024 under the old definition | Rerun `hourly_ablation.py` on 2024 |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

@@ -1,0 +1,11 @@
+lead_hours,train_years,config,features,seed,onset_pr_auc,precision_top1,recall_top1,n_rows,n_events
+2,2020–2023,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,0,0.046497410496191,0.07881534228839618,0.1699825479930192,1853748,8595
+2,2020–2023,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,1,0.0458651274235926,0.07881534228839618,0.1699825479930192,1853748,8595
+2,2020–2023,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,2,0.04774884771329102,0.07886928845012678,0.17009889470622455,1853748,8595
+2,2020–2023,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,3,0.04683898505446522,0.07849166531801262,0.16928446771378708,1853748,8595
+2,2020–2023,"base (weather, place, recent, official)",weather+place+recent_now+warnings+outlook,4,0.04751874019657973,0.07935480390570211,0.17114601512507271,1853748,8595
+2,2020–2023,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,0,0.04813664469166882,0.08178238118357879,0.17638161721931356,1853748,8595
+2,2020–2023,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,1,0.04727973259418559,0.08140475805146463,0.17556719022687609,1853748,8595
+2,2020–2023,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,2,0.04637851587175684,0.08113502724281167,0.17498545666084933,1853748,8595
+2,2020–2023,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,3,0.04717296203378263,0.080163996331661,0.172891215823153,1853748,8595
+2,2020–2023,+ neighbours,weather+place+recent_now+warnings+outlook+neighbors,4,0.049106574281962044,0.08356260452068835,0.18022105875509017,1853748,8595
