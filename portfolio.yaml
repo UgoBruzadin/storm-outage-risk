@@ -1,0 +1,35 @@
+# This project's card on the portfolio (github.com/UgoBruzadin/portfolio). The portfolio reads this file when it
+# builds, so keep it in step with the findings here. Fields match the portfolio's Project type (src/data/projects.js).
+name: Storm Outage Risk
+repo: storm-outage-risk
+image: https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg
+summary: >-
+  Which Missouri and Illinois counties will lose power in the next few hours? An hourly, county-level outage
+  forecast built on public data and real weather forecasts, tested two hours ahead on a year it never saw, with a
+  story page, a full write-up and a decision dashboard.
+tags: [XGBoost, Forecasting, dbt, DuckDB, SQL, Geospatial, Streamlit, Python]
+why: >-
+  Weather forecasts tell utilities when a storm will arrive, not which counties will lose power. Repair crews need
+  to know where, early enough to get there, and the same storm can cut 2% of one county and 40% of the next.
+problem: >-
+  New outages are rare (about 0.5% of county-hours) and outages persist, so a model can look accurate by predicting
+  "still out", or, as my first version did, by summarizing the weather during the hours it was predicting. The
+  useful target is a fresh outage, predicted with only what was known at the time.
+approach: >-
+  A dbt + DuckDB pipeline (61 tests, a 15-million-row hourly table) joining DOE EAGLE-I outage records, NOAA HRRR
+  weather, HRRR forecasts as issued (read from the hourly forecast archive on AWS), NWS warnings, SPC outlooks, tree
+  canopy and Census housing. Every hour, an XGBoost model scores every county for the six hours starting two hours
+  later, using only inputs known at that moment, including the last five forecast runs, which also give each
+  prediction a range. Trained on 2020-2024, choices made on 2024, tested once on 2025; storm-day bootstrap ranges,
+  paired permutation tests, and an audit for look-ahead and leakage.
+results: >-
+  Two hours ahead, it ranks new outages 2.4x better than NWS warnings plus SPC outlooks (95% range 2.0-3.3x,
+  p < 0.001). Alerting on the riskiest 0.75% of county-hours, 15% of alerts were followed by a new outage (31x the
+  base rate) and they caught 30% of 2025's 1,436 new outages; the official forecasts, alerting as often, were right
+  11% of the time and caught 17%. Real forecasts recover most of what perfect knowledge of the weather would add,
+  and its probabilities come true about as often as stated.
+stack: [Python, SQL, dbt, DuckDB, XGBoost, scikit-learn, MLflow, GeoPandas, D3, Streamlit, Docker]
+github: https://github.com/UgoBruzadin/storm-outage-risk
+demo: https://ugobruzadin.github.io/storm-outage-risk/
+featured: true
+highlight: true
