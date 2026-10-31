@@ -374,11 +374,11 @@ The second framing, built to answer the question a utility actually faces. A dec
 
 | Test | Why | Notes |
 |---|---|---|
-| 2024 forecasts: alert level and calibration | The frozen alert level was set without forecasts; probabilities above 20% are overconfident (E21) | Download running |
+| 2024 forecasts: alert level and calibration | The frozen alert level was set without forecasts; probabilities above 20% are overconfident (E21) | 2024 forecasts downloaded; calibration step not built |
 | HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
 | One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
 | Held-out storms | Split by storm instead of by year | |
-| Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | |
-| Per-storm scores | Which 2025 storms were caught, which were missed and why | |
+| Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | Measured in E21 (calibrated to 20%, high above); fixing it is the row above |
+| Per-storm scores | Which 2025 storms were caught, which were missed and why | Counts per storm day in the dashboard (`storm_days.parquet`); the why is open |
 | Neighbours under the fresh definition | E26: neutral at 2 h, helpful at 6 h; chosen on 2024 under the old definition | Rerun `hourly_ablation.py` on 2024 |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
