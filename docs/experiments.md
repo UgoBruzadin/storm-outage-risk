@@ -323,6 +323,26 @@ The second framing, built to answer the question a utility actually faces. A dec
   - **A plausible reading:** in Missouri, heavy canopy comes with the rest of the Ozarks (rural, hilly, older lines, few customers per county), which the model already learns from housing, density and county size. Canopy then adds nothing new there. In mostly treeless Illinois, the few wooded counties (river bluffs and valleys) stand out from their neighbours in a way the other features don't capture.
   - **Small effects.** All of these are within a few percent, close to the seed noise. The supported claim is: trees are a small, real signal overall (E7, E15), and the county correlation is not evidence that they matter more in Missouri.
 
+### E25. Are "new outages" really new?
+- **Question:** A county hovering around the 5% line (6%, then 4%, then 6%) counts as a new outage each time it climbs back over. Those re-crossings are the same outage continuing, and easy to predict. Do they inflate the scores?
+- **Setup:** 2025, 2 h ahead, the same predictions as E19–E23. A *fresh* new outage has no hour at 5% or more in that county in the 24 hours before; a decision is *fresh* when the county had no such hour in the 24 hours before it. All models were rescored on fresh decisions only, with paired storm-day ranges (`fresh_onsets_2025.csv`).
+- **Result:**
+  - **188 of the 1,624 new outages (12%) were re-crossings.**
+  - Decisions with an outage in the previous 24 hours are 2.1% of all decisions, but hold 8% of the positive windows.
+  - On fresh decisions only:
+
+  | Model | Onset PR-AUC, all | Fresh only | vs. warnings + outlook, fresh only |
+  |---|---|---|---|
+  | No forecasts | 0.068 | 0.064 | 1.6× (1.4–2.1×) |
+  | With HRRR forecasts (newest run) | 0.094 | 0.089 | 2.3× (1.9–3.0×) |
+  | With HRRR forecasts (mean of 5) | 0.099 | 0.095 | 2.4× (2.0–3.3×) |
+  | Ceiling | 0.105 | 0.101 | 2.6× (2.1–3.3×) |
+
+- **Meaning:**
+  - Re-crossings make the scores about 5% higher and the advantage over the official forecasts slightly larger (2.5× against 2.4×). The conclusions don't change.
+  - The headline keeps the standard definition, which is documented and easy to reproduce. This check is the robustness note.
+  - Predicting how long an outage lasts, or when power comes back, is a different target from this model's. It is listed under open experiments.
+
 ---
 
 ## Open experiments
@@ -335,3 +355,4 @@ The second framing, built to answer the question a utility actually faces. A dec
 | Held-out storms | Split by storm instead of by year | |
 | Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | |
+| Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
