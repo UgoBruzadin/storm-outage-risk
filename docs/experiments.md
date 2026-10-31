@@ -466,6 +466,12 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **Result:** the model without forecasts against warnings + outlook, 2025: ≥ 1% of customers 0.102 vs 0.061 (1.67×); ≥ 5% 0.064 vs 0.039 (1.63×); ≥ 10% 0.047 vs 0.029 (1.64×).
 - **Meaning:** The edge doesn't depend on where the line is drawn.
 
+### E35. Weather arriving an hour late
+- **Question:** The model uses each hour's weather as soon as the hour ends, but operationally the HRRR analysis arrives about an hour late (audit, "What the audit doesn't cover"). Does that matter?
+- **Setup:** The model without forecasts retrained with every weather input an hour older, both the county's own and its neighbours': the 6 hours from 7 to 1 hours before the decision instead of 6 to 0. Compared with the usual inputs, same rows, 2025.
+- **Result:** 0.0643 with late weather, 0.0635 on time.
+- **Meaning:** No loss: the difference is within seed noise. The last hour of weather adds nothing the hours before it don't already carry, so the 2-hours-ahead results hold with realistic data delays.
+
 ### E36. Several test years
 - **Question:** Is 2025 typical?
 - **Setup:** The model without forecasts trained on 2020 to the year before and tested on each of 2022–2025. The forecast model (mean of five runs) tested on 2024, trained on 2020–2023, on the 2024 decisions where all five runs exist.
@@ -503,7 +509,6 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | Test | Why | Notes |
 |---|---|---|
 | HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
-| One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
 | Held-out storms | Split by storm instead of by year | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | By storm type in E29: wind and rain without storm energy are the hard cases |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
