@@ -25,6 +25,7 @@ export-app = { cmd = "python -m ml.export_app_data", description = "Train the fi
 app = { cmd = "streamlit run app/streamlit_app.py --server.address=localhost", description = "Run the dashboard locally (this computer only)" }
 publish-data = { cmd = "python scripts/publish_hf.py data", description = "Upload data/app to a Hugging Face dataset (private by default; needs HF_TOKEN)" }
 deploy-space = { cmd = "python scripts/publish_hf.py space", description = "Deploy the dashboard as a Hugging Face Docker Space (private by default; needs HF_TOKEN)" }
+backup-hf = { cmd = "python scripts/backup_hf.py", description = "Back up data/raw and a warehouse snapshot to a PRIVATE Hugging Face dataset (needs HF_TOKEN; resumable)" }
 
 [dependencies]
 python = "3.14.*"
@@ -95,4 +96,4 @@ pyyaml = "*"
 [environments]
 default = { features = ["dev", "dbt", "models"], solve-group = "default" }
 app = { features = ["app"], no-default-feature = true }                  # Docker image
-ci = { features = ["app", "dev", "dbt"], no-default-feature = true }     # GitHub Actions: tests, lint, dbt parse
+ci = { features = ["app", "dev", "dbt", "models"], no-default-feature = true }     # GitHub Actions: tests, lint, dbt parse
