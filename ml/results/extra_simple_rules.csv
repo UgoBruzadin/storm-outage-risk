@@ -1,0 +1,9 @@
+rule,pr_auc,rows
+"a severe, tornado or wind warning in force",0.005855023830834867,1722803
+share of nearby counties under warning,0.006328778321793792,1722803
+"worst outage in a county within 100 km, now",0.008543719982715007,1719083
+"worst outage upwind, now",0.008107774636321426,1618705
+forecast max gust in the window (newest run),0.043188125591084904,1722803
+forecast max storm energy (CAPE) in the window,0.009051578848478141,1722803
+warnings + outlook (rate table),0.03918985139842959,1722803
+"the model, last five forecasts",0.09421953930115166,1722803

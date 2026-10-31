@@ -394,6 +394,108 @@ The second framing, built to answer the question a utility actually faces. A dec
   - **The headline alert numbers hold with a level set in advance,** so they are achievable by a utility that fixes its alert level beforehand.
   - **In dollars, the forecast version is worth about the same as the one without forecasts.** Its extra skill is mostly on medium-risk calls, which the staging rule rarely acts on. The dollar estimate is the least certain number on the pages: two of its four inputs are assumptions.
 
+### E29–E39. Follow-up analyses of the 2-hours-ahead model
+
+Eleven quick analyses reusing the saved 2025 predictions, the forecast archive and the warehouse (`ml/extra_analyses.py`; results in `ml/results/extra_<name>.csv`). Fresh new outages, 2 hours ahead. "Model" is the headline model (mean of the last five HRRR runs) unless marked "without forecasts". "Caught" means alerting on each version's own riskiest 0.75% of county-hours.
+
+### E29. Which kinds of outages it catches
+- **Question:** Does it miss particular kinds of storms?
+- **Setup:** Each 2025 new outage is labelled by the conditions at its onset hour: winter or cold (a winter warning, or mean temperature ≤ 2 °C), warm-season convective (CAPE ≥ 250 J/kg, or a severe-thunderstorm or tornado warning), or other (wind or rain without storm energy).
+- **Result:**
+
+  | Storm type | New outages | Caught: model | Caught: warnings + outlook |
+  |---|---|---|---|
+  | Warm-season convective | 767 | 41% | 29% |
+  | Winter / cold | 192 | **36%** | **2%** |
+  | Other (wind, rain, no storm energy) | 477 | 10% | 4% |
+
+- **Meaning:** The largest gap is in winter. Severe-thunderstorm and tornado warnings, and the SPC convective outlook, say little about ice and snow, while the model learns from temperature, freezing level and precipitation. Outages without storm energy (a third of all new outages) are hard for both, and are the clearest place to improve.
+
+### E30. Big outages or small ones
+- **Question:** Does it catch the outages that matter most?
+- **Result:** caught by the model (warnings + outlook):
+
+  | Group | New outages | Model | Official |
+  |---|---|---|---|
+  | 5–10% of customers out | 747 | 23% | 12% |
+  | 10–25% | 539 | 37% | 22% |
+  | over 25% | 150 | 39% | 25% |
+  | under 1,000 customers affected | 893 | 28% | 13% |
+  | 1,000–5,000 | 482 | 32% | 22% |
+  | over 5,000 | 61 | **49%** | 33% |
+
+- **Meaning:** The bigger the outage, the more often it is caught in time, and the model's lead over the official forecasts holds at every size.
+
+### E31. Season and time of day
+- **Result:** onset PR-AUC, model against warnings + outlook:
+
+  | Group | Model | Official | Ratio |
+  |---|---|---|---|
+  | Spring | 0.167 | 0.072 | 2.3× |
+  | Summer | 0.036 | 0.015 | 2.4× |
+  | Fall | 0.021 | 0.007 | 3.0× |
+  | Winter | 0.110 | 0.037 | 3.0× |
+  | Night (0–6 CT) | 0.068 | 0.019 | **3.6×** |
+  | Morning (6–12) | 0.075 | 0.021 | 3.5× |
+  | Afternoon (12–18) | 0.120 | 0.077 | 1.6× |
+  | Evening (18–24) | 0.112 | 0.053 | 2.1× |
+
+- **Meaning:** It is better in every season and at every time of day. The edge is largest at night and in the morning, when few warnings are issued, and smallest in the afternoon, when forecasters are most active. Summer outages are the hardest to rank for both: many scattered, short-lived storms.
+
+### E32. The five-run range as an alert trigger
+- **Result:** onset PR-AUC 0.091 (lowest run), **0.094 (mean)**, 0.083 (highest run), 0.088 (newest run); mean plus half or all of the range 0.086 and 0.078. At the same alert share they catch 30–33% and are right 14–15% of the time.
+- **Meaning:** The mean is the best single number. The range is useful as a statement of uncertainty (E21), not as a better trigger.
+
+### E33. Simple rules against the model
+- **Result:** onset PR-AUC on 2025 (base rate 0.005):
+
+  | Rule | PR-AUC |
+  |---|---|
+  | A severe, tornado or wind warning in force | 0.006 |
+  | Share of nearby counties under warning | 0.006 |
+  | Worst outage within 100 km, now | 0.009 |
+  | Worst outage upwind, now | 0.008 |
+  | Forecast storm energy (CAPE) in the window | 0.009 |
+  | **Forecast max gust in the window (newest run)** | **0.043** |
+  | Warnings + outlook (rate table) | 0.039 |
+  | The model | 0.094 |
+
+- **Meaning:** On their own, warnings in force are barely better than chance at saying where a new outage will start 2–8 hours later: they come too late and cover too much. The single best rule is the forecast gust, which on its own already matches the official forecasts. The model is 2.2× the best single rule.
+
+### E34. Other outage sizes
+- **Result:** the model without forecasts against warnings + outlook, 2025: ≥ 1% of customers 0.102 vs 0.061 (1.67×); ≥ 5% 0.064 vs 0.039 (1.63×); ≥ 10% 0.047 vs 0.029 (1.64×).
+- **Meaning:** The edge doesn't depend on where the line is drawn.
+
+### E36. Several test years
+- **Question:** Is 2025 typical?
+- **Setup:** The model without forecasts trained on 2020 to the year before and tested on each of 2022–2025. The forecast model (mean of five runs) tested on 2024, trained on 2020–2023, on the 2024 decisions where all five runs exist.
+- **Result:**
+
+  | Test year | Trained on | Model | Warnings + outlook | Ratio |
+  |---|---|---|---|---|
+  | 2022 | 2020–2021 | 0.018 | 0.010 | 1.8× |
+  | 2023 | 2020–2022 | 0.042 | 0.026 | 1.7× |
+  | 2024 | 2020–2023 | 0.048 | 0.023 | 2.1× |
+  | 2025 | 2020–2024 | 0.064 | 0.039 | 1.6× |
+  | 2024, with HRRR forecasts | 2020–2023 | 0.066 | 0.024 | **2.8×** |
+
+- **Meaning:** The advantage over the official forecasts holds every year (1.6–2.1× without forecasts). The absolute scores vary much more, from 0.018 to 0.064, with how much training history there is and with the year's storms. That is why the pages quote comparisons, not absolute scores.
+
+### E37. Forecasts at every lead time
+- **Setup:** The forecast model (newest run, trained on actual weather) at 0–6 hours ahead, 2025.
+- **Result:** 0.107 / 0.090 / 0.087 / 0.081 / 0.071 at 0 / 1 / 2 / 3 / 6 h, against 0.047 / 0.039 / 0.039 / 0.037 / 0.031 for warnings + outlook: **2.2–2.3× at every lead**. Without forecasts, the model fell to 1.5× at 6 h (E26).
+- **Meaning:** Forecasts keep the advantage steady as the lead grows. Six hours ahead they lift the score from 0.048 to 0.071.
+
+### E38. Counties never seen in training
+- **Setup:** Counties split into 5 groups; each group's 2025 decisions are scored by a model trained on the other groups' 2020–2024 (without forecasts).
+- **Result:** 0.060, against 0.064 when every county is in training; warnings + outlook 0.041 (1.45×).
+- **Meaning:** Most of what it learns transfers to counties it has never seen. Knowing a county's own history adds a little.
+
+### E39. What it relies on
+- **Setup:** The model without forecasts on 2025; each input group's columns shuffled across rows, and the onset PR-AUC lost (from 0.064).
+- **Result:** outlook 66% of the score lost; place 33%; weather so far 24%; neighbours 16%; warnings 16%; recent outages 10%.
+- **Meaning:** The SPC outlook is the backbone: it says which days are storm days. The model's skill is in using place, recent weather and neighbours to say *where* on those days. The groups overlap (a shuffled group can be partly recovered from the others), so these are a ranking, not shares that add up.
+
 ---
 
 ## Open experiments
@@ -403,5 +505,5 @@ The second framing, built to answer the question a utility actually faces. A dec
 | HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
 | One hour of data delay | HRRR analyses arrive about an hour late; the model uses the last hour as soon as it ends | Drop the last hour of weather and rescore |
 | Held-out storms | Split by storm instead of by year | |
-| Per-storm scores | Which 2025 storms were caught, which were missed and why | Counts per storm day in the dashboard (`storm_days.parquet`); the why is open |
+| Per-storm scores | Which 2025 storms were caught, which were missed and why | By storm type in E29: wind and rain without storm energy are the hard cases |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

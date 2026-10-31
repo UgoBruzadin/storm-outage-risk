@@ -1,0 +1,4 @@
+storm_type,new_outages,caught_model,caught_official,share_with_svr_tor_warning
+"other (wind, rain, no storm energy)",477,0.09643605870020965,0.03773584905660377,0.0
+warm-season convective,767,0.409387222946545,0.288135593220339,0.2516297262059974
+winter / cold,192,0.359375,0.020833333333333332,0.0
