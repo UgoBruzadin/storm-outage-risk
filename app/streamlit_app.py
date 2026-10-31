@@ -29,10 +29,10 @@ if getattr(lib, "loaded_stamp", None) != stamp:
     lib.loaded_stamp = stamp
 
 pages = st.navigation([
-    st.Page("views/overview.py", title="Overview", icon="🗺️", default=True),
-    st.Page("views/storm_replay.py", title="Storm replay", icon="⛈️"),
-    st.Page("views/accuracy.py", title="Accuracy", icon="🎯"),
-    st.Page("views/scorecard.py", title="Resilience scorecard", icon="📋"),
-    st.Page("views/model.py", title="Model", icon="📈"),
+    st.Page("views/storm_room.py", title=lib.text("app.pages.storm_room"), icon="⛈️", default=True),
+    st.Page("views/alert_level.py", title=lib.text("app.pages.alert_level"), icon="🎚️"),
+    st.Page("views/trust.py", title=lib.text("app.pages.trust"), icon="✅"),
+    st.Page("views/scorecard.py", title=lib.text("app.pages.scorecard"), icon="📋"),
+    st.Page("views/about.py", title=lib.text("app.pages.about"), icon="ℹ️"),
 ])
 pages.run()

@@ -65,6 +65,7 @@ pyarrow = ">=21,!=25.0.0"
 
 [feature.app.pypi-dependencies]
 duckdb = "==2.0.0"
+pyyaml = ">=6,<7"                  # app/text.yaml
 streamlit = ">=1.60,<2"
 plotly = ">=7.1.0,<8"
 

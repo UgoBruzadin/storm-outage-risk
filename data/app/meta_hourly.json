@@ -1,0 +1,111 @@
+{
+  "test_year": 2025,
+  "lead_hours": 2,
+  "threshold_pct": 5,
+  "headline_model": "With HRRR forecasts (mean of 5 runs)",
+  "headline_share": 0.0075,
+  "alert_level": 0.07680580019950867,
+  "n_decisions": 1722803,
+  "n_new_outages": 1436,
+  "event_rate": 0.0049082802850935366,
+  "ladder": {
+    "Warnings + outlook": {
+      "onset_pr_auc": 0.03918985139842959,
+      "lo": 0.020327466687073376,
+      "hi": 0.06232228014437456,
+      "ratio_vs_official": 1.0,
+      "ratio_vs_official_lo": 1.0,
+      "ratio_vs_official_hi": 1.0,
+      "better_vs_official": 0.0,
+      "ratio_vs_no_forecasts": 0.6150203519171147,
+      "ratio_vs_no_forecasts_lo": 0.4553982370154881,
+      "ratio_vs_no_forecasts_hi": 0.7242712427284038,
+      "better_vs_no_forecasts": 0.0
+    },
+    "No forecasts": {
+      "onset_pr_auc": 0.06372122690943266,
+      "lo": 0.03470295002207411,
+      "hi": 0.09648768236030764,
+      "ratio_vs_official": 1.6259624529218317,
+      "ratio_vs_official_lo": 1.3806982182522651,
+      "ratio_vs_official_hi": 2.195880773533129,
+      "better_vs_official": 1.0,
+      "ratio_vs_no_forecasts": 1.0,
+      "ratio_vs_no_forecasts_lo": 1.0,
+      "ratio_vs_no_forecasts_hi": 1.0,
+      "better_vs_no_forecasts": 0.0
+    },
+    "With HRRR forecasts (newest run)": {
+      "onset_pr_auc": 0.08768194456493025,
+      "lo": 0.050991445587164064,
+      "hi": 0.13403994794807667,
+      "ratio_vs_official": 2.2373635376541343,
+      "ratio_vs_official_lo": 1.8530747902072595,
+      "ratio_vs_official_hi": 3.005437759993495,
+      "better_vs_official": 1.0,
+      "ratio_vs_no_forecasts": 1.3760241102945663,
+      "ratio_vs_no_forecasts_lo": 1.1971703759607686,
+      "ratio_vs_no_forecasts_hi": 1.6548934839677512,
+      "better_vs_no_forecasts": 1.0
+    },
+    "With HRRR forecasts (mean of 5 runs)": {
+      "onset_pr_auc": 0.09421953930115166,
+      "lo": 0.053574651444737866,
+      "hi": 0.14312472270085583,
+      "ratio_vs_official": 2.404182101719508,
+      "ratio_vs_official_lo": 1.9831288135108245,
+      "ratio_vs_official_hi": 3.262976549742185,
+      "better_vs_official": 1.0,
+      "ratio_vs_no_forecasts": 1.4786209222723603,
+      "ratio_vs_no_forecasts_lo": 1.2872637793098083,
+      "ratio_vs_no_forecasts_hi": 1.756703462216951,
+      "better_vs_no_forecasts": 1.0
+    },
+    "Perfect weather (ceiling)": {
+      "onset_pr_auc": 0.09969929486168577,
+      "lo": 0.058285389018113004,
+      "hi": 0.1491023649289611,
+      "ratio_vs_official": 2.5440079843140437,
+      "ratio_vs_official_lo": 2.1098404005038778,
+      "ratio_vs_official_hi": 3.3933725173598575,
+      "better_vs_official": 1.0,
+      "ratio_vs_no_forecasts": 1.5646166857927728,
+      "ratio_vs_no_forecasts_lo": 1.3279114836535502,
+      "ratio_vs_no_forecasts_hi": 1.9294487132946205,
+      "better_vs_no_forecasts": 1.0
+    }
+  },
+  "at_headline_share": {
+    "Warnings + outlook": {
+      "caught": 0.1692200557103064,
+      "precision": 0.10806553245116572,
+      "episodes": 1047
+    },
+    "No forecasts": {
+      "caught": 0.2590529247910863,
+      "precision": 0.11739668781922304,
+      "episodes": 2919
+    },
+    "With HRRR forecasts (newest run)": {
+      "caught": 0.3286908077994429,
+      "precision": 0.14664912552236495,
+      "episodes": 4679
+    },
+    "With HRRR forecasts (mean of 5 runs)": {
+      "caught": 0.29874651810584957,
+      "precision": 0.1507506577929113,
+      "episodes": 2958
+    },
+    "Perfect weather (ceiling)": {
+      "caught": 0.31963788300835655,
+      "precision": 0.15872156013001085,
+      "episodes": 2985
+    }
+  },
+  "value_no_forecasts": {
+    "low": -2102771.082555189,
+    "high": 28157311.480973087,
+    "official_low": -19188129.226384584,
+    "official_high": -3242463.823855832
+  }
+}

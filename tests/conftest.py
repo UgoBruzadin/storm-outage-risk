@@ -74,6 +74,39 @@ def write_fixture():
         "threshold_pct": 5.0, "train_year": 2024, "test_year": 2025, "n_regions": 2,
         "test_events": 2, "test_blocks": 24, "onset_alert_threshold": 0.3,
     }))
+    # the hourly tables (ml/export_hourly.py)
+    headline, newest, official = "With HRRR forecasts (mean of 5 runs)", "With HRRR forecasts (newest run)", \
+        "Warnings + outlook"
+    hours = pd.date_range("2025-05-16 00:00", periods=30, freq="h")
+    pd.DataFrame([
+        {"region_fips": f, "hour": h, "pct_out": float(i % 9), "customers": c, "out": c * (i % 9) / 100,
+         "p_mean": 0.02 * (i % 10), "p_low": 0.01 * (i % 10), "p_high": 0.03 * (i % 10), "new_outage": i == 8,
+         "storm": 0, "peak": hours[15], "customers_out_peak": 5000.0}
+        for f, c in [("17001", 10_000), ("29001", 50_000)] for i, h in enumerate(hours)
+    ]).to_parquet(APP_DATA / "hourly_storms.parquet", index=False)
+    shares = [0.001, 0.0075, 0.02]
+    pd.DataFrame([
+        {"model": model, "alert_share": sh, "actual_share": sh * k, "caught": 0.1 + sh * 10 * k, "precision": 0.15,
+         "episodes": 1000 * sh * 100, **{f"net_cut{c}_cost{w}k": 1e6 * c / w for c in (10, 25) for w in (5, 20)}}
+        for model, k in [(headline, 1), (newest, 1.1), (official, 0.4)] for sh in shares
+    ]).to_parquet(APP_DATA / "alert_curves.parquet", index=False)
+    pd.DataFrame({"region_fips": ["17001", "29001"], "expected": [3.0, 5.0], "actual": [2, 6],
+                  "mean_probability": [0.004, 0.006], "new_outages": [4.0, 1.0], "caught": [1.0, 0.0],
+                  "caught_share": [0.25, 0.0]}).to_parquet(APP_DATA / "county_hourly.parquet", index=False)
+    pd.DataFrame({"bin": ["(0, 0.01]", "(0.01, 1]"], "decisions": [1000, 50], "mean_probability": [0.002, 0.1],
+                  "outage_share": [0.002, 0.09], "range_low": [0.001, 0.06], "range_high": [0.003, 0.15]}) \
+        .to_parquet(APP_DATA / "calibration.parquet", index=False)
+    pd.DataFrame({"day": pd.to_datetime(["2025-05-16", "2025-03-14"]), "new_outages": [5, 3], "counties": [2, 2],
+                  "caught_model": [3, 2], "caught_official": [1, 2], "customers_out_peak": [5000.0, 9000.0]}) \
+        .to_parquet(APP_DATA / "storm_days.parquet", index=False)
+    (APP_DATA / "meta_hourly.json").write_text(json.dumps({
+        "test_year": 2025, "lead_hours": 2, "threshold_pct": 5, "headline_model": headline, "headline_share": 0.0075,
+        "alert_level": 0.1, "n_decisions": 60, "n_new_outages": 8, "event_rate": 0.005,
+        "ladder": {headline: {"onset_pr_auc": 0.1, "lo": 0.05, "hi": 0.15, "ratio_vs_official": 2.5,
+                              "ratio_vs_official_lo": 2.1, "ratio_vs_official_hi": 3.4}},
+        "at_headline_share": {m: {"caught": 0.3, "precision": 0.16, "episodes": 3000}
+                              for m in (headline, newest, official)},
+    }))
     (APP_DATA / "states.json").write_text(json.dumps([
         {"name": s, "type": "Feature", "geometry": json.loads(square(x, y))}
         for s, x, y in [("Illinois", -91, 39), ("Missouri", -92, 38)]]))

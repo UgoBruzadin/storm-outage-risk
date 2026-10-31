@@ -83,47 +83,39 @@ def meta():
     return json.loads(_read_text("meta.json"))
 
 
+@st.cache_data(show_spinner=False)
+def meta_hourly():
+    """What ml/export_hourly.py measured: the headline model, its alert level and the numbers the pages quote."""
+    return json.loads(_read_text("meta_hourly.json"))
+
+
+TEXT_FILE = Path(__file__).parent / "text.yaml"
+
+
+class _KeepMissing(dict):
+    def __missing__(self, key):                  # a placeholder with no value stays visible as {key}
+        return "{" + key + "}"
+
+
+@st.cache_data(show_spinner=False)
+def _text(modified):                             # keyed on the file's modification time: edits show on rerun
+    import yaml
+    return yaml.safe_load(TEXT_FILE.read_text())
+
+
+def text(key, **values):
+    """The words at `key` in app/text.yaml (e.g. "storm_room.title"), with {placeholders} filled from values."""
+    node = _text(TEXT_FILE.stat().st_mtime)
+    for part in key.split("."):
+        node = node[part]
+    return node.format_map(_KeepMissing(values)) if isinstance(node, str) else node
+
+
 def _read_text(name):
     path = f"{APP_DATA}/{name}"
     if path.startswith("hf://"):
         return connection().sql(f"SELECT content FROM read_text('{path}')").fetchall()[0][0]
     return Path(path).read_text()
-
-
-@st.cache_data(show_spinner=False)
-def shapes():
-    """County and state shapes for the D3 components: coordinates rounded to ~100 m."""
-    def rounded(coords):
-        if isinstance(coords[0], list):
-            return [rounded(c) for c in coords]
-        return [round(coords[0], 3), round(coords[1], 3)]
-
-    counties = []
-    for r in table("regions").itertuples():
-        geometry = json.loads(r.geojson)
-        geometry["coordinates"] = rounded(geometry["coordinates"])
-        counties.append({"id": r.region_fips, "name": r.region, "state": r.state, "geometry": geometry})
-    return {"counties": counties, "states": json.loads(_read_text("states.json"))}
-
-
-def shapes_order():
-    """Region ids in the order the D3 components expect values."""
-    return [c["id"] for c in shapes()["counties"]]
-
-
-def d3_component(name, payload, height):
-    """Render app/components/<name>.html (D3, shared base.js and style.css) with `payload` as DATA."""
-    import streamlit.components.v1 as components
-
-    folder = Path(__file__).parent / "components"
-    markup = (folder / f"{name}.html").read_text()
-    data = json.dumps({**shapes(), **payload}, separators=(",", ":"))
-    head = ('<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>\n'
-            f"<script>const DATA = {data};\nconst THEME = {json.dumps('dark' if theme() is DARK else 'light')};\n"
-            f"{(folder / 'base.js').read_text()}</script>\n")
-    html = (f"<!doctype html><html><head><meta charset='utf-8'><style>{(folder / 'style.css').read_text()}</style>"
-            f"</head><body><div class='tip'></div>{markup.replace('<script>', head + '<script>', 1)}</body></html>")
-    components.html(html, height=height)
 
 
 @st.cache_data(show_spinner=False)
@@ -151,6 +143,8 @@ def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, heig
         labels={value: label},
     )
     fig.update_traces(marker_line_width=0.5, marker_line_color=theme()["surface"])
+    if range_color and range_color[1] <= 1:                          # shares: label the color bar in percent
+        fig.update_coloraxes(colorbar_tickformat=".0%")
     if legend == "bottom":
         bar = dict(title=dict(text=label, side="top"), orientation="h", thickness=10, len=0.7,
                    x=0.5, xanchor="center", y=-0.02, yanchor="top")
@@ -158,3 +152,18 @@ def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, heig
         bar = dict(title=label, thickness=10, len=0.6)
     fig.update_layout(coloraxis_colorbar=bar)
     return style(fig, height=height)
+
+
+def gray_missing(fig, df, value, note):
+    """Draw the counties with no `value` in neutral gray (not blank), with `note` in their tooltip."""
+    import plotly.graph_objects as go
+
+    missing = df[df[value].isna()]
+    if len(missing):
+        t = theme()
+        fig.add_trace(go.Choroplethmap(
+            geojson=geojson(), locations=missing.region_fips, z=[0] * len(missing),
+            colorscale=[[0, t["axis"]], [1, t["axis"]]], showscale=False, marker_opacity=0.85,
+            marker_line_width=0.5, marker_line_color=t["surface"], customdata=missing.region,
+            hovertemplate="<b>%{customdata}</b><br>" + note + "<extra></extra>"))
+    return fig

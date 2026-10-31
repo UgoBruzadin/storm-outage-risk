@@ -5,8 +5,8 @@ choice never looks at the 2025 test year. Each configuration runs with every see
 counts when it moves the score the same way for (nearly) every seed, as in seeds_ablate.yaml.
 
 Usage: pixi run python -m ml.hourly_ablation [--lead 2] [--seeds 0,1,2,3,4] [--configs 0,1]
-                                            [--train-start 2018]
-Writes ml/results/hourly_ablation_lead<L>[_from<year>].csv.
+                                            [--train-start 2018] [--tag fresh]
+Writes ml/results/hourly_ablation_lead<L>[_from<year>][_<tag>].csv.
 """
 import argparse
 
@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--seeds", default="0,1,2,3,4")
     parser.add_argument("--configs", help="indexes into CONFIGS, e.g. 0,1 (default: all)")
     parser.add_argument("--train-start", type=int, default=TRAIN_YEARS[0])
+    parser.add_argument("--tag", default="", help="added to the results file name, e.g. fresh")
     args = parser.parse_args()
     seeds = [int(s) for s in args.seeds.split(",")]
     configs = dict(list(CONFIGS.items()) if args.configs is None
@@ -41,7 +42,8 @@ def main():
     df = data.load_hourly(THRESHOLD_PCT, train_years + [VAL_YEAR], args.lead)
     train, val = df[df.year.isin(train_years)], df[df.year == VAL_YEAR]
     rows = []
-    suffix = "" if args.train_start == TRAIN_YEARS[0] else f"_from{args.train_start}"
+    suffix = ("" if args.train_start == TRAIN_YEARS[0] else f"_from{args.train_start}") + \
+        (f"_{args.tag}" if args.tag else "")
     out = data.ROOT / "ml" / "results" / f"hourly_ablation_lead{args.lead}{suffix}.csv"
     for name, spec in configs.items():
         features = data.resolve_features(spec)

@@ -3,3 +3,7 @@ headless = true
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+# the site's accent blue, so progress bars, sliders and toggles match the charts (app/lib.py palette)
+primaryColor = "#2a78d6"

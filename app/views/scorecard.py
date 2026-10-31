@@ -1,42 +1,39 @@
 import plotly.graph_objects as go
 import streamlit as st
-from lib import BLUE, choropleth, style, table, theme
+from lib import BLUE, choropleth, style, table, text, theme
 
 regions = table("regions")
 yearly = table("yearly").merge(regions[["region_fips", "region", "state"]], on="region_fips")
 start, end = str(regions.history_start.iloc[0])[:4], int(str(regions.history_end.iloc[0])[:4]) - 1
 t = theme()
 
-st.title("📋 Resilience scorecard")
-st.markdown(
-    f"How each county fared in {start}–{end}, from 15-minute outage records grouped into 6-hour periods. "
-    "An **outage event** is a run of periods with ≥ 1% of customers out; the **storm hit rate** is how often a "
-    "reported storm turned into one, which compares places under similar weather."
-)
+st.title(text("scorecard.title"))
+st.markdown(text("scorecard.intro", start=start, end=end))
 
 measures = {
-    "Outage hours per customer": ("hours_out_per_customer", "hours / year", "{:.1f} h"),
-    "Outage events per year": ("events_per_year", "events / year", "{:.0f}"),
-    "Storm hit rate": ("storm_hit_rate", "share of storms", "{:.0%}"),
+    text("scorecard.measures.hours"): ("hours_out_per_customer", "hours / year", "{:.1f} h"),
+    text("scorecard.measures.events"): ("events_per_year", "events / year", "{:.0f}"),
+    text("scorecard.measures.hit"): ("storm_hit_rate", "share of storms", "{:.0%}"),
 }
-default = "Outage hours per customer"
-measure = st.segmented_control("Map", list(measures), default=default) or default
+default = text("scorecard.measures.hours")
+measure = st.segmented_control(text("scorecard.map"), list(measures), default=default) or default
 column, label, fmt = measures[measure]
 st.plotly_chart(choropleth(regions, column, label, BLUE, None, height=560, zoom=5.5,
                            hover={column: ":.2f" if column == "storm_hit_rate" else ":.1f", "region_fips": False}),
                 width="stretch")
 
 # --- one county up close ------------------------------------------------------
-st.subheader("One county up close")
+st.subheader(text("scorecard.county_title"))
 ranked = regions.sort_values("hours_out_per_customer", ascending=False)
 names = {r.region_fips: f"{r.region}, {r.state}" for r in ranked.itertuples()}
-fips = st.selectbox("County", list(names), format_func=names.get, help="Sorted by outage hours per customer.")
+fips = st.selectbox(text("scorecard.county"), list(names), format_func=names.get, help=text("scorecard.county_help"))
 county = regions.set_index("region_fips").loc[fips]
 peers = regions[regions.state == county.state]
 c1, c2, c3, c4 = st.columns(4)
 for col, (name, (key, _, form)) in zip([c1, c2, c3], measures.items(), strict=True):
     median = peers[key].median()
-    col.metric(name, form.format(county[key]), delta=f"{form.format(county[key] - median)} vs {county.state} median",
+    col.metric(name, form.format(county[key]),
+               delta=f"{form.format(county[key] - median)} " + text("scorecard.vs_median", state=county.state),
                delta_color="inverse")
 c4.metric("Customers", f"{county.customers:,.0f}",
           help=f"Tree canopy {county.canopy_mean_pct:.0f}% · homes built before 1960 {county.share_homes_pre1960:.0%}")
@@ -53,7 +50,7 @@ with left:
                              mode="lines+markers", line=dict(color=t["muted"], width=2, dash="dot"),
                              marker=dict(size=8),
                              hovertemplate="%{x}: %{y:.1f} h (state median)<extra></extra>"))
-    fig.update_layout(title="Outage hours per customer, by year", yaxis_title="hours")
+    fig.update_layout(title=text("scorecard.trend"), yaxis_title="hours")
     st.plotly_chart(style(fig, height=340), width="stretch")
 with right:
     fig = go.Figure(go.Bar(x=years.year, y=years.worst_pct_out, marker_color=t["series"][1], marker_line_width=2,
@@ -63,6 +60,10 @@ with right:
     fig.update_layout(title="Worst outage each year (% of customers out)", yaxis_title="% out",
                       yaxis_range=[0, max(10, years.worst_pct_out.max() * 1.18)])
     st.plotly_chart(style(fig, height=340), width="stretch")
+
+st.markdown(f"**{text('scorecard.context_title')}:** tree canopy {county.canopy_mean_pct:.0f}% · homes built before "
+            f"1960 {county.share_homes_pre1960:.0%} · {county.housing_per_km2:,.0f} homes per km²")
+st.caption(text("scorecard.context_note"))
 
 with st.expander("All counties"):
     state = st.selectbox("State", ["All states", *sorted(regions.state.unique())])
