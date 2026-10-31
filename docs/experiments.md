@@ -6,17 +6,18 @@ Results are never deleted. When a later experiment changes how an earlier result
 
 ## Where things stand
 
-The question: **will a county's power outage start (≥ 5% of customers out, from below 5%) in the next 6 hours?** Tested on 2025, a year no model or setting saw before the final run.
+The question: **will a new outage start in a county (≥ 5% of customers out, with no hour at 5% or more in the 24 hours before) in the 6 hours starting 2 hours from now?** Tested on 2025, a year no model or setting saw before the final run. The 24-hour rule (E25, E26) keeps one outage hovering around the line from counting twice.
 
 | Version | What the model knows | Onset PR-AUC (2025) | vs. warnings + outlook | Status |
 |---|---|---|---|---|
-| Perfect-weather ceiling | The weather during the 6 hours it predicts | 0.105 (0.056–0.159) | 2.7× (2.2–3.6×) | Best case: nobody knows that weather in advance |
-| **Forecast-ready, 2 h ahead** | Weather up to the decision, warnings and outlook in force, neighbouring counties, outages so far | **0.068 (0.039–0.103)** | **1.7× (1.5–2.3×)** | **Main result** |
-| Forecast-ready, 2 h ahead, with HRRR forecasts | As above, plus what the HRRR run issued 2 h before the decision predicted for the window | 0.094 (0.051–0.145) | 2.4× (2.0–3.3×) | [E19](#e19-hrrr-forecasts-as-issued) |
+| Warnings + outlook alone | NWS warnings in force, latest SPC outlook | 0.039 (0.020–0.062) | 1× | What utilities have today |
+| Forecast-ready, no forecasts | Weather up to the decision, warnings and outlook, neighbouring counties, outages so far | 0.064 (0.035–0.096) | 1.6× (1.4–2.2×) | [E18](#e18-the-final-forecast-ready-model-tested-on-2025), [E26](#e26-fresh-new-outages-as-the-definition) |
+| **With HRRR forecasts (mean of the last 5 runs)** | As above, plus what the five HRRR runs issued 2–6 h before the decision predicted for the window | **0.094 (0.054–0.143)** | **2.4× (2.0–3.3×)** | **Main result** ([E21](#e21-a-probability-range-from-several-hrrr-runs), E26) |
+| Perfect-weather ceiling | The weather during the 6 hours it predicts | 0.100 (0.058–0.149) | 2.5× (2.1–3.4×) | Not significantly better than the main result (p = 0.08) |
 
-Ranges are 95% storm-day bootstrap ranges on 2025. The 6-hour ceiling of E12 scored 0.106; on the moving-window rows of E19 it scores 0.105. Ratios are paired: both models are scored on the same resampled days.
+Ranges are 95% storm-day bootstrap ranges on 2025; ratios are paired (both models scored on the same resampled days). Every comparison with warnings + outlook is significant at p ≤ 0.001 (E23, E26).
 
-At 2 hours ahead, the forecast-ready model alerts on 0.74% of calm county-hours. 12.8% of its alerts are followed by a new outage, about 24× the 0.52% base rate. It caught 27% of 2025's 1,624 new outages in time.
+Alerting on the riskiest 0.75% of county-hours, 15.1% of the main model's alerts are followed by a new outage, 31× the 0.49% base rate, and it catches 30% of 2025's 1,436 new outages in time.
 
 **How to read the scores**
 
@@ -340,8 +341,32 @@ The second framing, built to answer the question a utility actually faces. A dec
 
 - **Meaning:**
   - Re-crossings make the scores about 5% higher and the advantage over the official forecasts slightly larger (2.5× against 2.4×). The conclusions don't change.
-  - The headline keeps the standard definition, which is documented and easy to reproduce. This check is the robustness note.
+  - At first the headline kept the standard definition, with this as a robustness note. E26 adopts the fresh definition everywhere instead.
   - Predicting how long an outage lasts, or when power comes back, is a different target from this model's. It is listed under open experiments.
+
+### E26. Fresh new outages as the definition
+- **Question:** E25 showed 12% of "new outages" were the same outage climbing back over the line. With those excluded everywhere (training rows, scoring, "caught in time", the dollar estimate), what changes?
+- **Setup:** A decision is kept only if no hour in the 24 hours before its window reached 5% (`data.FRESH_HOURS`, in `load_hourly`, `onset_hours` and `value_hourly.outages`). Everything from E18 to E23 rerun on 2025: 1,722,803 decisions, 1,436 new outages (against 1,624).
+- **Result:**
+
+  | 2 h ahead, 2025 | Before (E18–E23) | Fresh new outages |
+  |---|---|---|
+  | Warnings + outlook alone | 0.039 | 0.039 |
+  | No forecasts (final features) | 0.068, 1.7× | 0.064, 1.6× (1.4–2.2×) |
+  | HRRR, newest run | 0.094, 2.4× | 0.088, 2.2× (1.9–3.0×) |
+  | **HRRR, mean of 5 runs** | **0.099, 2.5×** | **0.094, 2.4× (2.0–3.3×)** |
+  | Ceiling | 0.105, 2.7× | 0.100, 2.5× (2.1–3.4×); vs. mean of 5, p = 0.08 |
+  | Alerts at 0.75%: caught / real (mean of 5) | 31% / 16.1% | 30% / 15.1% |
+  | Warnings + outlook at the same share: caught / real | 10% / 15.8% (ties: 0.29% of hours) | 17% / 10.8% (0.74% of hours) |
+  | Staging value, no forecasts, typical mix | −$0.5M to $30.5M | −$2.1M to $28.2M |
+
+  By lead time, no forecasts: 0.083 / 0.071 / 0.063 / 0.058 / 0.048 at 0 / 1 / 2 / 3 / 6 h, against 0.047 / 0.039 / 0.039 / 0.037 / 0.031 for warnings + outlook.
+
+- **Meaning:**
+  - Scores drop 5–8%, as E25 predicted, and every conclusion holds. All paired comparisons with warnings + outlook stay at p ≤ 0.001, and the gap to the ceiling stays not significant.
+  - **The official baseline changed character.** Fitted on fresh rows, its rate table has fewer ties, so at the same alert share it now alerts as often as the model. It is less precise (10.8% against 15.1%) and catches about half as many new outages (17% against 30%).
+  - **Neighbours are now neutral two hours ahead** (0.063 with, 0.064 without), though they still help six hours ahead (0.048 against 0.045) and with catching outages in time at 2 h (25% against 22%). They were chosen on 2024 under the old definition (E15); re-checking them on 2024 under the fresh one is open.
+  - For display only, the story page's storm animation uses a version of the same model trained on every county-hour, ongoing outages included (`ml/display_model.py`), so its map tracks the outage map. It is never scored or quoted.
 
 ---
 
@@ -355,4 +380,5 @@ The second framing, built to answer the question a utility actually faces. A dec
 | Held-out storms | Split by storm instead of by year | |
 | Calibration | Are the probabilities right, not just the ranking? Needed for the dollar rule | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | |
+| Neighbours under the fresh definition | E26: neutral at 2 h, helpful at 6 h; chosen on 2024 under the old definition | Rerun `hourly_ablation.py` on 2024 |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

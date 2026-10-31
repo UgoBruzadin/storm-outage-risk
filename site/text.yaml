@@ -21,19 +21,18 @@ storm:
   title: Which counties will lose power in the next few hours?
   lead: >-
     Forecasts tell utilities *when* a storm will hit. Repair crews need to know *where*, early enough to get there.
-    Every hour, this model looks two hours ahead and ranks every county by its risk of a new outage in the following
-    six, using only what was known at the time. Here it is on a storm it never saw.
+    Every hour, this model looks two hours ahead and ranks every county by its risk of losing power in the following
+    six. Here it is on a storm it never saw.
   map_risk: Risk, decided 2 hours before
   map_actual: "What happened: worst share of customers out"
-  legend_risk: "chance of a new outage (≥ 5% out) · hatched: already out"
-  legend_actual: "worst share of customers out in the 6 hours · hatched: already out"
+  legend_risk: "chance of being ≥ 5% out in the 6 hours"
+  legend_actual: "worst share of customers out in the 6 hours"
   play: ▶ Play
   pause: ❚❚ Pause
   # {window}: e.g. "Fri 7 PM–1 AM"; {decided}: e.g. "5 PM"
   when: "{window} CDT · decided {decided}"
   # {mo}, {il}: customers out at that hour
   totals: "Out now: Missouri {mo} · Illinois {il}"
-  tip_already: already out when the window began
   tip_none: no prediction
   # {p}: the prediction; {low}, {high}: lowest and highest of the five forecasts
   tip_risk: "risk {p} (five latest forecasts: {low}–{high})"
@@ -66,7 +65,7 @@ data:
 traps:
   menu: Three traps
   kicker: Pitfalls
-  title: Three ways a model like this looks better than it is.
+  title: Three (caught) misleading model pitfalls.
   gaps:
     title: No record doesn't mean no outage.
     lead: >-
@@ -79,7 +78,7 @@ traps:
     # {n}: snapshots recorded; {when}: date and time
     callout_detail: "{n} of 24 snapshots, {when}"
   persist:
-    title: "The easy way to look smart: predicting outages already underway."
+    title: "Predicting outages already underway."
     lead: >-
       Most outages last for hours, so "it's out now, it'll still be out" scores very well. That's a real forecast, of
       how long outages last, but it answers a different question from "which calm county goes dark next?", and mixing
@@ -90,7 +89,7 @@ traps:
       Score: PR-AUC, how well real outages are ranked ahead of false alarms. Random guessing scores the outage rate
       itself, about 0.005. Measured on the first, 6-hour version of the model.
   peek:
-    title: "The one I fell into: my first model saw the storm coming, because it saw the storm."
+    title: "My first model saw the storm coming, because it saw the storm."
     lead: >-
       The first version summarized the weather *during* the hours it was predicting. That's not a leak in the code,
       but nobody knows that weather in advance. Rebuilt so that every input is known at the moment of the decision,
@@ -156,11 +155,11 @@ alerts:
   # {share}: share of hours alerted; {caught}, {official_caught}, {newest_caught}: share of new outages caught;
   # {outages}: new outages; {spells}, {newest_spells}: alert spells; {official_precision}: share of official alerts that were real
   note: >-
-    Major = at least 5% of a county's customers, in the 6 hours starting 2 hours later. Alerts on the riskiest {share}
-    of county-hours caught {caught} of all {outages} major new outages in 2025, in {spells} separate alert spells.
-    Warnings + outlook alone are about as precise ({official_precision}) but caught {official_caught}. Using only the
-    newest forecast instead of the last five catches a little more ({newest_caught}) but alerts switch on and off as
-    each run moves the storm: {newest_spells} spells.
+    Major = at least 5% of a county's customers, in the 6 hours starting 2 hours later, with no outage in the day
+    before. Alerts on the riskiest {share} of county-hours caught {caught} of all {outages} major new outages in 2025,
+    in {spells} separate alert spells. Warnings + outlook alone, alerting just as often, were right {official_precision}
+    of the time and caught {official_caught}. Using only the newest forecast instead of the last five catches a little
+    more ({newest_caught}) but alerts switch on and off as each run moves the storm: {newest_spells} spells.
 
 ranges:
   menu: Ranges

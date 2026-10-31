@@ -29,16 +29,18 @@ TRAIN_YEARS, TEST_YEAR = [2020, 2021, 2022, 2023, 2024], 2025
 
 
 def outages(years, db=data.DB):
-    """New >= 5% outages per region: onset hour, customers affected (worst hour) and the average
-    outage length per affected customer, from the onset hour through every following hour with
-    >= 1% out (customer-hours = hourly peak customers out, summed)."""
+    """New >= 5% outages per region (fresh: none in the data.FRESH_HOURS before): onset hour, customers
+    affected (worst hour) and the average outage length per affected customer, from the onset hour through
+    every following hour with >= 1% out (customer-hours = hourly peak customers out, summed)."""
     con = duckdb.connect(str(db), read_only=True)
     df = con.sql(f"""
         WITH h AS (
             SELECT region_fips, hour, pct_out, pct_out * customers / 100 AS out,
-                   lag(pct_out) OVER (PARTITION BY region_fips ORDER BY hour) AS before
+                   lag(pct_out) OVER w AS before,
+                   max(pct_out) OVER (w ROWS BETWEEN {data.FRESH_HOURS} PRECEDING AND 1 PRECEDING) AS recent
             FROM marts.mart_study__region_1h
             WHERE year(hour) BETWEEN {min(years) - 1} AND {max(years)}
+            WINDOW w AS (PARTITION BY region_fips ORDER BY hour)
         ),
         runs AS (
             SELECT *, sum((coalesce(pct_out, 0) < 1)::INT) OVER (PARTITION BY region_fips ORDER BY hour) AS run
@@ -46,7 +48,7 @@ def outages(years, db=data.DB):
         ),
         onsets AS (
             SELECT region_fips, hour AS onset, run FROM runs
-            WHERE pct_out >= {THRESHOLD_PCT} AND before < {THRESHOLD_PCT}
+            WHERE pct_out >= {THRESHOLD_PCT} AND before < {THRESHOLD_PCT} AND recent < {THRESHOLD_PCT}
               AND year(hour) BETWEEN {min(years)} AND {max(years)}
         )
         SELECT o.region_fips, o.onset, max(r.out) AS affected, sum(r.out) AS customer_hours

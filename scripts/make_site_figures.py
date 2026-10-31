@@ -17,7 +17,10 @@ Then bump the ?v= on the image links in site/writeup/index.html, or browsers kee
 """
 import json
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))      # run as a script: make `ml` importable
 
 import duckdb
 import geopandas as gpd
@@ -340,9 +343,10 @@ def story_data(gdf):
     tests = subprocess.run(["dbt", "ls", "--resource-type", "test", "--quiet"], cwd=ROOT, capture_output=True,
                            text=True).stdout.split()
 
-    # the storm, hour by hour: the risk decided LEAD hours before each hour t, for the 6 hours from t, beside
-    # the worst share out in those 6 hours. Regions already >= 5% out at t - 1 have nothing to predict.
-    ens = pd.read_parquet(ROOT / "data" / "cache" / "forecast_ensemble_2025.parquet")
+    # the storm, hour by hour, for illustration: the display model's chance (ml/display_model.py: the same inputs and
+    # forecasts, asked whether the county will be >= 5% out at all in the 6 hours from t, decided LEAD hours before),
+    # beside the worst share out in those 6 hours. The scored model, which counts new outages only, is on later slides
+    ens = pd.read_parquet(ROOT / "data" / "cache" / "display_2025.parquet")
     ens = ens[ens.block_start.between(STORM_HOURS[0] - pd.Timedelta(hours=lead),
                                       STORM_HOURS[-1] - pd.Timedelta(hours=lead))]
     pct = hours.pivot(index="hour", columns="region_fips", values="pct_out").reindex(columns=order)
@@ -351,14 +355,12 @@ def story_data(gdf):
     for t in STORM_HOURS:
         e = ens[ens.block_start == t - pd.Timedelta(hours=lead)].set_index("region_fips").reindex(order)
         worst = pct.loc[t: t + pd.Timedelta(hours=5)].max()
-        already = pct.loc[t - pd.Timedelta(hours=1)] >= THRESHOLD
         now = out.loc[t]
         r3 = lambda v: None if pd.isna(v) else round(float(v), 3)          # noqa: E731
         storm.append({
             "start": t.isoformat() + "Z",
             "prob": [r3(v) for v in e.p_mean], "low": [r3(v) for v in e.p_low], "high": [r3(v) for v in e.p_high],
             "pct": [None if pd.isna(v) else round(float(v), 1) for v in worst],
-            "already": [bool(v) for v in already],
             "out_mo": int(now[now.index.str.startswith("29")].sum()),
             "out_il": int(now[now.index.str.startswith("17")].sum()),
         })
@@ -449,7 +451,6 @@ class StormFrame:
         self.when = [pd.Timestamp(f["start"]) for f in frames]
         self.prob = np.array([[np.nan if v is None else v for v in f["prob"]] for f in frames], dtype=float)
         self.pct = np.array([[np.nan if v is None else v for v in f["pct"]] for f in frames], dtype=float)
-        self.already = np.array([f["already"] for f in frames])
         self.out = [(f["out_mo"], f["out_il"]) for f in frames]
         self.vmax_p, self.vmax_o = 0.4, 25.0          # outages above 25% share the darkest color
         self.peak = int(np.nanargmax(np.nansum(self.prob, axis=1)))       # the hour with the most risk ahead
@@ -459,7 +460,7 @@ class StormFrame:
         self.part_of = parts.index.to_numpy()                             # part -> county row
         self.maps = []
         for left, title, colors, vmax, step, label, fmt in [
-                (0.035, "Risk, decided 2 hours before", BLUE, self.vmax_p, 0.2, "chance of a new outage",
+                (0.035, "Risk, decided 2 hours before", BLUE, self.vmax_p, 0.2, "chance of being ≥ 5% out",
                  lambda v: f"{v:.0%}"),
                 (0.52, "What happened in those 6 hours", ORANGE, self.vmax_o, 25, "worst share of customers out",
                  lambda v: f"{v:.0f}%" + ("+" if v >= 25 else ""))]:
@@ -494,14 +495,13 @@ class StormFrame:
             v = (1 - t) * values[k] + t * values[nxt]
             colors = ramp(norm(np.clip(np.nan_to_num(v), 0, norm.vmax)))
             colors[np.isnan(v)] = plt.matplotlib.colors.to_rgba("#e4e3dc")
-            colors[self.already[step]] = plt.matplotlib.colors.to_rgba(HATCH)      # already out: not asked
             patches.set_facecolor(colors[self.part_of])
         ct = self.when[step].tz_convert("America/Chicago")
         decided = ct - pd.Timedelta(hours=self.lead)
         self.subtitle.set_text(f"{ct:%-d %B, %-I %p}–{ct + pd.Timedelta(hours=6):%-I %p} CT, as seen at "
                                f"{decided:%-I %p} from the forecasts available then. A storm it never trained on.")
         mo, il = self.out[step]
-        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}  ·  Gray: already out")
+        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}")
 
 
 def social_card(gdf, story):

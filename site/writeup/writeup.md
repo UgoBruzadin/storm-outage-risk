@@ -26,9 +26,9 @@ When a storm moves through, which counties will lose power in the next few hours
 :::
 ::: stats
 - **216** counties across Missouri and Illinois, every hour, 2020–2025
-- **2.5×** better than NWS warnings and SPC outlooks alone at ranking new outages two hours ahead (95% range 2.1–3.4×)
-- **31×** more likely than average: county-hours the model alerted on were followed by a major new outage 16% of the time
-- **31%** of 2025's 1,624 major new outages caught in time, alerting on 0.75% of county-hours
+- **2.4×** better than NWS warnings and SPC outlooks alone at ranking new outages two hours ahead (95% range 2.0–3.3×)
+- **31×** more likely than average: county-hours the model alerted on were followed by a major new outage 15% of the time
+- **30%** of 2025's 1,436 major new outages caught in time, alerting on 0.75% of county-hours
 
 :::
 ::: abstract
@@ -38,7 +38,7 @@ When a storm moves through, which counties will lose power in the next few hours
 
 **What I built.** A model that, every hour, estimates for every county the chance that at least 5% of its customers lose power in the six hours starting two hours later. It uses only what is known at that moment: the weather so far, the latest HRRR weather forecasts, the warnings and outlooks in force, outages so far in the county and its neighbours, and what the place is like (tree cover, housing, density).
 
-**How well it works.** Tested on 2025, a year it never trained on, it ranks new outages 2.5× better than official warnings and outlooks alone (95% range 2.1–3.4×). Alerting on the riskiest 0.75% of county-hours, 16% of its alerts were followed by a major new outage, 31 times the average, and they caught 31% of all of them. Every prediction comes with a range from the last five forecast runs, and the ranges are honest: outages followed about as often as predicted.
+**How well it works.** Tested on 2025, a year it never trained on, it ranks new outages 2.4× better than official warnings and outlooks alone (95% range 2.0–3.3×). Alerting on the riskiest 0.75% of county-hours, 15% of its alerts were followed by a major new outage, 31 times the average, and they caught 30% of all of them. A new outage means a county with no outage in the previous 24 hours, so one outage hovering around the line isn't counted twice. Every prediction comes with a range from the last five forecast runs, and the ranges are honest: outages followed about as often as predicted.
 
 **The trap I fell into.** The first version scored better still, but it summarized the weather *during* the hours it was predicting, which nobody knows in advance. Rebuilt so that every input is known at the decision, its score fell by a third; real forecasts win most of that back. A separate audit then checked that no input sees the future.
 
@@ -99,25 +99,25 @@ So the model was rebuilt on an hourly table of 15 million county-hours, where ea
 
 Scores are **PR-AUC** on new outages: how well real outages rank ahead of false alarms. Guessing at random scores the outage rate itself, about 0.005. Trained on 2020–2024, with features and settings chosen on 2024, tested once on 2025.
 
-![Left: horizontal bars of PR-AUC on new outages two hours ahead, with 95% ranges: warnings plus outlook alone 0.039; the model with weather observed so far 0.068, 1.7 times official; with the latest HRRR forecast 0.094, 2.4 times; with the last five HRRR forecasts 0.099, 2.5 times; and the ceiling of knowing the weather in advance 0.105, 2.7 times. Right: score against hours ahead from 0 to 6: the model with warnings and outlook falls from 0.090 to 0.050, the model with weather so far only from 0.058 to 0.023, warnings and outlook alone from 0.047 to 0.031, with the HRRR forecast version at 0.099 two hours ahead.](../assets/results.jpg?v=5)
+![Left: horizontal bars of PR-AUC on new outages two hours ahead, with 95% ranges: warnings plus outlook alone 0.039; the model with weather observed so far 0.064, 1.6 times official; with the latest HRRR forecast 0.088, 2.2 times; with the last five HRRR forecasts 0.094, 2.4 times; and the ceiling of knowing the weather in advance 0.100, 2.5 times. Right: score against hours ahead from 0 to 6: the model with warnings and outlook falls from 0.083 to 0.048, the model with weather so far only from 0.050 to 0.020, warnings and outlook alone from 0.047 to 0.031, with the HRRR forecast version at 0.094 two hours ahead.](../assets/results.jpg?v=6)
 
 ::: table-wrap
 | New ≥ 5% outages, 2 hours ahead, 2025 | PR-AUC (95% range) | vs. warnings + outlook (95% range) |
 |----|----|----|
-| NWS warnings + SPC outlook alone | 0.039 (0.020–0.063) | 1× |
-| Model, weather observed so far | 0.068 (0.040–0.103) | 1.7× (1.5–2.3×) |
-| Model + latest HRRR forecast | 0.094 (0.054–0.145) | 2.4× (2.0–3.2×) |
-| Model + last five HRRR forecasts | **0.099 (0.056–0.154)** | **2.5× (2.1–3.4×)** |
-| Ceiling: knowing the window's weather | 0.105 (0.060–0.161) | 2.7× (2.3–3.6×) |
+| NWS warnings + SPC outlook alone | 0.039 (0.020–0.062) | 1× |
+| Model, weather observed so far | 0.064 (0.035–0.096) | 1.6× (1.4–2.2×) |
+| Model + latest HRRR forecast | 0.088 (0.051–0.134) | 2.2× (1.9–3.0×) |
+| Model + last five HRRR forecasts | **0.094 (0.054–0.143)** | **2.4× (2.0–3.3×)** |
+| Ceiling: knowing the window's weather | 0.100 (0.058–0.149) | 2.5× (2.1–3.4×) |
 
 :::
-> 1,756,605 decisions (every county-hour of 2025 not already in an outage), 1,624 new outages. XGBoost, 800 trees of depth 4; the model with forecasts is the same model given 15 more features, the window's weather, and trained on the weather that actually happened.
+> 1,722,803 decisions (every county-hour of 2025 with no outage in the 24 hours before the window), 1,436 new outages. XGBoost, 800 trees of depth 4; the model with forecasts is the same model given 15 more features, the window's weather, and trained on the weather that actually happened.
 
-- **Real forecasts recover about 85% of what perfect knowledge would add.** From 0.068 with only the weather so far to 0.099 with forecasts, against 0.105 with the actual weather: 1.46× (1.26–1.67×), paired on the same storm days.
-- **Averaging the last five runs beats the newest run alone** (0.099 against 0.094, better on the same days). Each run places the storm a little differently; the average is steadier.
-- **Every difference above is significant** (paired storm-day permutation test, p ≤ 0.002), except one: the ceiling is not significantly better than the model with real forecasts (p = 0.09). On 2025, the averaged forecasts can't be told apart from knowing the weather in advance.
-- **Weather that has already happened fades within hours.** On its own it beats the official forecasts only at 0–1 hour ahead. Warnings and outlooks fade slowly, because they are forecasts. Combining them beats both at every lead, by 1.6–1.9×.
-- **Neighbours help more the further ahead.** Outages and storms in counties within 100 km and upwind added 3% two hours ahead and 6% six hours ahead, with every seed: storms in Missouri mostly arrive from the west and southwest.
+- **Real forecasts recover more than 80% of what perfect knowledge would add.** From 0.064 with only the weather so far to 0.094 with forecasts, against 0.100 with the actual weather: 1.48× (1.29–1.76×), paired on the same storm days.
+- **Averaging the last five runs beats the newest run alone** (0.094 against 0.088, better on the same days). Each run places the storm a little differently; the average is steadier.
+- **Every difference above is significant** (paired storm-day permutation test, p = 0.001), except one: the ceiling is not significantly better than the model with real forecasts (p = 0.08). On 2025, the averaged forecasts can't be told apart from knowing the weather in advance.
+- **Weather that has already happened fades within hours.** On its own it beats the official forecasts only at 0–1 hour ahead. Warnings and outlooks fade slowly, because they are forecasts. Combining them beats both at every lead, by 1.5–1.8×.
+- **Neighbours help further ahead.** Outages and storms in counties within 100 km and upwind add 6% six hours ahead, where storms are still upwind, mostly to the west and southwest. Two hours ahead they no longer change the score but catch more outages in time (25% against 22%).
 
 ### If a utility acted on it
 
@@ -126,22 +126,22 @@ To compare alerts fairly, every version alerts on the same share of county-hours
 ::: table-wrap
 | Alerts on 0.75% of county-hours, 2025 | Alerts that were real | New outages caught | Alert spells |
 |----|----|----|----|
-| Warnings + outlook alone¹ | 15.8% | 10% | 538 |
-| Model, weather observed so far | 12.7% | 27% | 3,159 |
-| Model + latest HRRR forecast | 15.7% | **33%** | 4,695 |
-| Model + last five HRRR forecasts | **16.1%** | 31% | **3,050** |
-| Ceiling | 16.8% | 33% | 3,236 |
+| Warnings + outlook alone | 10.8% | 17% | 1,047 |
+| Model, weather observed so far | 11.7% | 26% | 2,919 |
+| Model + latest HRRR forecast | 14.7% | **33%** | 4,679 |
+| Model + last five HRRR forecasts | **15.1%** | 30% | **2,958** |
+| Ceiling | 15.9% | 32% | 2,985 |
 
 :::
-> Base rate: 0.52% of county-hours were followed by a new outage. An alert spell is a run of consecutive alerted hours in one county, roughly one crew call-out. ¹ The rate table gives many hours the same probability, so it can only be cut at 0.29% of hours.
+> Base rate: 0.49% of county-hours were followed by a new outage. An alert spell is a run of consecutive alerted hours in one county, roughly one crew call-out.
 
-The newest run catches a few more outages; the average of five makes a third fewer call-outs, because alerts stop switching on and off as successive runs move a storm around. Which is better is a dispatch choice, not a modelling one. The official forecasts are about as precise, but they point at far fewer places, so they miss two-thirds of what the model catches.
+The newest run catches a few more outages; the average of five makes a third fewer call-outs, because alerts stop switching on and off as successive runs move a storm around. Which is better is a dispatch choice, not a modelling one. At the same number of alert hours, the official forecasts are less precise (11% of alerts real against 15%) and catch about half as many new outages (17% against 30%).
 
 ## How sure is it? {#sure}
 
 ### How sure is the score?
 
-One year's score depends on a handful of big storm days. Resampling 2025's storm days (12 UTC to 12 UTC, so an evening storm isn't cut at midnight) a thousand times gives the ranges above: any single score is uncertain, 0.099 could plausibly be anywhere from 0.056 to 0.154. But every version wins and loses on the same days, so the comparisons are much tighter: with forecasts, 2.5× the official forecasts, never less than 2.1× in 95% of resamples. Claims on these pages are phrased as comparisons for that reason. Resampling hours instead of days would have given ranges several times too narrow (pitfall 13).
+One year's score depends on a handful of big storm days. Resampling 2025's storm days (12 UTC to 12 UTC, so an evening storm isn't cut at midnight) a thousand times gives the ranges above: any single score is uncertain, 0.094 could plausibly be anywhere from 0.054 to 0.143. But every version wins and loses on the same days, so the comparisons are much tighter: with forecasts, 2.4× the official forecasts, never less than 2.0× in 95% of resamples. Claims on these pages are phrased as comparisons for that reason. Resampling hours instead of days would have given ranges several times too narrow (pitfall 13).
 
 Overlapping ranges don't mean "not significant", so the differences were tested directly, two ways, each paired over 2025's 366 storm days: the share of 1,000 resamples in which one model beats the other, and a permutation test that swaps the two models' predictions on randomly chosen storm days 1,000 times.
 
@@ -151,8 +151,8 @@ Overlapping ranges don't mean "not significant", so the differences were tested 
 | Model, weather so far vs. warnings + outlook | 100% | 0.001 |
 | Model + last five HRRR forecasts vs. warnings + outlook | 100% | 0.001 |
 | With forecasts vs. without | 100% | 0.001 |
-| Last five runs vs. the newest run | 100% | 0.002 |
-| Ceiling vs. last five runs | 92% | 0.09 |
+| Last five runs vs. the newest run | 100% | 0.001 |
+| Ceiling vs. last five runs | 93% | 0.08 |
 
 :::
 > 0.001 is the smallest p 1,000 permutations can show. Code: `ml/significance.py`.
@@ -164,16 +164,16 @@ The runs issued 2, 3, 4, 5 and 6 hours before a decision all forecast the same w
 ::: table-wrap
 | Predicted chance | County-hours | Average range | An outage followed |
 |------------------|--------------|---------------|--------------------|
-| 0.2%             | 1,405,544    | 0.18–0.21%    | 0.19%              |
-| 0.7%             | 213,353      | 0.6–0.8%      | 0.66%              |
-| 1.4%             | 77,674       | 1.1–1.9%      | 1.5%               |
-| 3.1%             | 41,328       | 2.0–4.8%      | 3.0%               |
-| 6.9%             | 13,128       | 4.0–11.6%     | 6.4%               |
-| 13.9%            | 6,617        | 8.0–22.5%     | 13.0%              |
-| 32.5%            | 3,992        | 22.7–43.6%    | 26.5%              |
+| 0.2%             | 1,397,044    | 0.17–0.21%    | 0.19%              |
+| 0.7%             | 203,739      | 0.6–0.8%      | 0.65%              |
+| 1.4%             | 70,780       | 1.0–1.9%      | 1.5%               |
+| 3.0%             | 35,370       | 1.9–5.0%      | 3.0%               |
+| 7.0%             | 11,383       | 3.8–12.2%     | 6.5%               |
+| 13.9%            | 6,044        | 7.7–23.2%     | 13.1%              |
+| 31.8%            | 3,333        | 21.4–43.9%    | 26.0%              |
 
 :::
-Only the riskiest group runs high (32.5% predicted, 26.5% happened): the model learned from the weather that actually happened and takes the forecasts a little too literally. The range carries information too: among low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one.
+Only the riskiest group runs high (31.8% predicted, 26.0% happened): the model learned from the weather that actually happened and takes the forecasts a little too literally. The range carries information too: among low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one.
 
 ### Did anything see the future?
 
@@ -275,13 +275,13 @@ Each outage's length and the number of customers affected come from EAGLE-I. A c
 ::: table-wrap
 | Net savings in 2025 | Shortened 10%, \$5k | 10%, \$20k | 25%, \$5k | 25%, \$20k |
 |----|----|----|----|----|
-| Perfect foresight (the ceiling) | \$42.9M | \$18.6M | \$124.0M | \$99.7M |
-| Model, weather observed so far | **\$5.0M** | **−\$0.5M** | **\$30.5M** | **\$8.7M** |
-| Warnings + outlook | −\$3.2M | −\$6.9M | −\$17.9M | −\$19.1M |
+| Perfect foresight (the ceiling) | \$39.6M | \$18.0M | \$113.7M | \$92.2M |
+| Model, weather observed so far | **\$4.8M** | **−\$2.1M** | **\$28.2M** | **\$7.5M** |
+| Warnings + outlook | −\$3.2M | −\$6.1M | −\$16.8M | −\$19.2M |
 
 :::
 - **The estimate: from about break-even to \$30 million in 2025** across Missouri and Illinois. It is a small loss only when crews help little and staging is expensive. Acting on the official forecasts by the same rule loses money in every scenario: they point at too many places.
-- **The rule is close to the best it could be.** Given each forecast's best cutoff in hindsight, chosen on 2025 itself, the model would save \$35.2M in the 25%, \$5k scenario against \$30.5M by its own rule, and the official forecasts \$12.5M at best.
+- **The rule is close to the best it could be.** Given each forecast's best cutoff in hindsight, chosen on 2025 itself, the model's own rule already finds the best one in three of four scenarios (\$28.2M in the 25%, \$5k scenario); the official forecasts would save \$11.3M at best, and only in that scenario.
 - **Businesses carry the value.** Counting only what outages cost households, staging never pays, even with perfect foresight: a home loses about \$14 in an 8-hour outage. Almost all the avoided cost is businesses', so the estimate moves with the customer mix.
 - **For the model without forecasts.** The forecast version ranks better and makes fewer call-outs, but the dollar rule uses its probabilities directly, and above 20% they run high (see How sure is it?). Its estimate waits for a calibration step fitted on 2024 forecasts.
 - **What the estimate is not.** It counts customers' losses, not the utility's own costs, and it covers one year.
@@ -500,7 +500,7 @@ WINDOW w  AS (PARTITION BY region_fips ORDER BY hour),
 
 ### 12. An alert level set on one kind of input flatters another
 
-The alert level was fixed on 2024 as the top 1% of the model's scores, with the weather that actually happened as input. Fed forecasts on 2025, more hours crossed it: 1.25% instead of 0.75%, with 7,393 alert spells instead of 3,151. The forecast version "caught" 41% of new outages, against 27%, partly just by alerting more. Alerts are now compared at one shared alert share; the cutoff uses each version's own scores and never the outcomes.
+The alert level was fixed on 2024 as the top 1% of the model's scores, with the weather that actually happened as input. Fed forecasts on 2025, more hours crossed it: 1.25% instead of 0.70%, with 7,139 alert spells instead of 2,770. The forecast version "caught" 39% of new outages, against 25%, partly just by alerting more. Alerts are now compared at one shared alert share; the cutoff uses each version's own scores and never the outcomes.
 
 ```
 cut = np.quantile(p, 1 - EQUAL_SHARE)        # each version's own top 0.75% of 2025 hours
@@ -510,8 +510,8 @@ flagged = p > cut                            # strictly above: ties can't widen 
 ::: table-wrap
 | Model + latest HRRR forecast         | Hours alerted | Caught | Alert spells |
 |--------------------------------------|---------------|--------|--------------|
-| Level fixed on 2024 (actual weather) | 1.25%         | 41%    | 7,393        |
-| Same share as the other versions     | 0.75%         | 33%    | 4,695        |
+| Level fixed on 2024 (actual weather) | 1.25%         | 39%    | 7,139        |
+| Same share as the other versions     | 0.75%         | 33%    | 4,684        |
 
 :::
 :::
@@ -520,7 +520,7 @@ flagged = p > cut                            # strictly above: ties can't widen 
 
 ### 13. Hours aren't independent, storm days are
 
-The test year has 1.76 million decisions, which makes any range computed over them look tiny. But the hours of one storm rise and fall together, and a few storm days decide most of the score. Ranges come from resampling whole storm days, 12 UTC to 12 UTC as SPC counts them, and every model is scored on the same resampled days, so differences between models get their own, much tighter, ranges.
+The test year has 1.72 million decisions, which makes any range computed over them look tiny. But the hours of one storm rise and fall together, and a few storm days decide most of the score. Ranges come from resampling whole storm days, 12 UTC to 12 UTC as SPC counts them, and every model is scored on the same resampled days, so differences between models get their own, much tighter, ranges.
 
 ```
 def storm_day(hours):

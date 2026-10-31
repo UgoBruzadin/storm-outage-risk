@@ -469,7 +469,7 @@ const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getB
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-10-30b"),          // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-10-31"),          // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
@@ -536,8 +536,6 @@ function legend(svg, x, y, w, colors, domain, ticks, format, title) {
 
 function storm(data, features, states, fc) {
   const pred = d3.select("#map-pred"), actual = d3.select("#map-actual");
-  hatch(pred, "hatch-out");
-  hatch(actual, "hatch-out-2");
   const pc = countyMap(pred, features, states, fc, 460, 410);
   const ac = countyMap(actual, features, states, fc, 460, 410);
   const maxP = Math.min(0.6, d3.max(data.storm.flatMap(s => s.prob)));
@@ -571,17 +569,15 @@ function storm(data, features, states, fc) {
     i = k;
     const s = data.storm[k];
     const dur = animate && !REDUCE ? 350 : 0;
-    pc.transition().duration(dur).attr("fill", (d, j) => (s.already[j] ? "url(#hatch-out)" :
-      s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
-    ac.transition().duration(dur).attr("fill", (d, j) => (s.already[j] ? "url(#hatch-out-2)" :
-      s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
+    pc.transition().duration(dur).attr("fill", (d, j) => (s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
+    ac.transition().duration(dur).attr("fill", (d, j) => (s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
     scrub.value = k;
     d3.select(".when").text(when(s.start));
     d3.select(".totals").text(Tp("storm.totals", { mo: fmt(s.out_mo), il: fmt(s.out_il) }));
   }
   const tipHtml = (d, j) => {
     const s = data.storm[i];
-    const risk = s.already[j] ? T("storm.tip_already") : s.prob[j] == null ? T("storm.tip_none") :
+    const risk = s.prob[j] == null ? T("storm.tip_none") :
       T("storm.tip_risk", { p: pct(s.prob[j]), low: pct(s.low[j]), high: pct(s.high[j]) });
     return `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>${risk}<br>` +
       T("storm.tip_worst", { pct: s.pct[j] == null ? T("storm.tip_unknown") : s.pct[j] + "% out" });

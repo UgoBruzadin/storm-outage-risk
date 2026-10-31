@@ -122,30 +122,46 @@ def load(threshold_pct, years, db=DB):
 
 
 HOURLY_LEADS = (0, 1, 2, 3, 6)
+# a new outage must be fresh: no hour at or above the threshold in the FRESH_HOURS before it. A county hovering
+# around the line (6%, 4%, 6%) is one outage continuing, not a new one (docs/experiments.md, E25)
+FRESH_HOURS = 24
 
 
 def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db=DB):
     """The moving-window table (marts.mart_study__region_1h) for one lead: a row is a decision at the
     start of `hour` about the 6 hours starting `lead` hours later. Features use only what had happened
     by `hour`; y = the window's worst hour >= threshold_pct; is_onset = the region was known to be below
-    the threshold when the window began. Columns are renamed so the 6-hour feature groups apply:
+    the threshold when the window began. With onsets_only, a row is kept only if no hour in the FRESH_HOURS
+    before the window reached the threshold (hours after `hour` only select rows, they are never features).
+    Columns are renamed so the 6-hour feature groups apply:
     hour -> block_start (the decision time), hour_utc -> block_hour_utc."""
     if lead not in HOURLY_LEADS:
         raise ValueError(f"lead must be one of {HOURLY_LEADS}")
     con = duckdb.connect(str(db), read_only=True)
     others = ", ".join(f"fut_max_pct_{x}, start_pct_{x}" for x in HOURLY_LEADS)
+    # the FRESH_HOURS before the window, which starts `lead` hours after the decision
+    before = (f"{FRESH_HOURS} PRECEDING AND 1 PRECEDING" if lead == 0
+              else f"{FRESH_HOURS - lead} PRECEDING AND {lead - 1} FOLLOWING")
+    year_list = ", ".join(str(int(y)) for y in years)
     df = con.sql(f"""
-        SELECT * EXCLUDE ({others}, hour, hour_utc),
+        WITH m AS (
+            SELECT *, max(pct_out) OVER (PARTITION BY region_fips ORDER BY hour ROWS BETWEEN {before})
+                      AS max_pct_before_window
+            FROM marts.mart_study__region_1h
+            WHERE year(hour) BETWEEN {min(years) - 1} AND {max(years)}
+        )
+        SELECT * EXCLUDE ({others}, hour, hour_utc, max_pct_before_window),
                hour AS block_start, hour_utc AS block_hour_utc,
                fut_max_pct_{lead} AS fut_max_pct, start_pct_{lead} AS start_pct
-        FROM marts.mart_study__region_1h
+        FROM m
         -- only region-years EAGLE-I was tracking (mart_study__region_coverage)
         SEMI JOIN marts.mart_study__region_coverage AS c
-               ON c.region_fips = mart_study__region_1h.region_fips AND c.year = year(hour) AND c.tracked
+               ON c.region_fips = m.region_fips AND c.year = year(m.hour) AND c.tracked
         WHERE has_weather
           AND fut_max_pct_{lead} IS NOT NULL
-          AND year(hour) IN ({", ".join(str(int(y)) for y in years)})
+          AND year(hour) IN ({year_list})
           {f"AND start_pct_{lead} < {float(threshold_pct)}" if onsets_only else ""}
+          {f"AND coalesce(max_pct_before_window, 0) < {float(threshold_pct)}" if onsets_only else ""}
         ORDER BY region_fips, hour
     """).df()
     con.close()

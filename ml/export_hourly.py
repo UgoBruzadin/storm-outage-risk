@@ -9,12 +9,14 @@ moving-window model fed the runs issued 2-6 h before each decision, 2 h ahead.
 
 Writes data/app/:
   hourly_storms.parquet   the biggest 2025 storm days, every region-hour from 12 h before the peak to
-                          18 h after: share of customers out, and each model's probability and range
-                          (NaN when the region was already >= 5% out: nothing to predict)
+                          18 h after: share of customers out, the model's chance and range for the 6 hours
+                          starting then (every county and hour, for display), and whether a new outage started
   alert_curves.parquet    per model and alert share (the top x% of 2025 hours): new outages caught,
                           precision, alert episodes, and net dollars for each staging scenario
   county_hourly.parquet   per region, headline model: new outages, caught at the headline alert
                           share, expected (sum of probabilities) and actual new-outage hours
+  storm_days.parquet      each 2025 storm day (12 UTC to 12 UTC) with a new outage: how many, and how many the
+                          headline model and warnings + outlook caught at the headline alert share
   ladder.parquet          each model's onset PR-AUC with its storm-day range, and paired ratios
   lead_time.parquet       moving_window_2025.csv: score and caught by lead, per model
   calibration.parquet     forecast_ensemble_bins_2025.csv: predicted vs observed by probability bin
@@ -90,8 +92,33 @@ def county(pred, onsets):
     return out
 
 
-def storms(pred):
-    """The N_STORMS biggest storm days by customers out at the worst hour, ±hours around each peak."""
+def storm_days(pred, onsets):
+    """Per storm day with at least one new outage: new outages, customers out at the worst hour, and how many
+    were caught in time by the headline model and by warnings + outlook, each alerting on its own top
+    HEADLINE_SHARE of hours (the same comparison as alert_curves)."""
+    on = onsets.copy()
+    for label in (HEADLINE, "Warnings + outlook"):
+        p = pred[MODELS[label]]
+        flagged = pd.Series(p > np.quantile(p, 1 - HEADLINE_SHARE), index=pred.index)
+        on[label] = caught_flags(pred, flagged, onsets, LEAD)
+    on["day"] = storm_day(on.hour)
+    con = duckdb.connect(str(data.DB), read_only=True)
+    worst = con.sql(f"""
+        SELECT hour, sum(pct_out * customers / 100) AS out FROM marts.mart_study__region_1h
+        WHERE year(hour) = {TEST_YEAR} GROUP BY 1
+    """).df()
+    con.close()
+    worst["day"] = storm_day(worst.hour)
+    days = on.groupby("day").agg(new_outages=("hour", "size"), counties=("region_fips", "nunique"),
+                                 caught_model=(HEADLINE, "sum"), caught_official=("Warnings + outlook", "sum"))
+    days = days.join(worst.groupby("day").out.max().rename("customers_out_peak"))
+    return days.reset_index().sort_values("new_outages", ascending=False)
+
+
+def storms(onsets):
+    """The N_STORMS biggest storm days by customers out at the worst hour, ±hours around each peak: every region
+    and hour, the share out, the model's chance for the 6 hours starting then (decided LEAD hours earlier; every
+    county and hour, for display) and whether a fresh new outage started that hour."""
     con = duckdb.connect(str(data.DB), read_only=True)
     hours = con.sql(f"""
         SELECT region_fips, hour, pct_out, customers, pct_out * customers / 100 AS out
@@ -102,14 +129,14 @@ def storms(pred):
     day = (total.index - pd.Timedelta(hours=12)).floor("D")
     peaks = total.groupby(day).idxmax()
     top = total.loc[peaks].sort_values(ascending=False).head(N_STORMS).index
-    keep = ["region_fips", "block_start"] + [c for c in ("p_mean", "p_low", "p_high", "p_newest",
-                                                       "forecast-ready", "warnings + outlook") if c in pred]
+    shown = pd.read_parquet(CACHE / "forecast_ensemble_all_2025.parquet")
+    shown["hour"] = shown.pop("block_start") + pd.Timedelta(hours=LEAD)     # shown at the window's first hour
+    starts = set(zip(onsets.region_fips, onsets.hour, strict=True))
     parts = []
     for i, peak in enumerate(sorted(top)):
-        window = hours[hours.hour.between(peak - pd.Timedelta(hours=12), peak + pd.Timedelta(hours=18))]
-        # a decision at h is about h + LEAD ... h + LEAD + 5: show it at the window's first hour
-        p = pred[keep].assign(hour=pred.block_start + pd.Timedelta(hours=LEAD)).drop(columns="block_start")
-        w = window.merge(p, on=["region_fips", "hour"], how="left")
+        w = hours[hours.hour.between(peak - pd.Timedelta(hours=12), peak + pd.Timedelta(hours=18))]
+        w = w.merge(shown, on=["region_fips", "hour"], how="left")
+        w["new_outage"] = [(r, h) in starts for r, h in zip(w.region_fips, w.hour, strict=True)]
         w["storm"], w["peak"], w["customers_out_peak"] = i, peak, total.loc[peak]
         parts.append(w)
     return pd.concat(parts, ignore_index=True)
@@ -143,7 +170,8 @@ def main():
     curves = alert_curves(pred, onsets)
     curves.to_parquet(OUT / "alert_curves.parquet", index=False)
     county(pred, onsets).to_parquet(OUT / "county_hourly.parquet", index=False)
-    storms(pred).to_parquet(OUT / "hourly_storms.parquet", index=False)
+    storms(onsets).to_parquet(OUT / "hourly_storms.parquet", index=False)
+    storm_days(pred, onsets).to_parquet(OUT / "storm_days.parquet", index=False)
     lad = ladder(pred)
     lad.to_parquet(OUT / "ladder.parquet", index=False)
     pd.read_csv(RESULTS / "moving_window_2025.csv").to_parquet(OUT / "lead_time.parquet", index=False)
@@ -156,6 +184,8 @@ def main():
     meta = {
         "test_year": TEST_YEAR, "lead_hours": LEAD, "threshold_pct": THRESHOLD_PCT,
         "headline_model": HEADLINE, "headline_share": HEADLINE_SHARE,
+        # the headline model's probability at its headline share: the storm room's alert line
+        "alert_level": float(np.quantile(pred[MODELS[HEADLINE]], 1 - HEADLINE_SHARE)),
         "n_decisions": len(pred), "n_new_outages": len(onsets), "event_rate": float(pred.y.mean()),
         "ladder": lad.set_index("model").to_dict(orient="index"),
         "at_headline_share": at[["caught", "precision", "episodes"]].to_dict(orient="index"),

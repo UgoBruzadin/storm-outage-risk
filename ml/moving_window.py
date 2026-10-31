@@ -44,14 +44,18 @@ RUNS = [  # (label, model, feature spec)
 
 
 def onset_hours(year, db=data.DB):
-    """Every hour a region crossed THRESHOLD_PCT from below (the hour before known and under it)."""
+    """Every hour a region crossed THRESHOLD_PCT from below (the hour before known and under it) after
+    data.FRESH_HOURS with no hour at or above it: a new outage, not one hovering around the line."""
     import duckdb
     con = duckdb.connect(str(db), read_only=True)
     df = con.sql(f"""
         SELECT region_fips, hour FROM (
-            SELECT region_fips, hour, pct_out, lag(pct_out) OVER (PARTITION BY region_fips ORDER BY hour) AS before
-            FROM marts.mart_study__region_1h WHERE year(hour) BETWEEN {year - 1} AND {year})
+            SELECT region_fips, hour, pct_out, lag(pct_out) OVER w AS before,
+                   max(pct_out) OVER (w ROWS BETWEEN {data.FRESH_HOURS} PRECEDING AND 1 PRECEDING) AS recent
+            FROM marts.mart_study__region_1h WHERE year(hour) BETWEEN {year - 1} AND {year}
+            WINDOW w AS (PARTITION BY region_fips ORDER BY hour))
         WHERE year(hour) = {year} AND pct_out >= {THRESHOLD_PCT} AND before < {THRESHOLD_PCT}
+          AND recent < {THRESHOLD_PCT}
     """).df()
     con.close()
     return df
