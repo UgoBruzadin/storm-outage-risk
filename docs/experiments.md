@@ -502,6 +502,20 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **Result:** outlook 66% of the score lost; place 33%; weather so far 24%; neighbours 16%; warnings 16%; recent outages 10%.
 - **Meaning:** The SPC outlook is the backbone: it says which days are storm days. The model's skill is in using place, recent weather and neighbours to say *where* on those days. The groups overlap (a shuffled group can be partly recovered from the others), so these are a ranking, not shares that add up.
 
+### E43. Without live outage data (for a live test)
+- **Question:** A live test can get forecasts, warnings and outlooks as they are issued, but not current outages: EAGLE-I is published about a year later, and the utilities' outage maps don't allow automated collection. How much does the headline model lose without them?
+- **Setup:** The headline model (mean of the five HRRR runs, 2 hours ahead, fresh new outages) retrained on 2020–2024 without its four outage inputs: the county's share out now and its worst share in the past 24 hours, and the worst neighbouring and upwind county now. Both scored on the same 1,727,693 decisions of 2025; alerts on each one's riskiest 0.75% of county-hours (`ml/live_inputs.py`, `live_inputs_2025.csv`).
+- **Result:**
+
+  | Model | PR-AUC | vs warnings + outlook | Alerts real | Caught |
+  |---|---|---|---|---|
+  | Warnings + outlook | 0.039 | 1× | 10.8% | 17% |
+  | Headline (all inputs) | 0.094 | 2.4× (2.0–3.3×) | 15.1% | 29.9% |
+  | **Without live outage data** | **0.088** | **2.2× (1.8–3.0×)** | **14.4%** | **29.5%** |
+
+  - Against the headline model on the same storm days: 0.93× (0.88–0.98×); lower in 99.7% of resamples.
+- **Meaning:** Current outages add a small, real amount (about 7% of the score), but almost nothing to the alerts: they catch the same share of new outages and are right nearly as often. A live test without outage data measures essentially the headline model, so it doesn't need a live outage source; it can be graded on EAGLE-I once 2026 is published.
+
 ---
 
 ## Open experiments
