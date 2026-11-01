@@ -192,6 +192,19 @@ After the first version's mistake, the pipeline was audited before publishing ([
 - **Tree canopy is a small, real effect, just not where the map suggests.** Removing it lowers the score by about 3% overall, with every seed. Tested state by state, it improves the model in Illinois (+3.0%, 3 of 3 seeds) and barely in Missouri (+0.4%), the opposite of the county correlation below. Still an association, not a cause.
 - **Tuning barely matters, and bigger is worse.** Deeper trees or more of them overfit this rare an event, by up to 22%.
 
+### Does it hold up?
+
+2025 could have been a lucky year, or the model could be good at one kind of storm or a few familiar counties. Each
+was tested (`ml/extra_analyses.py`; results in `ml/results/extra_<name>.csv`):
+
+- **Every year.** Trained on 2020 to the year before and tested on each of 2022–2025, the model without forecasts beat warnings + outlook every year: 1.8×, 1.7×, 2.1× and 1.6×. With HRRR forecasts, 2.8× on 2024 and 2.4× on 2025.
+- **Every kind of storm.** Alerting on the riskiest 0.75% of county-hours, it caught 41% of thunderstorm outages (official forecasts: 29%), 36% of winter and ice outages (2%), and 10% of outages from wind and rain without storm energy (4%). That last group is a third of all new outages and the clearest place to improve.
+- **Every time of day.** The edge is largest at night (3.6×) and in the morning (3.5×), when few warnings are out, and smallest in the afternoon (1.6×).
+- **Bigger outages are caught more often:** 49% of those affecting over 5,000 customers, against 33% for the official forecasts.
+- **Counties it never saw.** With a fifth of the counties held out of training each time, it still beat the official forecasts on them by 1.45×, against 1.6× on counties it trained on.
+- **Other outage sizes and lead times.** The same holds for outages of ≥ 1% and ≥ 10% of customers, and with forecasts at every lead from 0 to 6 hours (2.2–2.3×).
+- **An alert level set in advance.** Fixed at the top 0.75% of 2024's hours, the alert level gives the same 2025 result: alerts on 0.77% of hours, 14.8% real, 29.9% caught.
+
 ### Trees matter, just not the way I expected
 
 I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But Missouri's most wooded counties are the Ozarks, also remote, hilly and sparsely served, and the model already sees that through housing, density and county size. Given the tree data, it barely improves in Missouri (+0.4%) and improves a little in Illinois (+3.0%), where the few wooded river counties stand out from the farmland around them. Code: `ml/canopy_by_state.py`.

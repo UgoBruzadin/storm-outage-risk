@@ -159,7 +159,9 @@ alerts:
     before. Alerts on the riskiest {share} of county-hours caught {caught} of all {outages} major new outages in 2025,
     in {spells} separate alert spells. Warnings + outlook alone, alerting just as often, were right {official_precision}
     of the time and caught {official_caught}. Using only the newest forecast instead of the last five catches a little
-    more ({newest_caught}) but alerts switch on and off as each run moves the storm: {newest_spells} spells.
+    more ({newest_caught}) but alerts switch on and off as each run moves the storm: {newest_spells} spells. A utility
+    would set its alert level in advance: fixed on 2024's forecasts, it gives the same result in 2025 (alerts on 0.77%
+    of hours, 14.8% real, 29.9% caught).
 
 ranges:
   menu: Ranges
@@ -191,6 +193,54 @@ where:
   # {caught} of {new}
   tip: "{caught} of {new} new outages caught"
   tip_few: "{new} new outages: too few to judge"
+
+holds:
+  menu: Does it hold up?
+  kicker: Does it hold up?
+  title: Not one lucky year, one kind of storm, or a few familiar counties.
+  baseline: official = 1×
+  tabs:                                 # the tabs, left to right
+    years:
+      tab: Every year
+      tab_narrow: Years
+      lead: >-
+        Tested the same way on 2022, 2023 and 2024, each time trained only on the years before, it beat the official
+        forecasts every year. With HRRR forecasts the edge grows.
+      key_without: Model, weather observed so far
+      key_with: + last five HRRR forecasts
+      note: >-
+        Times better than NWS warnings + SPC outlook at ranking new outages, 2 hours ahead. The archived forecasts
+        cover 2024 and 2025 so far; earlier years are being added.
+    storms:
+      tab: Every kind of storm
+      tab_narrow: Storm types
+      lead: >-
+        It catches more of every kind of outage, and the gap is widest in winter: warnings and outlooks are built for
+        thunderstorms and say little about ice and snow.
+      key_model: Model alerts
+      key_official: Warnings + outlook, alerting as often
+      # {n}: new outages of this kind in 2025
+      count: "{n} new outages"
+      note: >-
+        Share of 2025's new outages caught in time, alerting on the riskiest 0.75% of county-hours. Each outage is
+        labelled by the conditions when it started: winter (a winter warning, or near freezing), thunderstorm (storm
+        energy or a severe-thunderstorm or tornado warning), or wind and rain without storm energy, the hard case for
+        both.
+      labels:
+        convective: Thunderstorms
+        winter: Winter and ice
+        other: Wind and rain, no storm energy
+    counties:
+      tab: Counties it never saw
+      tab_narrow: New counties
+      lead: >-
+        Trained with a fifth of the counties held out each time, it still beat the official forecasts in counties it
+        had never seen, losing only a little of its edge. A utility could use it beyond the area it was built on.
+      seen: Counties it trained on
+      unseen: Counties it never saw
+      note: >-
+        Times better than NWS warnings + SPC outlook at ranking new outages in 2025, 2 hours ahead, model without HRRR
+        forecasts in both.
 
 trees:
   menu: Trees

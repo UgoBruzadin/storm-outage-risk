@@ -119,12 +119,26 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .card .lead { font-size: 1rem; margin-bottom: 10px; }
 .card .note { margin-top: 6px; }
 
+/* does it hold up: one chart, horizontal tabs swap what it shows */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 4px 0 18px; overflow: auto hidden;
+  scrollbar-width: none; }
+.tab { all: unset; cursor: pointer; padding: 8px 14px 10px; font-weight: 600; color: var(--muted); white-space: nowrap;
+  border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--ink-2); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+.holds-lead { min-height: 4.6em; }
+.holds-panel { min-height: 340px; }             /* the tallest tab, so switching tabs doesn't move the slide */
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .85rem; color: var(--ink-2); margin: -8px 0 8px; }
+.key span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px;
+  vertical-align: -1px; background: var(--c); }
+
 /* charts */
 .axis text { fill: var(--muted); font-size: 14px; }
 .axis path, .axis line { stroke: var(--line); }
 .gridline line { stroke: var(--grid); }
 .label { fill: var(--ink); font-size: 16px; }
-#savings .label, #lead-chart .label, #calib .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+#savings .label, #lead-chart .label, #calib .label, #holds-chart .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
 .waffles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 32px; }
@@ -306,6 +320,18 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <svg id="map-acc" role="img" aria-label="Share of each county's new outages caught by the model"></svg>
 </section>
 
+<section class="slide" id="holds">
+  <p class="kicker" data-t="holds.kicker"></p>
+  <h2 data-t="holds.title"></h2>
+  <div class="tabs" role="tablist" id="holds-tabs"></div>
+  <p class="lead holds-lead" id="holds-lead"></p>
+  <div class="holds-panel">
+    <div class="key" id="holds-key"></div>
+    <svg id="holds-chart" role="img" aria-label="How the model compares with the official forecasts in other years, kinds of storm and unseen counties"></svg>
+    <p class="note" id="holds-note"></p>
+  </div>
+</section>
+
 <section class="slide" id="trees">
   <p class="kicker" data-t="trees.kicker"></p>
   <h2 data-t="trees.title"></h2>
@@ -469,7 +495,7 @@ const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getB
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-11-01"),          // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-11-01b"),          // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
@@ -491,6 +517,7 @@ Promise.all([
     ["#calib", animate => calibration(data, animate)],
     ["#savings", animate => savings(data, animate)],
     ["#map-acc", animate => accuracy(data, features, states, fc, animate)],
+    ["#holds-chart", animate => holdsUp(data, animate)],
     ["#scatter", animate => trees(data, animate)],
   ];
   charts.forEach(([, draw]) => draw(true));
@@ -779,6 +806,82 @@ function ladder(data, animate) {
     whisk.transition().delay((d, i) => 600 + i * 350).duration(400).attr("opacity", 1);
     vals.transition().delay((d, i) => 600 + i * 350).duration(400).attr("opacity", 1);
   });
+}
+
+// does it hold up: the open tab's rows of bars; a tab click redraws the chart
+let holdsTab = "years", holdsSeen = false;
+function holdsUp(data, animate) {
+  const h = data.holds, t = TEXT.holds.tabs, tabs = document.querySelector("#holds-tabs");
+  if (!tabs.children.length) {
+    Object.keys(t).forEach(k => {
+      const b = document.createElement("button");
+      b.className = "tab"; b.setAttribute("role", "tab"); b.dataset.key = k;
+      b.textContent = innerWidth < 600 ? t[k].tab_narrow : t[k].tab;
+      b.addEventListener("click", () => {
+        holdsTab = k; d3.select("#holds-chart").selectAll("*").remove(); holdsUp(data, holdsSeen);
+      });
+      tabs.append(b);
+    });
+  }
+  tabs.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.key === holdsTab));
+  const tt = t[holdsTab], light = "color-mix(in srgb, var(--accent) 45%, var(--surface))";
+  document.querySelector("#holds-lead").innerHTML = T(`holds.tabs.${holdsTab}.lead`);
+  document.querySelector("#holds-note").innerHTML = T(`holds.tabs.${holdsTab}.note`);
+  const times = v => `${v.toFixed(1)}×`, share = v => `${Math.round(v * 100)}%`;
+  let rows, keys, baseline = 1, fmtV = times;
+  if (holdsTab === "years") {
+    keys = [[tt.key_without, light], [tt.key_with, "var(--accent)"]];
+    rows = h.years.map(y => ({ label: String(y.year), bars: [{ v: y.without, c: light },
+      ...(y.with ? [{ v: y.with, c: "var(--accent)", strong: true }] : [])] }));
+  } else if (holdsTab === "storms") {
+    keys = [[tt.key_model, "var(--accent)"], [tt.key_official, "var(--other)"]];
+    baseline = null; fmtV = share;
+    rows = h.storms.map(r => ({ label: tt.labels[r.key], sub: Tp("holds.tabs.storms.count", { n: fmt(r.n) }),
+      bars: [{ v: r.model, c: "var(--accent)", strong: true }, { v: r.official, c: "var(--other)" }] }));
+  } else {
+    keys = []; fmtV = v => `${v.toFixed(2)}×`;
+    rows = [{ label: tt.seen, bars: [{ v: h.counties.seen, c: light }] },
+            { label: tt.unseen, bars: [{ v: h.counties.unseen, c: "var(--accent)", strong: true }] }];
+  }
+  document.querySelector("#holds-key").innerHTML = keys.map(([name, c]) => `<span style="--c:${c}">${name}</span>`).join("");
+  const W = widthOf("#holds-chart"), narrow = W < 600, left = narrow ? 0 : 230, top = baseline ? 26 : 6;
+  const bh = narrow ? 18 : 22, gap = 4, labelH = narrow ? 22 : 0, rowGap = narrow ? 16 : 20;
+  const rowH = r => labelH + r.bars.length * (bh + gap) - gap + rowGap;
+  const ys = rows.reduce((a, r) => [...a, a[a.length - 1] + rowH(r)], [top]);
+  const svg = d3.select("#holds-chart").attr("viewBox", `0 0 ${W} ${ys[ys.length - 1]}`);
+  const max = d3.max(rows.flatMap(r => r.bars.map(b => b.v)));
+  const x = d3.scaleLinear().domain([0, holdsTab === "storms" ? Math.max(0.5, max) : Math.max(3, max)])
+    .range([0, W - left - 70]);
+  const plot = svg.append("g").attr("transform", `translate(${left},0)`);
+  if (baseline) {
+    plot.append("line").attr("x1", x(1)).attr("x2", x(1)).attr("y1", top - 8).attr("y2", ys[ys.length - 1] - rowGap)
+      .attr("stroke", "var(--muted)").attr("stroke-dasharray", "4 4");
+    plot.append("text").attr("class", "label muted").attr("x", x(1)).attr("y", top - 12).attr("text-anchor", "middle")
+      .style("font-size", "13px").text(Tp("holds.baseline"));
+  }
+  const g = plot.selectAll("g.row").data(rows).join("g").attr("class", "row")
+    .attr("transform", (d, i) => `translate(0,${ys[i]})`);
+  const lab = g.append("text").attr("class", "label").attr("x", narrow ? 0 : -14).attr("y", narrow ? 14 : bh / 2 + 5)
+    .attr("text-anchor", narrow ? "start" : "end").attr("transform", narrow ? `translate(${-left},0)` : null);
+  lab.append("tspan").style("font-weight", 600).text(d => d.label);
+  lab.append("tspan").attr("dx", 8).style("fill", "var(--muted)").style("font-size", "13px")
+    .text(d => (narrow && d.sub ? d.sub : ""));
+  g.filter(d => d.sub && !narrow).append("text").attr("class", "label muted").attr("x", -14).attr("y", bh + 20)
+    .attr("text-anchor", "end").style("font-size", "13px").text(d => d.sub);
+  const bars = g.selectAll("g.bar").data(d => d.bars).join("g").attr("class", "bar")
+    .attr("transform", (b, k) => `translate(0,${labelH + k * (bh + gap)})`);
+  const still = REDUCE || !animate;
+  const rect = bars.append("rect").attr("height", bh).attr("rx", 4).attr("fill", b => b.c)
+    .attr("width", b => (still ? x(b.v) : 0));
+  const vals = bars.append("text").attr("class", "label").attr("x", b => x(b.v) + 8).attr("y", bh / 2 + 5)
+    .style("font-weight", b => (b.strong ? 700 : 400)).attr("opacity", still ? 1 : 0).text(b => fmtV(b.v));
+  if (still) return;
+  const play = () => {
+    holdsSeen = true;
+    rect.transition().duration(700).ease(d3.easeCubicOut).attr("width", b => x(b.v));
+    vals.transition().delay(500).duration(300).attr("opacity", 1);
+  };
+  if (holdsSeen) play(); else onEnter(document.querySelector("#holds"), play);
 }
 
 function leadTime(data, animate) {

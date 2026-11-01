@@ -221,6 +221,25 @@ HOURLY_VALUE = [  # (column of hourly_dollars(), label), drawn top to bottom
     ("model", "Model, weather observed so far"), ("official", "Warnings + outlook")]
 
 
+def holds(meta):
+    """Does it hold up: other test years, kinds of storm, counties never trained on
+    (ml/extra_analyses.py: E36, E29, E38). 2025 with forecasts is the headline result."""
+    years = pd.read_csv(RESULTS / "extra_years.csv")
+    ratio = {(r.test_year, r.model != "no forecasts"): round(float(r.ratio), 2) for r in years.itertuples()}
+    ratio[(2025, True)] = round(meta["ladder"][meta["headline_model"]]["ratio_vs_official"], 2)
+    kinds = {"warm-season convective": "convective", "winter / cold": "winter"}
+    storms = pd.read_csv(RESULTS / "extra_storm_types.csv")
+    unseen = pd.read_csv(RESULTS / "extra_counties.csv").iloc[0]
+    return {
+        "years": [{"year": int(y), "without": ratio[(y, False)], "with": ratio.get((y, True))}
+                  for y in sorted(years.test_year.unique())],
+        "storms": [{"key": kinds.get(r.storm_type, "other"), "n": int(r.new_outages),
+                    "model": round(float(r.caught_model), 3), "official": round(float(r.caught_official), 3)}
+                   for r in storms.sort_values("caught_model", ascending=False).itertuples()],
+        "counties": {"seen": ratio[(2025, False)], "unseen": round(float(unseen.ratio), 2)},
+    }
+
+
 def hourly_dollars():
     """Net savings per typical-mix scenario (ml/value_hourly.py), with the headline model's raw probabilities
     (ml/calibrate_forecasts.py, E28) as the column `headline`."""
@@ -438,6 +457,7 @@ def story_data(gdf):
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)},
                    # what knowing the canopy adds to the model, per state (ml/canopy_by_state.py: pooled model, 2024)
                    "model": canopy_effect()},
+        "holds": holds(meta),
         "value": {
             "forecasts": [{"key": col, "label": label, "ours": col == "headline",
                            "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
