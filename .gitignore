@@ -7,6 +7,9 @@ data/*
 # ...except the dashboard's small precomputed files (~8 MB), so a host can serve the app
 !data/app/
 !data/app/*.parquet
+# ...and the live forecast's fixed inputs (live/static.py); its output goes to the live-data branch
+!live/static/*.parquet
+live/out/
 
 # Environments, caches, tool output
 .pixi/*
