@@ -469,7 +469,7 @@ const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getB
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-10-31"),          // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-11-01"),          // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;

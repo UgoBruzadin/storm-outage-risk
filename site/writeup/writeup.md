@@ -42,7 +42,7 @@ When a storm moves through, which counties will lose power in the next few hours
 
 **The trap I fell into.** The first version scored better still, but it summarized the weather *during* the hours it was predicting, which nobody knows in advance. Rebuilt so that every input is known at the decision, its score fell by a third; real forecasts win most of that back. A separate audit then checked that no input sees the future.
 
-**What it would be worth.** Staging crews wherever the model pointed in 2025 would have been worth from about break-even to \$30 million, depending on assumptions about crews. That estimate is for the model without HRRR forecasts; acting on the official forecasts the same way loses money in every scenario.
+**What it would be worth.** Staging crews wherever the model pointed in 2025 would have been worth about \$1–24 million, depending on assumptions about crews; acting on the official forecasts the same way loses money in every scenario.
 
 **Where the effort went.** Mostly into making the numbers trustworthy. Public data hides traps: gaps that look like "no outages", one county's outages reported under its neighbour's code, and a model that looks great by predicting outages already underway, or by seeing the storm it is supposed to forecast. Each is written up below, with the code that fixes it.
 
@@ -257,7 +257,7 @@ The closest operational work is the University of Connecticut and Eversource out
 
 A better score only matters if it changes a decision. The decision here: two hours before a storm window, a utility can send repair crews to wait in a county. Staging costs money every time. It pays off only if that county then loses power, because restoration starts sooner and customers are out for less time. So the question is: if a utility had staged crews wherever each forecast pointed in 2025, how much would it have saved?
 
-![Estimated net savings in 2025 from staging crews two hours ahead, four scenarios each: perfect foresight 18.6 to 124.0 million dollars, the model with weather observed so far from a loss of 0.5 million to a gain of 30.5 million, and warnings plus outlook from a loss of 19.1 million to a loss of 3.2 million.](../assets/value.jpg?v=2)
+![Estimated net savings in 2025 from staging crews two hours ahead, four scenarios each: perfect foresight 18.0 to 113.7 million dollars, the model with the last five HRRR forecasts 0.7 to 24.4 million, the model with weather observed so far from a loss of 2.1 million to a gain of 28.2 million, and warnings plus outlook from a loss of 19.2 million to a loss of 3.2 million.](../assets/value.jpg?v=3)
 
 Turning outages into dollars takes four inputs. Two come from published data, two are assumptions, so the estimate is a range over four scenarios.
 
@@ -276,17 +276,18 @@ Each outage's length and the number of customers affected come from EAGLE-I. A c
 | Net savings in 2025 | Shortened 10%, \$5k | 10%, \$20k | 25%, \$5k | 25%, \$20k |
 |----|----|----|----|----|
 | Perfect foresight (the ceiling) | \$39.6M | \$18.0M | \$113.7M | \$92.2M |
-| Model, weather observed so far | **\$4.8M** | **−\$2.1M** | **\$28.2M** | **\$7.5M** |
+| Model + last five HRRR forecasts | **\$4.1M** | **\$0.7M** | **\$24.4M** | **\$6.0M** |
+| Model, weather observed so far | \$4.8M | −\$2.1M | \$28.2M | \$7.5M |
 | Warnings + outlook | −\$3.2M | −\$6.1M | −\$16.8M | −\$19.2M |
 
 :::
-- **The estimate: from about break-even to \$30 million in 2025** across Missouri and Illinois. It is a small loss only when crews help little and staging is expensive. Acting on the official forecasts by the same rule loses money in every scenario: they point at too many places.
-- **The rule is close to the best it could be.** Given each forecast's best cutoff in hindsight, chosen on 2025 itself, the model's own rule already finds the best one in three of four scenarios (\$28.2M in the 25%, \$5k scenario); the official forecasts would save \$11.3M at best, and only in that scenario.
+- **The estimate: about \$1–24 million in 2025** across Missouri and Illinois, positive in every scenario. Acting on the official forecasts by the same rule loses money in every scenario: they point at too many places.
+- **The rule is close to the best it could be.** Given each forecast's best cutoff in hindsight, chosen on 2025 itself, the version without forecasts already finds the best one in three of four scenarios (\$28.2M in the 25%, \$5k scenario); the official forecasts would save \$11.3M at best, and only in that scenario.
 - **Businesses carry the value.** Counting only what outages cost households, staging never pays, even with perfect foresight: a home loses about \$14 in an 8-hour outage. Almost all the avoided cost is businesses', so the estimate moves with the customer mix.
-- **For the model without forecasts.** The forecast version ranks better and makes fewer call-outs, but the dollar rule uses its probabilities directly, and above 20% they run high (see How sure is it?). Its estimate waits for a calibration step fitted on 2024 forecasts.
+- **Forecasts add skill, not dollars.** The forecast version ranks new outages better, but it is worth about the same as the version without forecasts: its extra skill is mostly on medium-risk calls, which the staging rule rarely acts on. Its probabilities run a little high above 20% (see How sure is it?); a calibration fitted on 2024 forecasts changed the estimate little (−\$0.3M to \$25.0M), so the raw probabilities are used.
 - **What the estimate is not.** It counts customers' losses, not the utility's own costs, and it covers one year.
 
-Code: `ml/value_hourly.py`; results in `ml/results/value_hourly_2025.csv`.
+Code: `ml/value_hourly.py` and `ml/calibrate_forecasts.py`; results in `ml/results/value_hourly_2025.csv` and `value_forecasts_2025.csv`.
 
 ## Pitfalls, with code {#pitfalls}
 

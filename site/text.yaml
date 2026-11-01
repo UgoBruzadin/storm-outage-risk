@@ -221,10 +221,11 @@ value:
   note: >-
     Net savings: what outages cost homes and businesses (Berkeley Lab's outage-cost models) that staged crews avoid,
     minus the cost of staging. Scenarios: crews shorten outages by 10% or 25%; staging costs $5,000 or $20,000 per
-    county per 6 hours. Every forecast stages by the same rule, set on 2020–2024 data. Estimated for the model without
-    HRRR forecasts; the estimate for the forecast version needs its probabilities calibrated first.
+    county per 6 hours. Every forecast stages by the same rule, set on 2020–2024 data. Two of the four inputs are
+    assumptions, so this is the least certain number on the page.
   labels:
     perfect: Perfect foresight
+    headline: Model + last five HRRR forecasts
     model: Model, weather observed so far
     official: Warnings + outlook
   # {cut}: how much crews shorten outages; {cost}: staging cost

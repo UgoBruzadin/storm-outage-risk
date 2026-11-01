@@ -94,6 +94,9 @@ def fetch_run(run, points, mask, pool):
     jobs = {(name, t): f"{stem}/{path}/{path.split('/')[0]}/{path.split('/')[1]}/0.{t[0]}.{t[1]}"
             for name, path in VARIABLES.items() for t in TILES}
     raw = dict(zip(jobs, pool.map(get, jobs.values()), strict=True))
+    for key, v in raw.items():                             # a malformed chunk (not whole 150 x 150 hours) is missing
+        if v is not None and len(BLOSC.decode(v)) %(4 * TILE * TILE):
+            raw[key] = None
     if any(v is None for (name, _), v in raw.items() if name not in OPTIONAL):
         return None                                        # a core variable is missing: skip the run
     n_fh = len(FHOURS)

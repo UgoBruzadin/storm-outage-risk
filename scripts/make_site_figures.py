@@ -216,8 +216,18 @@ LADDER_LABELS = {"Warnings + outlook": "NWS warnings + SPC outlook alone",
                  "With HRRR forecasts (newest run)": "Model + latest HRRR forecast",
                  "With HRRR forecasts (mean of 5 runs)": "Model + last five HRRR forecasts",
                  "Perfect weather (ceiling)": "Ceiling: knowing the weather in advance"}
-HOURLY_VALUE = [  # (column in ml/results/value_hourly_2025.csv, label), drawn top to bottom
-    ("perfect", "Perfect foresight"), ("model", "Model, weather observed so far"), ("official", "Warnings + outlook")]
+HOURLY_VALUE = [  # (column of hourly_dollars(), label), drawn top to bottom
+    ("perfect", "Perfect foresight"), ("headline", "Model + last five HRRR forecasts"),
+    ("model", "Model, weather observed so far"), ("official", "Warnings + outlook")]
+
+
+def hourly_dollars():
+    """Net savings per typical-mix scenario (ml/value_hourly.py), with the headline model's raw probabilities
+    (ml/calibrate_forecasts.py, E28) as the column `headline`."""
+    keys = ["restoration_cut", "staging_cost"]
+    dollars = pd.read_csv(RESULTS / "value_hourly_2025.csv").query("mix == 'typical mix'")
+    headline = pd.read_csv(RESULTS / "value_forecasts_2025.csv").query("mix == 'typical mix'")
+    return dollars.merge(headline[keys + ["forecast_raw"]].rename(columns={"forecast_raw": "headline"}), on=keys)
 def money(millions):
     """−14.9 -> '−\\$14.9M' (escaped: matplotlib reads a bare $ as math)."""
     if abs(millions) < 0.05:
@@ -228,12 +238,12 @@ def money(millions):
 def value_figure():
     """Net savings in 2025 from staging crews on alert episodes 2 hours ahead (ml/value_hourly.py), the four
     typical-customer-mix scenarios as dots on a range per forecast."""
-    dollars = pd.read_csv(RESULTS / "value_hourly_2025.csv").query("mix == 'typical mix'")
-    fig, b = plt.subplots(figsize=(10, 3.4), dpi=200)
+    dollars = hourly_dollars()
+    fig, b = plt.subplots(figsize=(10, 4.2), dpi=200)
     y = np.arange(len(HOURLY_VALUE))[::-1]
     for yi, (col, _) in zip(y, HOURLY_VALUE, strict=True):
         v = dollars[col] / 1e6
-        color = BLUE[4] if col == "model" else (MUTED if col == "perfect" else HATCH)
+        color = {"headline": BLUE[4], "model": BLUE[2], "perfect": MUTED}.get(col, HATCH)
         b.plot([v.min(), v.max()], [yi, yi], color=color, linewidth=7, solid_capstyle="round", alpha=0.45)
         b.scatter(v, [yi] * len(v), color=color, s=26, zorder=3, edgecolor=SURFACE, linewidth=1)
         if v.max() < 0:                       # all losses: label left of the range, clear of the zero line
@@ -254,7 +264,7 @@ def value_figure():
                  fontweight="bold")
     fig.text(0.02, -0.1, "Each dot is one scenario: a staged crew shortens outages by 10% or 25%; staging costs "
              "\\$5,000 or \\$20,000 per county per 6 hours. Typical customer mix; outage costs from Berkeley Lab's "
-             "ICE models.\nThe model here is the version without HRRR forecasts.", color=MUTED, fontsize=9)
+             "ICE models.\nThe forecast version uses its probabilities as they are (calibrating them changed little).", color=MUTED, fontsize=9)
     fig.tight_layout()
     save(fig, "value.jpg")
 
@@ -383,7 +393,7 @@ def story_data(gdf):
     calib = pd.read_parquet(APP / "calibration.parquet")
     acc = pd.read_parquet(APP / "county_hourly.parquet").set_index("region_fips").reindex(order)
     canopy = gdf.set_index("region_fips").reindex(order)
-    dollars = pd.read_csv(RESULTS / "value_hourly_2025.csv").query("mix == 'typical mix'")
+    dollars = hourly_dollars()
 
     data = {
         "counties": counties, "states": states,
@@ -428,7 +438,7 @@ def story_data(gdf):
                    # what knowing the canopy adds to the model, per state (ml/canopy_by_state.py: pooled model, 2024)
                    "model": canopy_effect()},
         "value": {
-            "forecasts": [{"key": col, "label": label, "ours": col == "model",
+            "forecasts": [{"key": col, "label": label, "ours": col == "headline",
                            "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
                           for col, label in HOURLY_VALUE],
             "scenarios": [{"cut": float(r.restoration_cut), "cost": int(r.staging_cost)} for r in dollars.itertuples()],

@@ -56,11 +56,12 @@ costs $5,000 or $20,000 per county per 6 hours):
 | Net savings in 2025, staging 2 hours ahead | Range over the four scenarios |
 |---|---|
 | Perfect foresight | $18.0M to $113.7M |
-| **Model, weather observed so far** | **−$2.1M to $28.2M** |
+| **Model + last five HRRR forecasts** | **$0.7M to $24.4M** |
+| Model, weather observed so far | −$2.1M to $28.2M |
 | Warnings + outlook | −$19.2M to −$3.2M |
 
-Estimated for the model without HRRR forecasts; the headline model's estimate needs its probabilities calibrated on
-2024 forecasts first. Almost all the avoided cost is businesses'. Code: `ml/value_hourly.py`.
+The forecast version uses its probabilities as they are; calibrating them on 2024 forecasts changed the estimate
+little. Almost all the avoided cost is businesses'. Code: `ml/value_hourly.py`, `ml/calibrate_forecasts.py`.
 
 ### Limitations
 
