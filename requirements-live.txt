@@ -1,5 +1,5 @@
 # The hourly live forecast job (live/predict.py, run by the storm-outage-live repo's GitHub Actions workflow).
-# Pinned to the versions the model was trained with (pixi default environment).
+# Pinned to the versions the model was trained with (pixi default environment), from PyPI.
 duckdb==2.0.0
 geopandas==1.2.0
 numcodecs==0.17.1
@@ -11,4 +11,4 @@ pyproj==3.8.0
 requests==2.34.2
 scikit-learn==1.9.1
 shapely==2.2.0
-xgboost==3.4.2
+xgboost==3.4.1                # PyPI's newest; trained with 3.4.2 (conda-forge): identical predictions
