@@ -7,6 +7,7 @@
 """
 import io
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -21,6 +22,19 @@ OPEN_METEO = "https://api.open-meteo.com/v1/forecast"
 AGENT = {"User-Agent": "storm-outage-risk live forecast (research, non-commercial)"}
 
 
+def get(url, params, tries=4, timeout=120):
+    """GET with retries: a feed that hiccups is tried again after 15 s, 30 s, 60 s."""
+    for attempt in range(tries):
+        try:
+            r = requests.get(url, params=params, timeout=timeout, headers=AGENT)
+            r.raise_for_status()
+            return r
+        except requests.RequestException:
+            if attempt == tries - 1:
+                raise
+            time.sleep(15 * 2 ** attempt)
+
+
 def iso(t):
     return f"{t:%Y-%m-%dT%H:%M}Z"
 
@@ -30,12 +44,11 @@ def weather(regions, past_hours=12):
     parts = []
     for i in range(0, len(regions), 54):
         chunk = regions.iloc[i:i + 54]
-        r = requests.get(OPEN_METEO, timeout=120, headers=AGENT, params={
+        r = get(OPEN_METEO, {
             "latitude": ",".join(map(str, chunk.lat)), "longitude": ",".join(map(str, chunk.lon)),
             "hourly": ",".join(VARIABLES), "models": "ncep_hrrr_conus", "wind_speed_unit": "ms",
             "timezone": "GMT", "past_hours": past_hours, "forecast_hours": 1,
         })
-        r.raise_for_status()
         replies = r.json() if isinstance(r.json(), list) else [r.json()]
         for fips, reply in zip(chunk.region_fips, replies, strict=True):
             parts.append(pd.DataFrame(reply["hourly"]).assign(region_fips=fips))
@@ -44,11 +57,10 @@ def weather(regions, past_hours=12):
 
 def warnings(start, end):
     """Warnings for the study states issued or in force between start and end, one row per county / zone."""
-    r = requests.get(f"{IEM}/watchwarn.py", timeout=300, headers=AGENT, params={
+    r = get(f"{IEM}/watchwarn.py", timeout=300, params={
         "accept": "csv", "sts": iso(start), "ets": iso(end), "location_group": "states", "states": STATES,
         "limitps": 1, "phenomena": ",".join(PHENOMENA), "significance": ",".join("W" * len(PHENOMENA)),
     })
-    r.raise_for_status()
     w = pd.read_csv(io.BytesIO(r.content), dtype=str)
     return w[w.gtype == "C"] if len(w) else w
 
@@ -56,9 +68,7 @@ def warnings(start, end):
 def outlooks(start, end):
     """SPC Day 1 categorical and probabilistic outlook polygons issued between start and end."""
     import geopandas as gpd
-    r = requests.get(f"{IEM}/outlooks.py", timeout=300, headers=AGENT,
-                     params={"d": 1, "type": "C", "sts": iso(start), "ets": iso(end)})
-    r.raise_for_status()
+    r = get(f"{IEM}/outlooks.py", {"d": 1, "type": "C", "sts": iso(start), "ets": iso(end)}, timeout=300)
     with tempfile.NamedTemporaryFile(suffix=".zip") as f:
         f.write(r.content)
         f.flush()

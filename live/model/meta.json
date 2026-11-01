@@ -85,5 +85,7 @@
   "training_positives": 47469,
   "alert_share": 0.0075,
   "alert_level_held_out": 0.07376297563314438,
-  "alert_level_in_sample": 0.07703900337219238
+  "alert_level_in_sample": 0.07703900337219238,
+  "alert_level": 0.07376297563314438,
+  "alert_level_choice": "held out: the same recipe trained on 2020-2024, its top 0.75% of 2025 hours"
 }

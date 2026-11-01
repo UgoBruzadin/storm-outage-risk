@@ -5,12 +5,13 @@ starting at h + 2, from the frozen model (live/model) fed each HRRR run issued 2
 their mean, the range their lowest and highest. Runs not yet in the archive are left out (n_runs says how many
 were used).
 
-Writes, under --out (default live/out):
-  predictions/<YYYY-MM-DD>.parquet   one row per county per decision hour, appended
-  inputs/<YYYY-MM-DD>.parquet        the inputs behind them, for audits and the feed parity check
-  latest.json                        the newest hour, for the story page and the dashboard
+Writes, under --out (default live/out), one file per decision hour so a re-run replaces only its own hour:
+  predictions/<YYYY>/<MM>/<DD>/<HH>.parquet   one row per county
+  inputs/<YYYY>/<MM>/<DD>/<HH>.csv.gz         with --inputs: the inputs behind them, for the feed parity check during
+                                              the shakedown (afterwards they can be rebuilt from the public archives)
+  latest.json                                 the newest hour, for the story page and the dashboard
 
-Usage: pixi run python -m live.predict [--hour 2026-11-01T18] [--out live/out]
+Usage: pixi run python -m live.predict [--hour 2026-11-01T18] [--out live/out] [--inputs]
 """
 import argparse
 import json
@@ -27,16 +28,12 @@ from live import sources
 MODEL = Path(__file__).parent / "model"
 
 
-def append(path, df, key):
-    """Add rows to a day file, replacing any earlier rows for the same decision hour (a re-run)."""
+def save(df, path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        old = pd.read_parquet(path)
-        df = pd.concat([old[~old[key].isin(df[key].unique())], df], ignore_index=True)
-    df.sort_values([key, "region_fips"]).to_parquet(path, index=False)
+    df.sort_values("region_fips").to_parquet(path, index=False, compression="zstd")
 
 
-def run(hour, out):
+def run(hour, out, keep_inputs=False):
     meta = json.loads((MODEL / "meta.json").read_text())
     model = XGBClassifier()
     model.load_model(MODEL / "model.json")
@@ -64,7 +61,7 @@ def run(hour, out):
         raise RuntimeError(f"no HRRR run issued 2-6 hours before {hour} is in the archive yet")
     p = np.column_stack(list(probs.values()))
 
-    level = meta["alert_level"] if "alert_level" in meta else meta["alert_level_held_out"]
+    level = meta["alert_level"]
     pred = pd.DataFrame({
         "decision_hour": hour, "region_fips": rows.region_fips,
         "window_start": hour + pd.Timedelta(hours=meta["lead_hours"]),
@@ -75,18 +72,21 @@ def run(hour, out):
     pred["alert"] = pred.p_mean >= level
     pred["model_trained"], pred["generated_at"] = meta["trained"], started.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    day = f"{hour:%Y-%m-%d}"
-    append(out / "predictions" / f"{day}.parquet", pred, "decision_hour")
-    append(out / "inputs" / f"{day}.parquet", rows.rename(columns={"block_start": "decision_hour"}), "decision_hour")
+    stem = f"{hour:%Y/%m/%d/%H}.parquet"
+    save(pred, out / "predictions" / stem)
+    if keep_inputs:                                        # the model's columns only
+        window = [c for c in rows.columns if "|" in c]
+        path = out / "inputs" / f"{hour:%Y/%m/%d/%H}.csv.gz"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rows[["region_fips", "has_weather"] + base + window].to_csv(path, index=False, float_format="%.4g")
     names = regions.set_index("region_fips")
-    latest = {
+    latest = {                                             # counties: [fips, chance, low, high, alert]
         "decision_hour": f"{hour:%Y-%m-%dT%H:%MZ}", "window": [f"{pred.window_start[0]:%Y-%m-%dT%H:%MZ}",
                                                              f"{pred.window_end[0]:%Y-%m-%dT%H:%MZ}"],
         "generated_at": pred.generated_at[0], "model_trained": meta["trained"], "alert_level": level,
         "runs_used": sorted(f"{hour - pd.Timedelta(hours=a):%Y-%m-%dT%HZ}" for a in probs),
-        "counties": [{"fips": r.region_fips, "name": names.region[r.region_fips], "p": round(float(r.p_mean), 4),
-                      "low": round(float(r.p_low), 4), "high": round(float(r.p_high), 4), "alert": bool(r.alert)}
-                     for r in pred.itertuples()],
+        "counties": [[r.region_fips, round(float(r.p_mean), 4), round(float(r.p_low), 4), round(float(r.p_high), 4),
+                      int(r.alert)] for r in pred.itertuples()],
     }
     (out / "latest.json").write_text(json.dumps(latest, separators=(",", ":")))
     top = pred.nlargest(3, "p_mean")
@@ -100,9 +100,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hour", help="decision hour, UTC (default: the current hour)")
     parser.add_argument("--out", default=str(Path(__file__).parent / "out"))
+    parser.add_argument("--inputs", action="store_true", help="also save the inputs (the shakedown's feed check)")
     args = parser.parse_args()
     hour = pd.Timestamp(args.hour) if args.hour else pd.Timestamp.now(tz="UTC").tz_localize(None).floor("h")
-    run(hour, Path(args.out))
+    run(hour, Path(args.out), args.inputs)
 
 
 if __name__ == "__main__":

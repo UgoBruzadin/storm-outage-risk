@@ -74,6 +74,8 @@ def main():
         "alert_level_held_out": float(np.quantile(p_held, 1 - EQUAL_SHARE)),
         "alert_level_in_sample": float(np.quantile(p_final, 1 - EQUAL_SHARE)),
     }
+    meta["alert_level"] = meta["alert_level_held_out"]                   # chosen for the blind test (live/README.md)
+    meta["alert_level_choice"] = "held out: the same recipe trained on 2020-2024, its top 0.75% of 2025 hours"
     (OUT / "meta.json").write_text(json.dumps(meta, indent=2))
     print({k: v for k, v in meta.items() if k not in ("features", "params")})
 
