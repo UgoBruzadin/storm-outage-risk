@@ -15,14 +15,49 @@ nav:
   home: "⚡ Storm Outage Risk"
   writeup: "Full write-up →"
 
-storm:
-  menu: The storm                      # the name in the side dots' tooltip
-  kicker: 14–15 March 2025 · Missouri and Illinois
-  title: Which counties will lose power in the next few hours?
+live:
+  menu: Live now                       # the name in the side dots' tooltip
+  beta: Beta
+  # {updated}: e.g. "updated 25 min ago"
+  kicker: "Live forecast · {updated}"
+  title: Which counties could lose power in the next few hours?
+  # {window}: the 6 hours forecast, e.g. "Sun 2 PM–8 PM CST"
   lead: >-
     Forecasts tell utilities *when* a storm will hit. Repair crews need to know *where*, early enough to get there.
-    Every hour, this model looks two hours ahead and ranks every county by its risk of losing power in the following
-    six. Here it is on a storm it never saw.
+    Every hour, this model gives each Missouri and Illinois county its chance of a new outage (5% or more of its
+    customers losing power) in the 6 hours starting 2 hours later. Right now: **{window}**.
+  top: Highest chances right now
+  calm: Every county under 1%. A calm stretch.
+  key:                                  # the map's color steps, lowest to highest
+    - under 0.5%
+    - 0.5–1%
+    - 1–2%
+    - 2–5%
+    - 5% or more
+  # {level}: the alert level, e.g. "7.4%"
+  key_alert: "Alert (≥ {level}): the riskiest 0.75% of county-hours"
+  # {decided}: decision time; {runs}: how many HRRR forecast runs it averaged
+  status: >-
+    Decided {decided} from the {runs} latest HRRR forecasts. Each forecast is saved before the weather happens and
+    will be graded against official outage records: a blind test.
+  # {hours}: how old the newest forecast is
+  stale: "The newest forecast is {hours} hours old: the hourly job may have missed runs."
+  error: The live forecast couldn't be loaded right now. The rest of the page works without it.
+  disclaimer: >-
+    Experimental research forecast, not from any utility or the National Weather Service. Don't use it for safety
+    decisions.
+  repo: Every forecast, hour by hour →
+  # {name}: county; {p}: chance; {low}, {high}: lowest and highest of the forecast runs
+  tip: "**{name}**{p} chance of a new outage (forecast runs: {low}–{high})"
+  map_label: Chance of a new outage by county in the coming 6-hour window
+
+storm:
+  menu: A past storm                   # the name in the side dots' tooltip
+  kicker: 14–15 March 2025 · Missouri and Illinois
+  title: Here it is on a storm it never saw.
+  lead: >-
+    The same model, replayed hour by hour on one of 2025's worst storms, a year it never trained on: its risk map,
+    decided two hours ahead, next to what actually happened.
   map_risk: Risk, decided 2 hours before
   map_actual: "What happened: worst share of customers out"
   legend_risk: "chance of being ≥ 5% out in the 6 hours"
