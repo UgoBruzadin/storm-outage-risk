@@ -264,7 +264,8 @@ def value_figure():
                  fontweight="bold")
     fig.text(0.02, -0.1, "Each dot is one scenario: a staged crew shortens outages by 10% or 25%; staging costs "
              "\\$5,000 or \\$20,000 per county per 6 hours. Typical customer mix; outage costs from Berkeley Lab's "
-             "ICE models.\nThe forecast version uses its probabilities as they are (calibrating them changed little).", color=MUTED, fontsize=9)
+             "ICE models.\nThe forecast version uses its probabilities as they are (calibrating them changed little).",
+             color=MUTED, fontsize=9)
     fig.tight_layout()
     save(fig, "value.jpg")
 
