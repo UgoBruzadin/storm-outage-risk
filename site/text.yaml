@@ -27,6 +27,10 @@ live:
     Every hour, this model gives each Missouri and Illinois county its chance of a new outage (5% or more of its
     customers losing power) in the 6 hours starting 2 hours later. This forecast covers **{window}**.
   top: Highest chances in this forecast
+  # {decided}: when the forecast on the map was made
+  when: "Made {decided}"
+  # {n}: how many of the 12 hours before the newest forecast have one saved
+  saved: "Forecasts saved in the 12 hours before the newest: {n}."
   calm: Every county under 1%. A calm stretch.
   key:                                  # the map's color steps, lowest to highest
     - under 0.5%

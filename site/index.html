@@ -67,6 +67,7 @@ strong { color: var(--ink); }
   background: color-mix(in srgb, var(--warm) 16%, transparent); color: var(--warm); }
 .live { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: start; }
 #map-live { max-height: 52svh; width: auto; max-width: 100%; margin: 0 auto; }
+.live-map { min-width: 0; }
 .live-side h3 { font-size: 1rem; margin: 0 0 8px; }
 #live-top { list-style: none; padding: 0; margin: 0 0 16px; }
 #live-top li { display: grid; grid-template-columns: 1fr 4.5em 7em; gap: 12px; align-items: baseline; padding: 6px 0;
@@ -238,7 +239,15 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <h1 data-t="live.title"></h1>
   <p class="lead" id="live-lead"></p>
   <div class="live">
-    <svg id="map-live" viewBox="0 0 460 410" role="img"></svg>
+    <div class="live-map">
+      <svg id="map-live" viewBox="0 0 460 410" role="img"></svg>
+      <div class="controls" style="display: none">
+        <button class="play" type="button" data-t="storm.play"></button>
+        <input class="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Hour of the forecast">
+        <span class="when"></span>
+      </div>
+      <p class="note" id="live-saved"></p>
+    </div>
     <div class="live-side">
       <h3 data-t="live.top"></h3>
       <ol id="live-top"></ol>
@@ -602,8 +611,8 @@ function legend(svg, x, y, w, colors, domain, ticks, format, title) {
   g.append("text").attr("x", 0).attr("y", -6).text(title);
 }
 
-// the live forecast: latest.json from the storm-outage-live repo, refreshed by its hourly job
-const LIVE = "https://raw.githubusercontent.com/UgoBruzadin/storm-outage-live/main/latest.json";
+// the live forecast from the storm-outage-live repo, refreshed by its hourly job: latest.json, and hours/ for the past 12 hours
+const LIVE = "https://raw.githubusercontent.com/UgoBruzadin/storm-outage-live/main";
 function liveNow(features, states, fc) {
   const svg = d3.select("#map-live").attr("aria-label", Tp("live.map_label"));
   const counties = countyMap(svg, features, states, fc, 460, 410);
@@ -611,34 +620,66 @@ function liveNow(features, states, fc) {
   const status = document.querySelector("#live-status");
   const names = new Map(features.map(f => [f.id, f.properties.name]));
   const clock = (t, opts) => new Date(t).toLocaleString("en-US", { timeZone: "America/Chicago", ...opts });
-  d3.json(LIVE).then(d => {
-    const level = d.alert_level, steps = [0.005, 0.01, 0.02, 0.05];
+  d3.json(`${LIVE}/latest.json`).then(latest => {
+    const level = latest.alert_level, steps = [0.005, 0.01, 0.02, 0.05];
     const color = p => (p >= level ? ramp("blue")[6] : p < steps[0] ? "var(--idle)"
       : ramp("blue")[1 + d3.bisectRight(steps, p) - 1]);
-    const byId = new Map(d.counties.map(([id, p, low, high, alert]) => [id, { p, low, high, alert }]));
-    counties.attr("fill", f => (byId.has(f.id) ? color(byId.get(f.id).p) : "var(--idle)"))
-      .classed("alert", f => byId.get(f.id)?.alert === 1)
-      .on("pointermove", (e, f) => {
-        const c = byId.get(f.id); if (!c) return;
-        showTip(e, T("live.tip", { name: names.get(f.id), p: pct1(c.p), low: pct1(c.low), high: pct1(c.high) }));
-      }).on("pointerleave", hideTip);
-    const mins = Math.round((Date.now() - new Date(d.generated_at)) / 60000);
+    const scrub = document.querySelector("#live .scrub"), button = document.querySelector("#live .play");
+    let frames = [latest], i = 0, timer = null, byId = new Map();
+    function show(k) {
+      i = k;
+      const d = frames[k];
+      byId = new Map(d.counties.map(([id, p, low, high, alert]) => [id, { p, low, high, alert }]));
+      counties.attr("fill", f => (byId.has(f.id) ? color(byId.get(f.id).p) : "var(--idle)"))
+        .classed("alert", f => byId.get(f.id)?.alert === 1);
+      const [start, end] = d.window.map(t => new Date(t));
+      document.querySelector("#live-lead").innerHTML = T("live.lead", {
+        window: `${clock(start, { weekday: "short", hour: "numeric" })}–${clock(end, { hour: "numeric", timeZoneName: "short" })}` });
+      const top = d.counties.slice().sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const list = d3.select("#live-top");
+      list.selectAll("li").remove();
+      if (top[0][1] < 0.01) list.append("li").attr("class", "calm").text(Tp("live.calm"));
+      list.selectAll("li.row").data(top).join("li").attr("class", "row")
+        .html(([id, p, low, high]) => `<b>${names.get(id)}</b><em>${pct1(p)}</em><span>${pct1(low)}–${pct1(high)}</span>`);
+      const hours = (Date.now() - new Date(latest.decision_hour)) / 3600e3;
+      const decided = clock(d.decision_hour, { weekday: "short", hour: "numeric", timeZoneName: "short" });
+      status.innerHTML = hours > 3 ? T("live.stale", { hours: Math.floor(hours) })
+        : T("live.status", { decided, runs: d.runs_used.length });
+      scrub.value = k;
+      d3.select("#live .when").text(Tp("live.when", { decided }));
+    }
+    counties.on("pointermove", (e, f) => {
+      const c = byId.get(f.id); if (!c) return;
+      showTip(e, T("live.tip", { name: names.get(f.id), p: pct1(c.p), low: pct1(c.low), high: pct1(c.high) }));
+    }).on("pointerleave", hideTip);
+    const mins = Math.round((Date.now() - new Date(latest.generated_at)) / 60000);
     const updated = mins < 60 ? `updated ${mins} min ago` : `updated ${Math.round(mins / 60)} h ago`;
     document.querySelector("#live-kicker").textContent = Tp("live.kicker", { updated });
-    const [start, end] = d.window.map(t => new Date(t));
-    document.querySelector("#live-lead").innerHTML = T("live.lead", {
-      window: `${clock(start, { weekday: "short", hour: "numeric" })}–${clock(end, { hour: "numeric", timeZoneName: "short" })}` });
-    const top = d.counties.slice().sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const list = d3.select("#live-top");
-    if (top[0][1] < 0.01) list.append("li").attr("class", "calm").text(Tp("live.calm"));
-    list.selectAll("li.row").data(top).join("li").attr("class", "row")
-      .html(([id, p, low, high]) => `<b>${names.get(id)}</b><em>${pct1(p)}</em><span>${pct1(low)}–${pct1(high)}</span>`);
     const keys = TEXT.live.key.map((label, i) => `<span style="--c:${i === 0 ? "var(--idle)" : ramp("blue")[i]}">${label}</span>`);
     keys.push(`<span style="--c:${ramp("blue")[6]};--ring:1.5px">${Tp("live.key_alert", { level: pct1(level) })}</span>`);
     document.querySelector("#live-key").innerHTML = keys.join("");
-    const hours = (Date.now() - new Date(d.decision_hour)) / 3600e3;
-    status.innerHTML = hours > 3 ? T("live.stale", { hours: Math.floor(hours) })
-      : T("live.status", { decided: clock(d.decision_hour, { hour: "numeric", timeZoneName: "short" }), runs: d.runs_used.length });
+    show(0);
+    repaint.push(() => show(i));
+
+    // the 12 hours before the newest forecast; an hour the job missed has no file, and is left out and counted
+    function stop() { clearInterval(timer); timer = null; button.textContent = Tp("storm.play"); }
+    scrub.addEventListener("input", () => { stop(); show(+scrub.value); });
+    button.addEventListener("click", () => {
+      if (timer) { stop(); return; }
+      if (i === frames.length - 1) show(0);
+      button.textContent = Tp("storm.pause");
+      timer = setInterval(() => { if (i >= frames.length - 1) { stop(); return; } show(i + 1); }, 650);
+    });
+    const past = d3.range(1, 13).map(k => new Date(+new Date(latest.decision_hour) - k * 3600e3).toISOString().slice(0, 13));
+    Promise.all(past.map(t => d3.json(`${LIVE}/hours/${t.replace(/[-T]/g, "/")}.json`).catch(() => null))).then(found => {
+      const saved = found.filter(Boolean).reverse();
+      if (!saved.length) return;
+      frames = [...saved, latest];
+      scrub.max = frames.length - 1;
+      show(frames.length - 1);
+      document.querySelector("#live .controls").style.display = "";
+      document.querySelector("#live-saved").textContent = Tp("live.saved", { n: saved.length });
+    });
   }).catch(() => { status.innerHTML = T("live.error"); });
 }
 
@@ -663,7 +704,7 @@ function storm(data, features, states, fc) {
       paint(); return paint;
     });
   repaint.push(...mlegends);
-  const scrub = document.querySelector(".scrub");
+  const scrub = document.querySelector("#storm .scrub");
   scrub.max = data.storm.length - 1;
   scrub.addEventListener("input", () => { stop(); show(+scrub.value); });
   let i = 0, timer = null;
@@ -680,8 +721,8 @@ function storm(data, features, states, fc) {
     pc.transition().duration(dur).attr("fill", (d, j) => (s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
     ac.transition().duration(dur).attr("fill", (d, j) => (s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
     scrub.value = k;
-    d3.select(".when").text(when(s.start));
-    d3.select(".totals").text(Tp("storm.totals", { mo: fmt(s.out_mo), il: fmt(s.out_il) }));
+    d3.select("#storm .when").text(when(s.start));
+    d3.select("#storm .totals").text(Tp("storm.totals", { mo: fmt(s.out_mo), il: fmt(s.out_il) }));
   }
   const tipHtml = (d, j) => {
     const s = data.storm[i];
@@ -692,7 +733,7 @@ function storm(data, features, states, fc) {
   };
   [pc, ac].forEach(sel => sel.on("pointermove", (e, d) => showTip(e, tipHtml(d, features.indexOf(d))))
     .on("pointerleave", hideTip));
-  const button = document.querySelector(".play");
+  const button = document.querySelector("#storm .play");
   function stop() { clearInterval(timer); timer = null; button.textContent = Tp("storm.play"); }
   function play() {
     if (timer) { stop(); return; }
