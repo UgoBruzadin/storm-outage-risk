@@ -25,8 +25,8 @@ live:
   lead: >-
     Forecasts tell utilities *when* a storm will hit. Repair crews need to know *where*, early enough to get there.
     Every hour, this model gives each Missouri and Illinois county its chance of a new outage (5% or more of its
-    customers losing power) in the 6 hours starting 2 hours later. Right now: **{window}**.
-  top: Highest chances right now
+    customers losing power) in the 6 hours starting 2 hours later. This forecast covers **{window}**.
+  top: Highest chances in this forecast
   calm: Every county under 1%. A calm stretch.
   key:                                  # the map's color steps, lowest to highest
     - under 0.5%
@@ -46,6 +46,9 @@ live:
   disclaimer: >-
     Experimental research forecast, not from any utility or the National Weather Service. Don't use it for safety
     decisions.
+  model: >-
+    Frozen model live-v1.1, without current outage data: 2.2× official warnings on 2025, against 2.4× for the full
+    model below. It can't see if a county is already out, and still gives it a number.
   repo: Every forecast, hour by hour →
   # {name}: county; {p}: chance; {low}, {high}: lowest and highest of the forecast runs
   tip: "**{name}**{p} chance of a new outage (forecast runs: {low}–{high})"
@@ -56,8 +59,10 @@ storm:
   kicker: 14–15 March 2025 · Missouri and Illinois
   title: Here it is on a storm it never saw.
   lead: >-
-    The same model, replayed hour by hour on one of 2025's worst storms, a year it never trained on: its risk map,
-    decided two hours ahead, next to what actually happened.
+    One of 2025's worst storms, a year it never trained on, replayed hour by hour: the risk map, decided two hours
+    ahead, next to what actually happened. This display version has the full model's inputs but also counts outages
+    already underway, so its map follows the storm. Its scores aren't quoted anywhere; the results below are for new
+    outages only.
   map_risk: Risk, decided 2 hours before
   map_actual: "What happened: worst share of customers out"
   legend_risk: "chance of being ≥ 5% out in the 6 hours"
@@ -156,7 +161,9 @@ ladder:
     in the 6 hours starting 2 hours after each decision, every county and hour of 2025 ({decisions} decisions,
     {outages} new outages). Whiskers: the 95% range when 2025's storm days are resampled, both scored on the same
     days. Every version beat the official forecasts in all 1,000 resamples (p < 0.001). Knowing the weather in advance
-    is not significantly better than the real forecasts (p = {p_ceiling}).
+    is not significantly better than the real forecasts (p = {p_ceiling}). The live forecast at the top of this page is
+    the last-five-forecasts version without current outage data: 2.2× (1.8–3.0×), 14.4% of its alerts real, 29.5% of
+    outages caught.
   labels:                               # the bars, top to bottom
     No forecasts: Model, weather observed so far
     With HRRR forecasts (newest run): Model + latest HRRR forecast
@@ -196,18 +203,20 @@ alerts:
     of the time and caught {official_caught}. Using only the newest forecast instead of the last five catches a little
     more ({newest_caught}) but alerts switch on and off as each run moves the storm: {newest_spells} spells. A utility
     would set its alert level in advance: fixed on 2024's forecasts, it gives the same result in 2025 (alerts on 0.77%
-    of hours, 14.8% real, 29.9% caught).
+    of hours, 14.8% real, 29.9% caught). Even so, about 85% of alerts weren't followed by a major new outage and about
+    70% of outages got no alert: this says where to look first, not what will happen.
 
 ranges:
   menu: Ranges
   kicker: How sure is each alert?
-  title: Every prediction comes with a range, and the ranges are honest.
+  title: Every prediction comes with a range, showing how much the forecasts disagree.
   # {p}: a typical prediction; {low}, {high}: its range; {observed}: how often an outage followed
   lead: >-
     The model is run once on each of the five most recent HRRR forecasts, so every prediction comes with a low and a
     high. Take every county-hour where the model gave about a **{p}** chance of a new outage, with the five forecasts
     ranging from {low} to {high}: an outage followed in **{observed}** of them. Every group lands close to the dashed
-    line and inside its range; only the riskiest runs a little high.
+    line and inside its range; only the riskiest runs a little high. That's a check on groups: the range isn't a 95%
+    interval for any one county.
   key_line: "on the line: happened as often as predicted"
   key_bar: "bar: lowest to highest of the 5 latest forecasts"
   key_bar_narrow: "range: the 5 latest forecasts"
@@ -329,7 +338,7 @@ end:
       text: Publish predictions before storms happen, and score them when the outage data comes out.
     - title: Better place data
       text: Which utility serves each county, and trees near power lines rather than county-wide.
-  dashboard: Open the live dashboard
+  dashboard: Open the dashboard
   writeup: Read the full write-up
   code: Code on GitHub
   credits: >-

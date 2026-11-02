@@ -20,7 +20,7 @@ When a storm moves through, which counties will lose power in the next few hours
 
 ::: buttons
 - [← The two-minute story](../)
-- **[Open the live dashboard](https://storm-outage-risk.streamlit.app)**
+- **[Open the dashboard](https://storm-outage-risk.streamlit.app)**
 - [Code on GitHub](https://github.com/UgoBruzadin/storm-outage-risk)
 
 :::
@@ -38,7 +38,9 @@ When a storm moves through, which counties will lose power in the next few hours
 
 **What I built.** A model that, every hour, estimates for every county the chance that at least 5% of its customers lose power in the six hours starting two hours later. It uses only what is known at that moment: the weather so far, the latest HRRR weather forecasts, the warnings and outlooks in force, outages so far in the county and its neighbours, and what the place is like (tree cover, housing, density).
 
-**How well it works.** Tested on 2025, a year it never trained on, it ranks new outages 2.4× better than official warnings and outlooks alone (95% range 2.0–3.3×). Alerting on the riskiest 0.75% of county-hours, 15% of its alerts were followed by a major new outage, 31 times the average, and they caught 30% of all of them. A new outage means a county with no outage in the previous 24 hours, so one outage hovering around the line isn't counted twice. Every prediction comes with a range from the last five forecast runs, and the ranges are honest: outages followed about as often as predicted.
+**How well it works.** Tested on 2025, a year it never trained on, it ranks new outages 2.4× better than official warnings and outlooks alone (95% range 2.0–3.3×). Alerting on the riskiest 0.75% of county-hours, 15% of its alerts were followed by a major new outage, 31 times the average, and they caught 30% of all of them. A new outage means a county with no outage in the previous 24 hours, so one outage hovering around the line isn't counted twice. Every prediction comes with a range from the last five forecast runs, showing how much they disagree; grouped by prediction, outages followed about as often as predicted.
+
+**Live now.** A version without current outage data, which isn't available as it happens, publishes its forecasts on the [story page](https://ugobruzadin.github.io/storm-outage-risk/): 2.2× official warnings and outlooks on the same 2025 test (95% range 1.8–3.0×). Those forecasts will be graded against EAGLE-I once it is released.
 
 **The trap I fell into.** The first version scored better still, but it summarized the weather *during* the hours it was predicting, which nobody knows in advance. Rebuilt so that every input is known at the decision, its score fell by a third; real forecasts win most of that back. A separate audit then checked that no input sees the future.
 
@@ -173,7 +175,7 @@ The runs issued 2, 3, 4, 5 and 6 hours before a decision all forecast the same w
 | 31.8%            | 3,333        | 21.4–43.9%    | 26.0%              |
 
 :::
-Only the riskiest group runs high (31.8% predicted, 26.0% happened): the model learned from the weather that actually happened and takes the forecasts a little too literally. The range carries information too: among low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one.
+Only the riskiest group runs high (31.8% predicted, 26.0% happened): the model learned from the weather that actually happened and takes the forecasts a little too literally. The range carries information too: among low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one. It is still not a 95% interval: this checks groups of county-hours, and shows how much the forecast runs disagree, not how sure any one prediction is.
 
 ### Did anything see the future?
 

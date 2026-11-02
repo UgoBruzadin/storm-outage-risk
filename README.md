@@ -9,6 +9,14 @@ Census housing data. The pipeline runs locally on DuckDB and dbt; results are se
 [write-up](https://ugobruzadin.github.io/storm-outage-risk/writeup/) and a
 [Streamlit dashboard](https://storm-outage-risk.streamlit.app).
 
+## Live forecast (beta)
+
+The story page opens with a live map, updated from [storm-outage-live](https://github.com/UgoBruzadin/storm-outage-live),
+which saves each forecast before the weather happens. The live model (frozen at tag `live-v1.1`, trained on 2020–2025) is
+the headline recipe without current outage data, which isn't available as it happens: 2.2× (1.8–3.0×) warnings + outlook
+on 2025, against 2.4× for the headline model below ([E43](docs/experiments.md)). See [live/README.md](live/README.md). The
+forecasts haven't been graded yet: that needs EAGLE-I's release. Experimental: don't use it for safety decisions.
+
 ## What it does
 
 1. **Every hour, for every county, predicts a new outage two hours ahead:** the chance that at least 5% of customers
@@ -16,7 +24,7 @@ Census housing data. The pipeline runs locally on DuckDB and dbt; results are se
 2. **Uses only what was known at the time:** the weather so far, the HRRR forecasts issued before the decision,
    warnings and outlooks in force, outages so far in the county and its neighbours, and what the place is like. A
    [pipeline audit](docs/audit.md) checks that no input sees the future.
-3. **Gives each prediction a range** from the last five HRRR runs.
+3. **Gives each prediction a range** from the last five HRRR runs: how much they disagree, not a 95% interval.
 4. **Scores resilience:** outage hours per customer, events per year, how often a reported storm turns into an outage.
 
 ## Results
@@ -37,9 +45,11 @@ ahead; 95% ranges from resampling 2025's storm days, ratios paired on the same d
   The ceiling is not significantly better than the headline model (p = 0.08).
 - **Alerting on the riskiest 0.75% of county-hours,** 15% of alerts were followed by a new outage (31× the 0.49% base
   rate) and they caught 30% of 2025's 1,436 new outages in time. The official forecasts, alerting as often, were right
-  11% of the time and caught 17%.
-- **The probabilities are calibrated** up to about 20% (outages followed about as often as predicted), and every
-  prediction's range from the five runs contains what happened. Above 20% they run a little high.
+  11% of the time and caught 17%. So about 85% of alerts weren't followed by a new outage and about 70% of outages got
+  no alert: it says where to look first, not what will happen.
+- **The probabilities are calibrated** up to about 20% (outages followed about as often as predicted); above 20% they
+  run a little high. Grouped by prediction, the share of outages that followed falls inside the group's average range
+  from the five runs. That's a check on groups, not a validated prediction interval for any one county.
 - **The first version scored 0.106 by seeing the storm it predicted:** it summarized the weather *during* the six
   hours it scored. With weather only up to the decision it fell to 0.043; rebuilt hour by hour with forecasts as
   issued, it recovers most of that honestly.
@@ -103,7 +113,7 @@ Design choices worth knowing:
   (`ml/audit.py`); forecasts come from runs issued before it; storm reports are context, never inputs.
 - **Validation:** a validation year (2024) for every choice, one untouched test year (2025), storm-day bootstrap
   ranges and paired permutation tests, always against the official forecasts.
-- **The dashboard reads precomputed Parquet only** — it never runs a model.
+- **The dashboard reads precomputed Parquet only** — it never runs a model, and shows 2025, not the live forecast.
 
 The data traps found along the way (a renamed column in 2023, duplicated snapshots in
 2025, a raster whose no-data value was a real value, county codes swapped for years, and
