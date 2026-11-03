@@ -540,6 +540,26 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - Against the headline model on the same storm days: 0.93× (0.88–0.98×); lower in 99.7% of resamples.
 - **Meaning:** Current outages add a small, real amount (about 7% of the score), but almost nothing to the alerts: they catch the same share of new outages and are right nearly as often. A live test without outage data measures essentially the headline model, so it doesn't need a live outage source; it can be graded on EAGLE-I once 2026 is published.
 
+### E44. Place data on its own
+- **Question:** Do the place variables track how often storms cause outages, county by county? And can a correlation be mapped by county?
+- **Setup:** Across the 216 counties, each variable's correlation with the storm hit rate (2020–2025), per state; housing density and customers on a log scale. Canopy's correlation again after removing the census variables linearly. For a county-level map, each county correlated with its 15, 25 or 40 nearest neighbours, against the same with canopy shuffled. An exploratory check; the correlations by state are exported by `place_data` in `scripts/make_site_figures.py`.
+- **Result:**
+
+  | Correlation with storm hit rate | Missouri | Illinois |
+  |---|---|---|
+  | Tree canopy | +0.43 | −0.10 |
+  | Homes built before 1960 | −0.09 | +0.28 |
+  | Median year built | +0.10 | −0.25 |
+  | Housing density (log) | +0.02 | −0.19 |
+  | Customers (log) | +0.04 | −0.17 |
+
+  - **Canopy after the census variables:** Missouri +0.48, Illinois −0.09. In Missouri, canopy is almost unrelated to housing density (0.01) and customers (0.14).
+  - **Neighbour correlations:** from about −0.5 to +0.7, with shuffled canopy reaching about ±0.4 to ±0.5. The strongest values include counties with almost no trees (Douglas, IL: 2.7% canopy, +0.68).
+- **Meaning:**
+  - **No census variable tracks the hit rate strongly on its own,** though shuffling place data as a group costs about a third of the score (E39). The model may use place together with the weather; this check doesn't show that it does.
+  - **The Ozarks reading in E24 isn't supported by this check:** housing and customers don't account for Missouri's correlation. It is a linear check, and the model can find patterns it would miss, so why canopy adds so little in Missouri remains open.
+  - **Neighbour correlations aren't reliable enough to map,** so the pages show the variables and the hit rate side by side, with one correlation per state.
+
 ---
 
 ## Open experiments
@@ -547,6 +567,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | Test | Why | Notes |
 |---|---|---|
 | The headline recipe on 2022 and 2023 | It has only been tested on 2024 and 2025 (E36); E42 covers other years with a different version | The forecast archive now covers 2020–2025; the five-run mean exists from December 2020 |
+| The model without place data, against warnings + outlook | The pages say place data is likely part of why the model beats the official forecasts; E39 shows the model relies on it, not that it explains the gap | Compare the ratio to warnings + outlook with and without place data, on the same rows |
 | County-wide summaries on the current model | E41 only tried them on the forecast-trained model | Should be done before the blind test, since it would change the model |
 | The live model at longer leads | 2 hours may be too short to move crews; E37 tested the forecast model at 0–6 hours, not the live recipe | For example 4 hours |
 | Held-out storms | Split by storm instead of by year | |

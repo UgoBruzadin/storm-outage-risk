@@ -60,7 +60,8 @@ def cmap(colors):
 def load():
     con = duckdb.connect(str(ROOT / "data" / "warehouse.duckdb"), read_only=True)
     scores = con.sql("""
-        SELECT region_fips, region, state, canopy_mean_pct, storm_hit_rate, hours_out_per_customer
+        SELECT region_fips, region, state, canopy_mean_pct, storm_hit_rate, hours_out_per_customer,
+               share_homes_pre1960, housing_per_km2, customers
         FROM marts.mart_study__region_resilience
     """).df()
     con.close()
@@ -334,6 +335,19 @@ def canopy_effect():
             for state, e in effect}
 
 
+def place_data(canopy):
+    """Each county's census numbers for the trees slide, and each one's correlation with the storm hit rate per state.
+    Housing density and customers span orders of magnitude, so both are correlated on a log scale, as they are mapped."""
+    values = {"homes": canopy.share_homes_pre1960, "density": np.log10(canopy.housing_per_km2),
+              "customers": np.log10(canopy.customers)}
+    return {"homes": [round(float(v), 3) for v in canopy.share_homes_pre1960],
+            "density": [round(float(v), 1) for v in canopy.housing_per_km2],
+            "customers": [int(v) for v in canopy.customers],
+            "r": {key: {state: round(float(np.corrcoef(v[canopy.state == state],
+                                                       canopy.storm_hit_rate[canopy.state == state])[0, 1]), 2)
+                        for state in ("Missouri", "Illinois")} for key, v in values.items()}}
+
+
 def story_data(gdf):
     """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm
     hour by hour, the heartbeat example, and the hourly results (ml/export_hourly.py)."""
@@ -457,6 +471,7 @@ def story_data(gdf):
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)},
                    # what knowing the canopy adds to the model, per state (ml/canopy_by_state.py: pooled model, 2024)
                    "model": canopy_effect()},
+        "place": place_data(canopy),
         "holds": holds(meta),
         "value": {
             "forecasts": [{"key": col, "label": label, "ours": col == "headline",

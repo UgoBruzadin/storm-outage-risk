@@ -196,41 +196,43 @@ lead:
 alerts:
   menu: Alerts
   kicker: If a utility acted on it
-  # {times}: how many times the average, e.g. "31"
-  title: "Its alerts were {times}× more likely to be real."
-  # {n}: out of 1,000
-  avg: "**{n} in 1,000**calm county-hours were followed by a major new outage"
-  model: "**{n} in 1,000**of the hours the model alerted on were"
-  # {share}: share of hours alerted; {caught}, {official_caught}, {newest_caught}: share of new outages caught;
-  # {outages}: new outages; {spells}, {newest_spells}: alert spells; {official_precision}: share of official alerts that were real
+  # {times}: outages caught by the model, as a multiple of those caught by the official forecasts
+  title: "Same number of alerts, {times}× the outages caught."
+  # {share}: share of county-hours alerted; {model}, {official}: new outages caught; {outages}: all new outages
+  lead: >-
+    Give the model and the official forecasts the same budget: each alerts on its riskiest {share} of county-hours in
+    2025. The model caught **{model}** of {outages} major new outages. The official forecasts caught **{official}**.
+  key_model: The model
+  key_official: Warnings + outlook
+  row_caught: New outages caught
+  row_real: Alerts followed by an outage
+  callout: "Most alerts are still false alarms, and most outages get no alert. It says where to look first, not what will happen."
+  # {base}: how often any county-hour is followed by a new outage; {times}: the model's alerts as a multiple of that;
+  # {spells}, {newest_spells}: separate alert spells; {newest_caught}: share caught using only the newest forecast
   note: >-
-    Major = at least 5% of a county's customers, in the 6 hours starting 2 hours later, with no outage in the day
-    before. Alerts on the riskiest {share} of county-hours caught {caught} of all {outages} major new outages in 2025,
-    in {spells} separate alert spells. Warnings + outlook alone, alerting just as often, were right {official_precision}
-    of the time and caught {official_caught}. Using only the newest forecast instead of the last five catches a little
-    more ({newest_caught}) but alerts switch on and off as each run moves the storm: {newest_spells} spells. A utility
-    would set its alert level in advance: fixed on 2024's forecasts, it gives the same result in 2025 (alerts on 0.77%
-    of hours, 14.8% real, 29.9% caught). Even so, about 85% of alerts weren't followed by a major new outage and about
-    70% of outages got no alert: this says where to look first, not what will happen.
+    Major = at least 5% of a county's customers, in the 6 hours starting 2 hours later, with no outage in the day before.
+    An average county-hour is followed by one {base} of the time, so the model's alerts are {times}× that. An alert level
+    fixed in advance on 2024's forecasts gives about the same result in 2025 (14.8% real, 29.9% caught). Using only the
+    newest forecast catches {newest_caught} but makes alerts flicker: {newest_spells} separate spells against {spells}.
 
 ranges:
-  menu: Ranges
-  kicker: How sure is each alert?
-  title: Every prediction comes with a range, showing how much the forecasts disagree.
-  # {p}: a typical prediction; {low}, {high}: its range; {observed}: how often an outage followed
+  menu: Trust
+  kicker: Can you trust the percentages?
+  # {p}, {observed}: a typical prediction, and how often an outage followed
+  title: "When the model says {p}, an outage follows about {observed} of the time."
+  # {low}, {high}: that prediction's range over the five forecasts; {top_p}, {top_observed}: the riskiest group
   lead: >-
-    The model is run once on each of the five most recent HRRR forecasts, so every prediction comes with a low and a
-    high. Take every county-hour where the model gave about a **{p}** chance of a new outage, with the five forecasts
-    ranging from {low} to {high}: an outage followed in **{observed}** of them. Every group lands close to the dashed
-    line and inside its range; only the riskiest runs a little high. That's a check on groups: the range isn't a 95%
-    interval for any one county.
-  key_line: "on the line: happened as often as predicted"
-  key_bar: "bar: lowest to highest of the 5 latest forecasts"
-  key_bar_narrow: "range: the 5 latest forecasts"
-  axis_x: what the model predicted
-  axis_y: how often an outage followed
-  # {p}, {low}, {high}, {observed}, {n}: as above, {n} = county-hours in the group
-  tip: "**Predicted {p} (range {low}–{high})**an outage followed {observed} of {n} county-hours"
+    A forecast is only useful if its numbers mean what they say. So we grouped 2025's predictions by what the model said,
+    and counted what actually happened. They match closely, except the riskiest group, which runs high: {top_p} predicted,
+    {top_observed} happened. We also run the model on each of the last five forecasts: for the {p} group, they ranged from
+    {low} to {high}.
+  key_said: What the model said
+  key_happened: What actually happened
+  # {p}: the group's average prediction
+  row: "Said about {p}"
+  note: >-
+    A check on groups of county-hours, not on any one county. The five-forecast range shows how much the forecasts
+    disagree; it isn't a 95% interval.
 
 where:
   menu: Where it works
@@ -297,17 +299,42 @@ trees:
   menu: Trees
   kicker: The hunch that started it
   title: Trees matter, just not the way I expected.
-  # {r_mo}: correlation in Missouri; {mo}, {il}: what canopy adds to the model in each state;
-  # {better} of {seeds}: seeds where it helped in Illinois
   lead: >-
-    I expected tree-heavy counties to fail more often in storms, and in Missouri they do (r = {r_mo}). But Missouri's
-    most wooded counties are the Ozarks, also remote, hilly and sparsely served, and the model already sees that.
-    Given the tree data, it barely improves in Missouri ({mo}) and improves a little in Illinois (**{il}**, better
-    with {better} of {seeds} seeds), where the few wooded river counties stand out. Trees are a small, real signal,
-    not the main story.
-  axis_x: tree canopy cover
-  axis_y: "storm hit rate: share of storm periods that caused an outage, 2020–2025"
-  axis_y_narrow: storm hit rate, 2020–2025
+    I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But the same storm doesn't hit
+    every county the same way. Official warnings only look at the weather. Our model also knows each county's trees,
+    homes and customers, and that's **likely part of why it beats them**. Scramble those facts and it loses about a third
+    of its score. Exactly why? We don't know yet.
+  map_hit: Storm hit rate
+  legend_hit: share of storm periods that caused an outage
+  # {mo}, {il}: each state's correlation between the selected map and the storm hit rate
+  r: "Correlation with the storm hit rate: Missouri {mo} · Illinois {il}"
+  # {mo}, {il}: what canopy adds to the model in each state
+  note: >-
+    Hit rate covers 2020–2025. Correlations compare counties within each state, with a log scale for housing density and
+    customers. Score lost: model without forecasts. Adding canopy changes the score by {mo} in Missouri, {il} in Illinois.
+  # {label}, {value}: the selected map's county value; {hit}: its storm hit rate
+  tip: "{label} {value} · storm hit rate {hit}"
+  tabs:                                 # the buttons, in order
+    trees:
+      tab: Trees
+      title: Tree canopy cover
+      legend: share of the county under tree canopy
+      tip: canopy
+    homes:
+      tab: Older homes
+      title: Homes built before 1960
+      legend: share of homes
+      tip: homes built before 1960
+    density:
+      tab: Housing density
+      title: Housing density
+      legend: homes per km²
+      tip: homes per km²
+    customers:
+      tab: Customers
+      title: Customers
+      legend: customers tracked
+      tip: customers
 
 value:
   menu: What it's worth

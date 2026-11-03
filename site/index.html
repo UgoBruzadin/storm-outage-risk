@@ -88,6 +88,11 @@ strong { color: var(--ink); }
 .live .disclaimer { color: var(--ink-2); }
 .live-repo { font-size: .9rem; font-weight: 600; }
 .county.alert { stroke: var(--ink); stroke-width: 1.6; }
+.county.linked { stroke: var(--ink); stroke-width: 1.4; }
+#trees .map svg { max-height: 36svh; }
+#trees .tabs { margin-bottom: 12px; }
+#trees .lead { margin-bottom: 14px; }
+.place-r { margin: 12px 0 4px; font-weight: 600; }
 
 /* storm */
 .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -165,13 +170,10 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .axis path, .axis line { stroke: var(--line); }
 .gridline line { stroke: var(--grid); }
 .label { fill: var(--ink); font-size: 16px; }
-#savings .label, #lead-chart .label, #calib .label, #holds-chart .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+#savings .label, #lead-chart .label, #calib .label, #alert-bars .label, #holds-chart .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
-.waffles { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 32px; }
-.waffle { display: grid; grid-template-rows: subgrid; grid-row: span 2; }
-.waffle h3 { font-size: 1rem; margin: 0 0 8px; font-weight: 600; color: var(--ink-2); align-self: end; }
-.waffle h3 b, .waffle h3 strong { color: var(--ink); font-size: 1.6rem; display: block; }
+.callout { font-weight: 600; margin: 14px 0 0; max-width: 62ch; }
 .legend text { fill: var(--muted); font-size: 12px; }
 
 /* end */
@@ -196,18 +198,17 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .kicker { margin-bottom: 6px; }
   .maps { grid-template-columns: 1fr 1fr; gap: 10px; }
   .map svg { max-height: none; }
+  #trees .map svg { max-height: none; }
   .map h3 { font-size: .8rem; line-height: 1.25; margin-bottom: 4px; min-height: 2.5em; }
   .map .legend { display: none; }
   .mlegend { display: flex; }
-  .waffle svg { max-height: 19svh; width: auto; max-width: 100%; }
-  .waffle h3 b, .waffle h3 strong { font-size: 1.25rem; }
   .next { gap: 8px; margin-bottom: 16px; }
   .next div { font-size: .88rem; padding: 10px 12px; }
   .controls { margin-top: 8px; gap: 8px 12px; }
   .totals { font-size: .85rem; }
   .src { padding: 8px 14px; }
   .table-card { padding: 18px; }
-  .waffles, .next { grid-template-columns: 1fr; }
+  .next { grid-template-columns: 1fr; }
   .pipe { grid-template-columns: 1fr 50px; gap: 0; }   /* boxes, then a trunk down their right side into the card */
   .flow { display: none; }
   .flow-v { display: block; width: 50px; height: 100%; overflow: visible; }
@@ -216,8 +217,6 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .table-card .tests { margin-top: 8px; }
   .dots { display: none; }
   .slide { padding: 72px 16px 40px; }
-  .waffles { grid-template-columns: 1fr; grid-template-rows: none; row-gap: 20px; }
-  .waffle { grid-template-rows: none; grid-row: auto; }
   .traps { padding: 0; }
   .traps-sticky { padding: 60px 12px 12px; }
   .card-head { font-size: .95rem; padding: 10px 12px; }
@@ -365,18 +364,20 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <section class="slide" id="alerts">
   <p class="kicker" data-t="alerts.kicker"></p>
   <h2 id="alerts-title"></h2>
-  <div class="waffles">
-    <div class="waffle"><h3 id="w1-h"></h3><svg id="waffle-avg" viewBox="0 0 400 252" role="img"></svg></div>
-    <div class="waffle"><h3 id="w2-h"></h3><svg id="waffle-model" viewBox="0 0 400 252" role="img"></svg></div>
-  </div>
+  <p class="lead" id="alerts-lead"></p>
+  <div class="key" id="alerts-key"></div>
+  <svg id="alert-bars" role="img" aria-label="Share of new outages caught and share of alerts followed by an outage, the model against warnings and outlook"></svg>
+  <p class="callout" data-t="alerts.callout"></p>
   <p class="note" id="alerts-note"></p>
 </section>
 
 <section class="slide" id="ranges">
   <p class="kicker" data-t="ranges.kicker"></p>
-  <h2 data-t="ranges.title"></h2>
+  <h2 id="ranges-title"></h2>
   <p class="lead" id="ranges-lead"></p>
-  <svg id="calib" role="img" aria-label="Predicted probability against how often an outage followed, with the range of the five most recent forecasts"></svg>
+  <div class="key" id="ranges-key"></div>
+  <svg id="calib" role="img" aria-label="For each group of predictions, what the model said against how often an outage followed"></svg>
+  <p class="note" data-t="ranges.note"></p>
 </section>
 
 <section class="slide" id="where">
@@ -402,7 +403,13 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="kicker" data-t="trees.kicker"></p>
   <h2 data-t="trees.title"></h2>
   <p class="lead" id="trees-lead"></p>
-  <svg id="scatter" role="img" aria-label="Tree canopy against storm hit rate, one dot per county"></svg>
+  <div class="tabs" role="tablist" id="place-tabs"></div>
+  <div class="maps">
+    <div class="map"><h3 id="place-title"></h3><svg id="map-place" viewBox="0 0 460 470" role="img"></svg></div>
+    <div class="map"><h3 data-t="trees.map_hit"></h3><svg id="map-hit" viewBox="0 0 460 470" role="img" aria-label="Storm hit rate by county, 2020 to 2025"></svg></div>
+  </div>
+  <p class="place-r" id="place-r"></p>
+  <p class="note" id="trees-note"></p>
 </section>
 
 <section class="slide" id="value">
@@ -437,9 +444,15 @@ const isDark = () => document.documentElement.dataset.theme === "dark" ||
 // sequential ramps: near zero recedes toward the surface in both themes
 const RAMPS = {
   light: { blue: ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"],
-           orange: ["#fde0d2", "#f8b998", "#f2925f", "#eb6834", "#c84f1f", "#9c3c16", "#6e2a0f"] },
+           orange: ["#fde0d2", "#f8b998", "#f2925f", "#eb6834", "#c84f1f", "#9c3c16", "#6e2a0f"],
+           green: ["#d3f2e4", "#a3e0c6", "#6bcba4", "#1baf7a", "#158f63", "#0f6e4c", "#094d35"],
+           purple: ["#e6ddfa", "#cbb8f4", "#ae93ec", "#8f6de2", "#7350c4", "#583b9c", "#3d2870"],
+           magenta: ["#fad9e8", "#f4b0cf", "#ea83b3", "#db5494", "#b93a77", "#912b5c", "#661d40"] },
   dark: { blue: ["#1f2b3a", "#1c3a63", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"],
-          orange: ["#33231d", "#5c2a14", "#8a3a18", "#c84f1f", "#eb6834", "#f2925f", "#fbd2bf"] },
+          orange: ["#33231d", "#5c2a14", "#8a3a18", "#c84f1f", "#eb6834", "#f2925f", "#fbd2bf"],
+          green: ["#1b2b25", "#173f32", "#135a45", "#1a7c5d", "#1baf7a", "#6bcba4", "#c0ebd8"],
+          purple: ["#261f38", "#352a59", "#4a3883", "#6247ad", "#8f6de2", "#ae93ec", "#dccff8"],
+          magenta: ["#33202a", "#55243c", "#7d2c55", "#ab3a73", "#db5494", "#ea83b3", "#f8cfe2"] },
 };
 const ramp = name => RAMPS[isDark() ? "dark" : "light"][name];
 const fmt = d3.format(",");
@@ -578,7 +591,7 @@ const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getB
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-11-01b"),          // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-11-03a"),          // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
@@ -591,7 +604,6 @@ Promise.all([
   liveNow(features, states, fc);
   storm(data, features, states, fc);
   pipeline(data);
-  alerts(data);
   // charts drawn at their real width (text stays legible on phones); redrawn, finished, on resize
   const charts = [
     ["#heartbeat", animate => heartbeat(data, animate)],
@@ -599,11 +611,12 @@ Promise.all([
     ["#timeline", animate => timeline(data, animate)],
     ["#ladder-chart", animate => ladder(data, animate)],
     ["#lead-chart", animate => leadTime(data, animate)],
+    ["#alert-bars", animate => alerts(data, animate)],
     ["#calib", animate => calibration(data, animate)],
     ["#savings", animate => savings(data, animate)],
     ["#map-acc", animate => accuracy(data, features, states, fc, animate)],
     ["#holds-chart", animate => holdsUp(data, animate)],
-    ["#scatter", animate => trees(data, animate)],
+    ["#map-place", animate => trees(data, features, states, fc, animate)],
   ];
   charts.forEach(([, draw]) => draw(true));
   let lastWidth = innerWidth;
@@ -1098,70 +1111,61 @@ function leadTime(data, animate) {
   });
 }
 
-function alerts(data) {
-  const a = data.alerts, m = a.model, cols = 40, r = 3.6, gap = 10;
-  const nAvg = Math.round(a.base_rate * 1000), nModel = Math.round(m.precision * 1000);
-  document.querySelector("#alerts-title").innerHTML = T("alerts.title", { times: Math.round(m.precision / a.base_rate) });
-  document.querySelector("#w1-h").innerHTML = T("alerts.avg", { n: nAvg });
-  document.querySelector("#w2-h").innerHTML = T("alerts.model", { n: nModel });
-  document.querySelector("#alerts-note").innerHTML = T("alerts.note", { share: pct1(a.share), caught: pct(m.caught),
-    outages: fmt(a.new_outages), spells: fmt(m.episodes), official_precision: pct(a.official.precision),
-    official_caught: pct(a.official.caught), newest_caught: pct(a.newest.caught), newest_spells: fmt(a.newest.episodes) });
-  const grids = [["#waffle-avg", nAvg], ["#waffle-model", nModel]].map(([id, lit]) => {
-    const svg = d3.select(id).attr("aria-label", `${lit} of 1,000 dots lit`);
-    const order = d3.shuffle(d3.range(1000));
-    const rank = new Map(order.map((v, k) => [v, k]));
-    return svg.selectAll("circle").data(d3.range(1000).map(i => ({ i, lit: rank.get(i) < lit, rank: rank.get(i) })))
-      .join("circle").attr("cx", d => 6 + (d.i % cols) * gap).attr("cy", d => 6 + Math.floor(d.i / cols) * gap).attr("r", r)
-      .attr("fill", d => (REDUCE && d.lit ? "var(--warm)" : "var(--idle)"));
+// rows of paired horizontal bars, with each row's label on the left (above the bars on phones)
+function barRows(sel, section, rows, domainMax, format, animate) {
+  const still = REDUCE || !animate;
+  const W = widthOf(sel), narrow = W < 600, left = narrow ? 0 : 210, bh = narrow ? 13 : 15, gap = 3;
+  const labelH = narrow ? 20 : 0, rowGap = narrow ? 12 : 13, count = rows[0].bars.length;
+  const rowH = labelH + count * bh + (count - 1) * gap + rowGap;
+  const svg = d3.select(sel).attr("viewBox", `0 0 ${W} ${rows.length * rowH - rowGap}`);
+  const x = d3.scaleLinear().domain([0, domainMax]).range([0, W - left - 62]);
+  const g = svg.selectAll("g.row").data(rows).join("g").attr("class", "row")
+    .attr("transform", (d, i) => `translate(${left},${i * rowH})`);
+  const lab = g.append("text").attr("class", "label").attr("x", narrow ? 0 : -14).attr("y", narrow ? 13 : (count * bh + gap) / 2 + 5)
+    .attr("text-anchor", narrow ? "start" : "end").style("font-size", narrow ? "14px" : "15px").style("font-weight", 600).text(d => d.label);
+  const bars = g.selectAll("g.bar").data(d => d.bars).join("g").attr("class", "bar")
+    .attr("transform", (b, k) => `translate(0,${labelH + k * (bh + gap)})`);
+  const rect = bars.append("rect").attr("height", bh).attr("rx", 3).attr("fill", b => b.c).attr("width", b => (still ? Math.max(2, x(b.v)) : 0));
+  const vals = bars.append("text").attr("class", "label").attr("x", b => Math.max(2, x(b.v)) + 7).attr("y", bh / 2 + 5)
+    .style("font-size", "14px").style("font-weight", b => (b.strong ? 700 : 400)).attr("opacity", still ? 1 : 0).text(b => format(b.v));
+  if (still) return;
+  onEnter(document.querySelector(section), () => {
+    rect.transition().duration(800).ease(d3.easeCubicOut).attr("width", b => Math.max(2, x(b.v)));
+    vals.transition().delay(600).duration(300).attr("opacity", 1);
   });
-  onEnter(document.querySelector("#alerts"), () => grids.forEach(sel =>
-    sel.filter(d => d.lit).transition().delay(d => 300 + d.rank * 9).duration(300).attr("fill", "var(--warm)")));
+}
+const barKey = (sel, items) => {
+  document.querySelector(sel).innerHTML = items.map(([name, c]) => `<span style="--c:${c}">${name}</span>`).join("");
+};
+
+// the model against the official forecasts, each alerting on its riskiest county-hours
+function alerts(data, animate) {
+  const a = data.alerts, m = a.model, o = a.official, model = "var(--accent)", official = "var(--other)";
+  document.querySelector("#alerts-title").innerHTML = T("alerts.title", { times: (m.caught / o.caught).toFixed(1) });
+  document.querySelector("#alerts-lead").innerHTML = T("alerts.lead", { share: d3.format(".2%")(a.share),
+    model: fmt(Math.round(m.caught * a.new_outages)), official: fmt(Math.round(o.caught * a.new_outages)),
+    outages: fmt(a.new_outages) });
+  document.querySelector("#alerts-note").innerHTML = T("alerts.note", { base: pct1(a.base_rate),
+    times: Math.round(m.precision / a.base_rate), spells: fmt(m.episodes), newest_caught: pct(a.newest.caught),
+    newest_spells: fmt(a.newest.episodes) });
+  barKey("#alerts-key", [[Tp("alerts.key_model"), model], [Tp("alerts.key_official"), official]]);
+  const pair = (mv, ov) => [{ v: mv, c: model, strong: true }, { v: ov, c: official }];
+  barRows("#alert-bars", "#alerts", [
+    { label: Tp("alerts.row_caught"), bars: pair(m.caught, o.caught) },
+    { label: Tp("alerts.row_real"), bars: pair(m.precision, o.precision) },
+  ], 0.35, pct, animate);
 }
 
-// predicted probability (mean of the five latest forecasts) against how often an outage followed
+// what the model said (mean of the five latest forecasts) against how often an outage followed, group by group
 function calibration(data, animate) {
-  const still = REDUCE || !animate;
   const bins = data.calibration, ex = bins.find(b => b.mean > 0.05 && b.mean < 0.1) || bins[bins.length - 2];
-  document.querySelector("#ranges-lead").innerHTML = T("ranges.lead", { p: pct(ex.mean), low: pct(ex.low),
-    high: pct(ex.high), observed: pct1(ex.observed) });
-  const W = widthOf("#calib"), narrow = W < 600, H = narrow ? 360 : 440, m = { l: narrow ? 64 : 84, r: 20, t: 16, b: 62 };
-  const svg = d3.select("#calib").attr("viewBox", `0 0 ${W} ${H}`);
-  const x = d3.scaleLog().domain([0.001, 0.6]).range([m.l, W - m.r]);
-  const y = d3.scaleLog().domain([0.001, 0.6]).range([H - m.b, m.t]);
-  const ticks = [0.001, 0.003, 0.01, 0.03, 0.1, 0.3];
-  const f = d => (d < 0.01 ? d3.format(".1%")(d) : pct(d));
-  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`)
-    .call(d3.axisLeft(y).tickValues(ticks).tickSize(-(W - m.l - m.r)).tickFormat("")).select(".domain").remove();
-  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickValues(ticks).tickFormat(f));
-  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).tickValues(ticks).tickFormat(f))
-    .select(".domain").remove();
-  svg.append("line").attr("x1", x(0.001)).attr("y1", y(0.001)).attr("x2", x(0.6)).attr("y2", y(0.6))
-    .attr("stroke", "var(--muted)").attr("stroke-dasharray", "4 4");
-  // a key in the empty upper-left corner: the dashed line, and the dot with its range
-  const key = svg.append("g").attr("transform", `translate(${m.l + 14},${m.t + 14})`);
-  key.append("line").attr("x2", 26).attr("y1", 6).attr("y2", 6).attr("stroke", "var(--muted)").attr("stroke-dasharray", "4 4");
-  key.append("text").attr("class", "label muted").attr("x", 34).attr("y", 11).style("font-size", "13px")
-    .text(Tp("ranges.key_line"));
-  key.append("line").attr("y1", 30).attr("y2", 30).attr("x1", 0).attr("x2", 26).attr("stroke", "var(--accent)")
-    .attr("stroke-width", 6).attr("stroke-linecap", "round").attr("opacity", 0.35);
-  key.append("circle").attr("cx", 13).attr("cy", 30).attr("r", 5).attr("fill", "var(--accent)");
-  key.append("text").attr("class", "label muted").attr("x", 34).attr("y", 35).style("font-size", "13px")
-    .text(Tp(narrow ? "ranges.key_bar_narrow" : "ranges.key_bar"));
-  svg.append("text").attr("class", "label muted").attr("x", (m.l + W - m.r) / 2).attr("y", H - 14)
-    .attr("text-anchor", "middle").text(Tp("ranges.axis_x"));
-  svg.append("text").attr("class", "label muted").attr("text-anchor", "middle")
-    .attr("transform", `translate(${narrow ? 14 : 20},${(m.t + H - m.b) / 2}) rotate(-90)`)
-    .text(Tp("ranges.axis_y"));
-  const g = svg.selectAll("g.bin").data(bins).join("g").attr("class", "bin").attr("opacity", still ? 1 : 0);
-  g.append("line").attr("x1", d => x(d.low)).attr("x2", d => x(d.high)).attr("y1", d => y(d.observed)).attr("y2", d => y(d.observed))
-    .attr("stroke", "var(--accent)").attr("stroke-width", 6).attr("stroke-linecap", "round").attr("opacity", 0.35);
-  g.append("circle").attr("cx", d => x(d.mean)).attr("cy", d => y(d.observed)).attr("r", narrow ? 6 : 7).attr("fill", "var(--accent)")
-    .attr("stroke", "var(--surface)").attr("stroke-width", 2)
-    .on("pointermove", (e, d) => showTip(e, T("ranges.tip", { p: f(d.mean), low: f(d.low), high: f(d.high),
-      observed: f(d.observed), n: fmt(d.n) }))).on("pointerleave", hideTip);
-  if (still) return;
-  onEnter(document.querySelector("#ranges"), () => g.transition().delay((d, i) => 200 + i * 220).duration(500).attr("opacity", 1));
+  const top = bins[bins.length - 1], said = "color-mix(in srgb, var(--accent) 40%, var(--surface))", happened = "var(--accent)";
+  document.querySelector("#ranges-title").innerHTML = T("ranges.title", { p: pct(ex.mean), observed: pct(ex.observed) });
+  document.querySelector("#ranges-lead").innerHTML = T("ranges.lead", { p: pct(ex.mean), observed: pct1(ex.observed),
+    low: pct(ex.low), high: pct(ex.high), top_p: pct(top.mean), top_observed: pct(top.observed) });
+  barKey("#ranges-key", [[Tp("ranges.key_said"), said], [Tp("ranges.key_happened"), happened]]);
+  barRows("#calib", "#ranges", bins.map(b => ({ label: T("ranges.row", { p: pct1(b.mean) }),
+    bars: [{ v: b.mean, c: said }, { v: b.observed, c: happened, strong: true }] })), 0.35, pct1, animate);
 }
 
 function savings(data, animate) {
@@ -1242,50 +1246,88 @@ function accuracy(data, features, states, fc, animate) {
     .delay((d, j) => 200 + (judged[j] ? share[j] * 1600 : 1800)).duration(500).attr("opacity", 1).attr("fill", fill));
 }
 
-function trees(data, animate) {
+let placeTab = "trees", placePaint = () => {};
+function trees(data, features, states, fc, animate) {
   const still = REDUCE || !animate;
-  const c = data.canopy, W = widthOf("#scatter"), narrow = W < 600, H = narrow ? 360 : 420;
-  const m = { l: narrow ? 44 : 60, r: 16, t: 28, b: 46 };
-  const svg = d3.select("#scatter").attr("viewBox", `0 0 ${W} ${H}`);
+  const c = data.canopy, p = data.place, t = TEXT.trees.tabs, index = new Map(features.map((f, j) => [f, j]));
   const mo = c.model.Missouri, il = c.model.Illinois, sgn = v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%";
-  document.querySelector("#trees-lead").innerHTML = T("trees.lead", { r_mo: signed(c.r.Missouri), mo: sgn(mo.mean),
-    il: sgn(il.mean), better: il.better, seeds: il.seeds });
-  const pts = c.pct.map((p, j) => ({ p, h: c.hit[j], state: data.counties[j].state, name: data.counties[j].name }));
-  const x = d3.scaleLinear().domain([0, 75]).range([m.l, W - m.r]);
-  const y = d3.scaleLinear().domain([0, d3.max(pts, d => d.h) * 1.08]).range([H - m.b, m.t]).nice();
-  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`)
-    .call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat("")).select(".domain").remove();
-  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
-    .call(d3.axisBottom(x).ticks(narrow ? 4 : 8).tickFormat(d => d + "%"));
-  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat(pct))
-    .select(".domain").remove();
-  svg.append("text").attr("class", "label muted").attr("x", W - m.r).attr("y", H - 6).attr("text-anchor", "end")
-    .text(Tp("trees.axis_x"));
-  svg.append("text").attr("class", "label muted").attr("x", m.l).attr("y", m.t - 12)
-    .text(Tp(narrow ? "trees.axis_y_narrow" : "trees.axis_y"));
-  const stateColor = d => (d.state === "Missouri" ? "var(--mo)" : "var(--il)");
-  const dotsSel = svg.selectAll("circle").data(pts).join("circle").attr("cx", d => x(d.p)).attr("cy", d => y(d.h))
-    .attr("r", narrow ? 4 : 5.5).attr("stroke", "var(--surface)").attr("stroke-width", 1.2)
-    .attr("fill", still ? stateColor : "var(--muted)").attr("opacity", 0.85)
-    .on("pointermove", (e, d) => showTip(e, `<b>${d.name}, ${stateAbbr(d.state)}</b>` +
-      `canopy ${d.p}% · storm hit rate ${pct(d.h)}`)).on("pointerleave", hideTip);
-  const fits = ["Missouri", "Illinois"].map(state => {
-    const s = pts.filter(d => d.state === state), mx = d3.mean(s, d => d.p), my = d3.mean(s, d => d.h);
-    const b = d3.sum(s, d => (d.p - mx) * (d.h - my)) / d3.sum(s, d => (d.p - mx) ** 2);
-    const [x0, x1] = d3.extent(s, d => d.p);
-    return { state, x0, x1, y0: my + b * (x0 - mx), y1: my + b * (x1 - mx), r: c.r[state] };
+  document.querySelector("#trees-lead").innerHTML = T("trees.lead");
+  document.querySelector("#trees-note").innerHTML = T("trees.note", { mo: sgn(mo.mean), il: sgn(il.mean) });
+  const thousands = d => (d < 6 ? `${10 ** (d - 3)}k` : "1M");
+  // density and customers span orders of magnitude: mapped by their logarithm, shown in plain numbers
+  const views = {
+    trees: { color: "green", values: c.pct, domain: [0, 70], ticks: [0, 35, 70], tick: d => d + "%", show: d => d + "%", r: c.r },
+    homes: { color: "purple", values: p.homes, domain: [0, 0.6], ticks: [0, 0.2, 0.4, 0.6], tick: pct, show: pct, r: p.r.homes },
+    density: { color: "magenta", values: p.density.map(Math.log10), raw: p.density, domain: [0, 3], ticks: [0, 1, 2, 3],
+      tick: d => fmt(10 ** d), show: fmt, r: p.r.density },
+    customers: { color: "blue", values: p.customers.map(Math.log10), raw: p.customers, domain: [3, 6], ticks: [3, 4, 5, 6],
+      tick: thousands, show: fmt, r: p.r.customers },
+  };
+  const left = d3.select("#map-place"), right = d3.select("#map-hit");
+  [left, right].forEach(svg => {
+    svg.selectAll("*").remove();
+    d3.select(svg.node().parentNode).selectAll(".mlegend").remove();
   });
-  const lines = svg.selectAll("g.fit").data(fits).join("g").attr("class", "fit").attr("opacity", still ? 1 : 0);
-  lines.append("line").attr("x1", d => x(d.x0)).attr("x2", d => x(d.x1)).attr("y1", d => y(d.y0)).attr("y2", d => y(d.y1))
-    .attr("stroke", d => (d.state === "Missouri" ? "var(--mo)" : "var(--il)")).attr("stroke-width", 3);
-  // labels at the end of each line, above a rising line and below a falling one, inside the chart
-  lines.append("text").attr("class", "big-label").attr("text-anchor", "end")
-    .attr("x", d => Math.min(x(d.x1), W - m.r)).attr("y", d => y(d.y1) + (d.r > 0 ? -12 : 24))
-    .text(d => `${d.state} ${signed(d.r)}`);
+  const hitColor = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, 0.3]).clamp(true);
+  const placeColor = v => d3.scaleSequential(d3.interpolateRgbBasis(ramp(v.color))).domain(v.domain).clamp(true);
+  const fillPlace = (d, j) => placeColor(views[placeTab])(views[placeTab].values[index.get(d)]);
+  const fillHit = d => hitColor()(c.hit[index.get(d)]);
+  const placed = countyMap(left, features, states, fc, 460, 410), hit = countyMap(right, features, states, fc, 460, 410);
+  placed.attr("fill", fillPlace);
+  hit.attr("fill", fillHit);
+  const keys = Object.fromEntries(Object.entries(views).map(([k, v]) => {
+    const g = left.append("g");
+    legend(g, 80, 445, 300, () => ramp(v.color), v.domain, v.ticks, v.tick, Tp(`trees.tabs.${k}.legend`));
+    return [k, g];
+  }));
+  legend(right, 80, 445, 300, () => ramp("orange"), [0, 0.3], [0, 0.1, 0.2, 0.3], d => (d === 0.3 ? "30%+" : pct(d)), Tp("trees.legend_hit"));
+  // a compact legend under each map, shown on phones instead of the in-map one
+  const mini = svg => {
+    const box = d3.select(svg.node().parentNode).append("div").attr("class", "mlegend");
+    const lo = box.append("span"), bar = box.append("i"), hi = box.append("span");
+    return (colors, a, b) => { lo.text(a); hi.text(b); bar.style("background", `linear-gradient(to right, ${colors.join(",")})`); };
+  };
+  const miniLeft = mini(left), miniRight = mini(right);
+  const paintMini = () => {
+    const v = views[placeTab];
+    miniLeft(ramp(v.color), v.tick(v.domain[0]), v.tick(v.domain[1]));
+    miniRight(ramp("orange"), "0%", "30%+");
+  };
+  repaint.push(() => { placed.attr("fill", fillPlace); hit.attr("fill", fillHit); paintMini(); });
+  placePaint = fade => {
+    const v = views[placeTab], tt = t[placeTab];
+    document.querySelector("#place-title").textContent = tt.title;
+    left.attr("aria-label", `${tt.title} by county`);
+    document.querySelector("#place-r").innerHTML = T("trees.r", { mo: signed(v.r.Missouri), il: signed(v.r.Illinois) });
+    Object.entries(keys).forEach(([k, g]) => g.style("display", k === placeTab ? null : "none"));
+    paintMini();
+    (fade ? placed.transition().duration(450) : placed).attr("fill", fillPlace);
+    document.querySelectorAll("#place-tabs .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.key === placeTab));
+  };
+  const tabs = document.querySelector("#place-tabs");
+  if (!tabs.children.length) {
+    Object.keys(t).forEach(k => {
+      const b = document.createElement("button");
+      b.className = "tab"; b.setAttribute("role", "tab"); b.dataset.key = k; b.textContent = t[k].tab;
+      b.addEventListener("click", () => { placeTab = k; placePaint(!REDUCE); });
+      tabs.append(b);
+    });
+  }
+  placePaint(false);
+  [placed, hit].forEach((sel, side) => {
+    const other = side ? placed : hit;
+    sel.on("pointermove", (e, d) => {
+      const j = index.get(d), v = views[placeTab], raw = v.raw ? v.raw[j] : v.values[j];
+      other.classed("linked", o => o === d);
+      showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` +
+        T("trees.tip", { label: t[placeTab].tip, value: v.show(raw), hit: pct(c.hit[j]) }));
+    }).on("pointerleave", () => { other.classed("linked", false); hideTip(); });
+  });
   if (still) return;
+  placed.attr("opacity", 0); hit.attr("opacity", 0);
   onEnter(document.querySelector("#trees"), () => {
-    dotsSel.transition().delay(900).duration(900).attr("fill", stateColor);
-    lines.transition().delay(1800).duration(700).attr("opacity", 1);
+    placed.transition().delay(200).duration(700).attr("opacity", 1);
+    hit.transition().delay(800).duration(700).attr("opacity", 1);
   });
 }
 </script>
