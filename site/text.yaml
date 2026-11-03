@@ -312,10 +312,10 @@ trees:
 value:
   menu: What it's worth
   kicker: What it's worth · an estimate for 2025
-  # {high}: the model's best scenario, in millions
+  # {low}, {high}: the smallest and largest gap between the model and the official forecasts, in millions, each
+  # within one scenario
   title: >-
-    Sending crews where the model pointed would have saved up to ${high} million in 2025. Following the official
-    forecasts would have lost money.
+    Using the model would have netted ${low} million to ${high} million more than following the official forecasts in 2025.
   lead: >-
     Suppose a utility had sent repair crews to wait wherever each forecast pointed, two hours ahead. Crews cost money
     every time, and pay off when the power goes out, because it comes back sooner. Each dot is one scenario.
@@ -351,5 +351,5 @@ end:
   code: Code on GitHub
   portfolio: See my other projects
   credits: >-
-    Ugo Bruzadin Nunes · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo and the University of Utah HRRR archive,
+    Ugo Bruzadin Nunes, PhD · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo and the University of Utah HRRR archive,
     NOAA Storm Events, NWS and SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau.

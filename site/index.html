@@ -1169,8 +1169,10 @@ function savings(data, animate) {
   const v = data.value, W = widthOf("#savings"), narrow = W < 600, rowH = narrow ? 48 : 50;
   const left = narrow ? 0 : 250, right = narrow ? 8 : 150;
   const model = v.forecasts.find(f => f.ours).scenarios;
-  const lo = d3.min(model), hi = d3.max(model);
-  document.querySelector("#value-title").innerHTML = T("value.title", { high: hi.toFixed(1) });
+  const official = v.forecasts.find(f => f.key === "official").scenarios;
+  const ahead = model.map((m, i) => m - official[i]);   // model minus official, within the same scenario
+  document.querySelector("#value-title").innerHTML = T("value.title",
+    { low: d3.min(ahead).toFixed(0), high: d3.max(ahead).toFixed(0) });
   const label = d => TEXT.value.labels[d.key] || d.label;
   const svg = d3.select("#savings").attr("viewBox", `0 0 ${W} ${36 + v.forecasts.length * rowH}`);
   const all = v.forecasts.flatMap(f => f.scenarios);
