@@ -15,6 +15,9 @@
 <meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: outage risk by county, decided two hours ahead, beside the share of customers who actually lost power.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>
+try { const theme = localStorage.getItem("theme"); if (theme) document.documentElement.dataset.theme = theme; } catch (e) {}
+</script>
 <style>
 :root {
   color-scheme: light;
@@ -44,6 +47,9 @@ body {
 }
 main { max-width: 980px; margin: 0 auto; padding: 0 16px 64px; }
 a { color: var(--accent); }
+.theme { position: fixed; top: 12px; right: 16px; z-index: 10; width: 32px; height: 32px; padding: 0; cursor: pointer;
+  font: 1rem/1 system-ui, sans-serif; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; }
 h1, h2, h3 { line-height: 1.2; letter-spacing: -0.01em; }
 h1 { font-size: clamp(2rem, 5vw, 3rem); margin: 0 0 12px; }
 h2 { font-size: 1.6rem; margin: 64px 0 16px; }
@@ -129,6 +135,26 @@ footer p { color: var(--muted); }
 </style>
 </head>
 <body>
+<button class="theme" type="button"></button>
+<script>
+{ // the theme button: remembers the choice (the script in <head> applies it before the page paints)
+  const button = document.querySelector(".theme"), root = document.documentElement;
+  const system = matchMedia("(prefers-color-scheme: dark)");
+  const isDark = () => root.dataset.theme === "dark" || (root.dataset.theme !== "light" && system.matches);
+  const label = () => {
+    button.textContent = isDark() ? "☀\uFE0E" : "☾\uFE0E";
+    button.title = isDark() ? "Switch to light mode" : "Switch to dark mode";
+    button.setAttribute("aria-label", button.title);
+  };
+  button.addEventListener("click", () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+    label();
+  });
+  system.addEventListener("change", label);
+  label();
+}
+</script>
 <main id="doc"></main>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script>

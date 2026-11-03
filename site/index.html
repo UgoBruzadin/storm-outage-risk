@@ -15,6 +15,9 @@
 <meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: outage risk by county, decided two hours ahead, beside the share of customers who actually lost power.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>
+try { const theme = localStorage.getItem("theme"); if (theme) document.documentElement.dataset.theme = theme; } catch (e) {}
+</script>
 <style>
 :root {
   color-scheme: light;
@@ -46,6 +49,9 @@ a { color: var(--accent); }
   padding: 12px 20px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line); font-size: .9rem; }
 .bar a { text-decoration: none; font-weight: 600; }
+.bar-right { display: flex; align-items: center; gap: 12px; }
+.theme { font: 1rem/1 system-ui, sans-serif; width: 32px; height: 32px; padding: 0; cursor: pointer; color: var(--ink);
+  background: transparent; border: 1px solid var(--line); border-radius: 999px; }
 .bar .home { color: var(--ink); }
 .progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--accent); z-index: 11; }
 .dots { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 10; display: flex;
@@ -228,7 +234,10 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <div class="progress" aria-hidden="true"></div>
 <nav class="bar">
   <a class="home" href="./" data-t="nav.home"></a>
-  <a href="writeup/" data-t="nav.writeup"></a>
+  <span class="bar-right">
+    <a href="writeup/" data-t="nav.writeup"></a>
+    <button class="theme" type="button"></button>
+  </span>
 </nav>
 <nav class="dots" aria-label="Sections"></nav>
 <div class="tip" role="status"></div>
@@ -485,6 +494,22 @@ function onEnter(el, fn) {
 }
 const repaint = [];
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => repaint.forEach(f => f()));
+// the theme button: remembers the choice (the script in <head> applies it before the page paints)
+function themeButton() {
+  const button = document.querySelector(".theme");
+  const label = () => {
+    button.textContent = isDark() ? "☀\uFE0E" : "☾\uFE0E";
+    button.title = Tp(isDark() ? "nav.to_light" : "nav.to_dark");
+    button.setAttribute("aria-label", button.title);
+  };
+  button.addEventListener("click", () => {
+    const theme = isDark() ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("theme", theme); } catch (e) {}
+    repaint.forEach(f => f());
+  });
+  label(); repaint.push(label);
+}
 
 // navigation: progress bar and section dots
 const slides = [...document.querySelectorAll(".slide")];
@@ -548,6 +573,7 @@ Promise.all([
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
+  themeButton();
   applyText();
   buildDots();
   const features = data.counties.map(c => ({ type: "Feature", id: c.id, properties: c, geometry: c.geometry }));
@@ -655,9 +681,12 @@ function liveNow(features, states, fc) {
     const mins = Math.round((Date.now() - new Date(latest.generated_at)) / 60000);
     const updated = mins < 60 ? `updated ${mins} min ago` : `updated ${Math.round(mins / 60)} h ago`;
     document.querySelector("#live-kicker").textContent = Tp("live.kicker", { updated });
-    const keys = TEXT.live.key.map((label, i) => `<span style="--c:${i === 0 ? "var(--idle)" : ramp("blue")[i]}">${label}</span>`);
-    keys.push(`<span style="--c:${ramp("blue")[6]};--ring:1.5px">${Tp("live.key_alert", { level: pct1(level) })}</span>`);
-    document.querySelector("#live-key").innerHTML = keys.join("");
+    const paintKey = () => {
+      const keys = TEXT.live.key.map((label, i) => `<span style="--c:${i === 0 ? "var(--idle)" : ramp("blue")[i]}">${label}</span>`);
+      keys.push(`<span style="--c:${ramp("blue")[6]};--ring:1.5px">${Tp("live.key_alert", { level: pct1(level) })}</span>`);
+      document.querySelector("#live-key").innerHTML = keys.join("");
+    };
+    paintKey(); repaint.push(paintKey);
     show(0);
     repaint.push(() => show(i));
 

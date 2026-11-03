@@ -14,6 +14,8 @@
 nav:
   home: "⚡ Storm Outage Risk"
   writeup: "Full write-up →"
+  to_dark: Switch to dark mode
+  to_light: Switch to light mode
 
 live:
   menu: Live now                       # the name in the side dots' tooltip
