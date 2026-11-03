@@ -335,16 +335,17 @@ value:
 end:
   menu: What's next
   kicker: What's next
-  title: From one test year to a live forecast.
+  title: From a test on the past to a test on the future.
   next:                                 # the three cards
-    - title: More test years
+    - title: The blind test
       text: >-
-        Each year is decided by a handful of storms. Testing on 2023 and 2024 as well shows how much the result moves
-        from year to year.
-    - title: A live test
-      text: Publish predictions before storms happen, and score them when the outage data comes out.
+        Every forecast is saved before the weather happens. When the official outage records come out, we'll see if the
+        live model holds up.
     - title: Better place data
       text: Which utility serves each county, and trees near power lines rather than county-wide.
+    - title: A chance for your home
+      text: >-
+        Today's forecast asks if a county will pass 5% of customers out. Next: what are the odds for one household?
   dashboard: Open the dashboard
   writeup: Read the full write-up
   code: Code on GitHub

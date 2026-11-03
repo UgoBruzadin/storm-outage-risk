@@ -502,6 +502,30 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **Result:** outlook 66% of the score lost; place 33%; weather so far 24%; neighbours 16%; warnings 16%; recent outages 10%.
 - **Meaning:** The SPC outlook is the backbone: it says which days are storm days. The model's skill is in using place, recent weather and neighbours to say *where* on those days. The groups overlap (a shuffled group can be partly recovered from the others), so these are a ranking, not shares that add up.
 
+### E40–E42. Training on forecasts, and county-wide summaries
+- **Question:** The headline model learns from actual weather and is fed forecasts at test time. Does it do better trained on forecasts (E40), or with forecasts summarized over the county's whole area rather than one point (E41)?
+- **Setup:** Fresh new outages, 2 hours ahead, trained on 2020–2024 and scored on the same 1,731,671 decisions of 2025. Forecast windows come from the HRRR archive summarized by county (`ingest/fetch_hrrr_forecast_area.py`). E40 trains on the run issued 2 hours before each decision. E41 adds the window's strongest gust anywhere in the county, the share above storm thresholds, simulated radar, storm-column ice and lightning. E42 tests the higher-scoring of those two on 2022–2025, trained on 2020 to the year before, with the newest run (`ml/forecast_training.py`, `forecast_training_2025.csv`, `forecast_training_years.csv`, `forecast_training_calibration_2025.csv`).
+- **Result:**
+
+  | Model (2025) | Newest run | vs warnings + outlook | Mean of five runs | vs warnings + outlook |
+  |---|---|---|---|---|
+  | **Trained on actual weather (current)** | **0.089** | **2.27×** | **0.091** | **2.34×** |
+  | Trained on forecasts (E40) | 0.080 | 2.04× | 0.080 | 2.04× |
+  | Trained on forecasts + county-wide summaries (E41) | 0.082 | 2.11× | 0.082 | 2.10× |
+
+  | Test year (E42, trained on forecasts + county-wide summaries) | Trained on | Model | Warnings + outlook | Ratio |
+  |---|---|---|---|---|
+  | 2022 | 2020–2021 | 0.020 | 0.010 | 2.04× |
+  | 2023 | 2020–2022 | 0.049 | 0.026 | 1.94× |
+  | 2024 | 2020–2023 | 0.034 | 0.023 | 1.48× |
+  | 2025 | 2020–2024 | 0.082 | 0.039 | 2.11× |
+
+  - Calibration on 2025 (E41 model): predictions in the middle bands run low (5–10%: 6.9% predicted, 9.2% happened; 10–20%: 13.7%, 17.1%); above 20%, 30.3% predicted, 28.4% happened.
+- **Meaning:**
+  - **The current model stays.** Neither change beat it on 2025. These are single scores without storm-day ranges or a significance test, so they show no gain, not a proven loss.
+  - **County-wide summaries added a little to the forecast-trained model** (0.080 to 0.082). They haven't been tried on the current model.
+  - **E42 doesn't test the current model on other years.** It still beats warnings + outlook every year, but 2.11× for 2025 isn't a clean estimate, because that version was picked on its 2025 score. Its rows differ from E21's, so its current-model score (0.091) doesn't match the headline's 0.094 exactly.
+
 ### E43. Without live outage data (for a live test)
 - **Question:** A live test can get forecasts, warnings and outlooks as they are issued, but not current outages: EAGLE-I is published about a year later, and the utilities' outage maps don't allow automated collection. How much does the headline model lose without them?
 - **Setup:** The headline model (mean of the five HRRR runs, 2 hours ahead, fresh new outages) retrained on 2020–2024 without its four outage inputs: the county's share out now and its worst share in the past 24 hours, and the worst neighbouring and upwind county now. Both scored on the same 1,727,693 decisions of 2025; alerts on each one's riskiest 0.75% of county-hours (`ml/live_inputs.py`, `live_inputs_2025.csv`).
@@ -522,7 +546,9 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 
 | Test | Why | Notes |
 |---|---|---|
-| HRRR forecasts, trained on forecasts | E19 trains on actual weather and scores on forecasts | Needs 2020–2024 forecasts: ~1.5 TB of reads, ~4 GB kept |
+| The headline recipe on 2022 and 2023 | It has only been tested on 2024 and 2025 (E36); E42 covers other years with a different version | The forecast archive now covers 2020–2025; the five-run mean exists from December 2020 |
+| County-wide summaries on the current model | E41 only tried them on the forecast-trained model | Should be done before the blind test, since it would change the model |
+| The live model at longer leads | 2 hours may be too short to move crews; E37 tested the forecast model at 0–6 hours, not the live recipe | For example 4 hours |
 | Held-out storms | Split by storm instead of by year | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | By storm type in E29: wind and rain without storm energy are the hard cases |
 | Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

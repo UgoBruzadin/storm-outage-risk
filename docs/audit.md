@@ -77,6 +77,6 @@ Unknown hours, mostly when EAGLE-I's national feed was down, are spread evenly. 
 
 ## What the audit doesn't cover
 
-- **One test year.** The checks confirm 2025 is scored correctly, not that 2025 is typical. That needs several test years (open in experiments.md).
+- **One test year.** The checks confirm 2025 is scored correctly, not that 2025 is typical. Other years are tested separately (experiments.md, E36 and E42).
 - **Real-time delays.** The checks use archive timestamps. Operationally, the latest hour of HRRR and EAGLE-I arrives late; the forecast run's 2-hour age covers this for HRRR, not for EAGLE-I.
 - **Zone-to-county warnings** are checked through the mapping table, whose correctness rests on its dbt tests.

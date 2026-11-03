@@ -75,7 +75,15 @@ little. Almost all the avoided cost is businesses'. Code: `ml/value_hourly.py`, 
 
 ### Limitations
 
-- **One test year.** The ranges cover which storms hit 2025, not how different another year could be.
+- **Few test years for the full recipe.** The model without forecasts beat the official forecasts on each of 2022–2025
+  (1.6–2.1×), but the headline recipe has only been tested on 2024 and 2025. The ranges cover which storms hit 2025, not
+  how different another year could be.
+- **Trained on actual weather.** The headline model learned from what happened and is scored on forecasts, so its highest
+  probabilities run a little high. Training on forecasts instead scored lower (2.0× against 2.3× with the newest run on
+  2025; [E40](docs/experiments.md)).
+- **The live forecast isn't graded yet.** That needs EAGLE-I's 2026 data, which comes out about a year later. Training saw
+  warnings' final end times, while the live forecast only knows the end scheduled at that moment, and when the newest
+  HRRR run isn't ready a forecast uses four runs instead of five.
 - **Archive timestamps.** Each hour's weather and outage counts are used as soon as the hour ends; operationally HRRR
   analyses arrive about an hour late (the forecast runs already allow two hours).
 - **One weather point per county**, county-wide canopy, and EAGLE-I coverage that is patchy before 2020.
