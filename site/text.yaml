@@ -13,6 +13,7 @@
 
 nav:
   home: "⚡ Storm Outage Risk"
+  portfolio: Portfolio
   writeup: "Full write-up →"
   to_dark: Switch to dark mode
   to_light: Switch to light mode
@@ -347,6 +348,7 @@ end:
   dashboard: Open the dashboard
   writeup: Read the full write-up
   code: Code on GitHub
+  portfolio: See my other projects
   credits: >-
     Ugo Bruzadin Nunes · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo and the University of Utah HRRR archive,
     NOAA Storm Events, NWS and SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau.

@@ -224,6 +224,13 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .card .lead { font-size: .9rem; }
   .card .note { display: none; }
 }
+@media (max-width: 480px) {       /* keep the top bar on one line on phones */
+  .bar { padding: 12px; font-size: .82rem; }
+  .bar-right { gap: 8px; }
+}
+@media (max-width: 370px) {
+  .bar a[data-t="nav.portfolio"] { display: none; }   /* still linked at the end of the page */
+}
 @media (prefers-reduced-motion: reduce) {
   .src, .table-card, .card-body { transition: none; }
   .flow path, .flow-v path { animation: none; }
@@ -235,6 +242,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <nav class="bar">
   <a class="home" href="./" data-t="nav.home"></a>
   <span class="bar-right">
+    <a href="https://ugobruzadin.github.io/portfolio/" data-t="nav.portfolio"></a>
     <a href="writeup/" data-t="nav.writeup"></a>
     <button class="theme" type="button"></button>
   </span>
@@ -413,6 +421,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
     <a class="btn primary" href="https://storm-outage-risk.streamlit.app" data-t="end.dashboard"></a>
     <a class="btn" href="writeup/" data-t="end.writeup"></a>
     <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk" data-t="end.code"></a>
+    <a class="btn" href="https://ugobruzadin.github.io/portfolio/" data-t="end.portfolio"></a>
   </div>
   <p class="note" data-t="end.credits"></p>
 </section>
