@@ -337,7 +337,7 @@ def canopy_effect():
 
 def place_data(canopy):
     """Each county's census numbers for the trees slide, and each one's correlation with the storm hit rate per state.
-    Housing density and customers span orders of magnitude, so both are correlated on a log scale, as they are mapped."""
+    Housing density and customers span orders of magnitude, so both are correlated on a log scale, as they're mapped."""
     values = {"homes": canopy.share_homes_pre1960, "density": np.log10(canopy.housing_per_km2),
               "customers": np.log10(canopy.customers)}
     return {"homes": [round(float(v), 3) for v in canopy.share_homes_pre1960],
