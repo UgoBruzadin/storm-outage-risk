@@ -12,6 +12,13 @@ fetch-weather = { cmd = "python ingest/fetch_weather.py", description = "HRRR st
 fetch-hrrr-forecast = { cmd = "python -m ingest.fetch_hrrr_forecast", description = "HRRR forecasts as issued, per region, from the hrrrzarr archive: pass a start and end date (resumable)" }
 fetch-tree-canopy = { cmd = "python ingest/fetch_tree_canopy.py", description = "USFS/NLCD tree canopy % per region (2021) -> data/raw/geo" }
 fetch-acs = { cmd = "python ingest/fetch_acs.py", description = "Census ACS 5-year housing age/density tables -> data/raw/acs" }
+fetch-treemap = { cmd = "python ingest/fetch_treemap.py", description = "USFS TreeMap 2022 forest type and tree size per region -> data/raw/place" }
+fetch-forest-age = { cmd = "python ingest/fetch_forest_age.py", description = "USFS FIA stand age per region, surveys 2014-2019 -> data/raw/place" }
+fetch-soil = { cmd = "python ingest/fetch_soil.py", description = "NRCS SSURGO soil drainage, flooding and depth per region -> data/raw/place" }
+fetch-water = { cmd = "python ingest/fetch_water.py", description = "USGS NHD rivers and streams per region -> data/raw/place" }
+fetch-flood-zones = { cmd = "python ingest/fetch_flood_zones.py", description = "FEMA flood zones per region (slow, resumable) -> data/raw/place" }
+fetch-transmission = { cmd = "python ingest/fetch_transmission.py", description = "HIFLD transmission lines per region -> data/raw/place" }
+fetch-utilities = { cmd = "python ingest/fetch_utilities.py", description = "EIA-861 utilities and reliability 2015-2019 per region -> data/raw/place" }
 fetch-storm-events = { cmd = "python ingest/fetch_storm_events.py", description = "NOAA Storm Events reports 2014-2025 -> data/raw/storm_events" }
 fetch-nws = { cmd = "python ingest/fetch_nws.py", description = "NWS warnings + SPC Day 1 outlooks for MO/IL, 2014-2025 (Iowa Environmental Mesonet) -> data/raw/nws" }
 build = { cmd = "dbt deps && dbt build", description = "Rebuild the warehouse with dbt: every model + test (~30 s)" }
@@ -39,6 +46,7 @@ rasterio = ">=1.5.2,<2"
 rasterstats = ">=0.21.0,<0.22"
 pyarrow = ">=21,!=25.0.0"
 numcodecs = ">=0.17.1,<0.18"
+openpyxl = ">=3.1.5,<4"
 
 [feature.models.dependencies]
 # Benchmark models beyond scikit-learn (default environment only)

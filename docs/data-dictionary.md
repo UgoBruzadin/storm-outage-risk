@@ -31,6 +31,14 @@ except EAGLE-I is downloaded by a script (`pixi run fetch-<name>`, code in `inge
 | **County shapes** | U.S. Census Bureau (TIGER cartographic boundaries) | county polygons and land area, 1:500k | 2023 | `https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_us_county_500k.zip` | `fetch-counties` | `data/raw/geo/regions_study.*` |
 | **Tree canopy** | USDA Forest Service, distributed by MRLC (NLCD Tree Canopy Cover) | % tree canopy per 30 m pixel; we request 90 m | 2021 (v2021-4) | MRLC map service `https://www.mrlc.gov/geoserver/ows`, coverage `mrlc_download__nlcd_tcc_conus_2021_v2021-4` | `fetch-tree-canopy` (one cut-out per region, summarized) | `data/raw/geo/tree_canopy_2021.csv` |
 | **Housing** | U.S. Census Bureau, American Community Survey | tables B25034 (year built), B25035 (median year built), B01003 (population), B25001 (housing units) | 2020–2024 5-year estimates | `https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/` (the Census API now needs a key; these files don't) | `fetch-acs` | `data/raw/acs/` |
+| HRRR forecasts as issued | NOAA HRRR, University of Utah hrrrzarr archive on AWS | each hourly run's forecast at each region's weather point; five-run mean from June 2024 only (E47) | December 2019 → 2025 | `https://hrrrzarr.s3.amazonaws.com/sfc` | `fetch-hrrr-forecast` | `data/raw/weather/hrrr_fcst/` |
+| Tree type and size (tested, not in the model) | USFS TreeMap | forest type, tree size and dead trees per 30 m forest pixel | 2022 (RDS-2025-0032) | Forest Service Research Data Archive | `fetch-treemap` | `data/raw/place/treemap.csv` |
+| Stand age (tested, not in the model) | USFS Forest Inventory (FIA DataMart) | stand age on field plots | surveys 2014–2019 | FIA DataMart `MO_COND.csv`, `IL_COND.csv` | `fetch-forest-age` | `data/raw/place/forest_age.csv` |
+| Soil (tested, not in the model) | USDA NRCS SSURGO, Soil Data Access | drainage, flooding, water table and bedrock depth | current version | Soil Data Access | `fetch-soil` | `data/raw/place/soil.csv` |
+| Rivers and streams (tested, not in the model) | USGS National Hydrography Dataset | rivers mapped as areas, stream lines | current version | The National Map NHD service | `fetch-water` | `data/raw/place/water.csv` |
+| Flood zones (tested, not in the model) | FEMA National Flood Hazard Layer | 1% annual chance flood zones | current version | NFHL map service | `fetch-flood-zones` | `data/raw/place/flood_zones.csv` |
+| Transmission lines (tested, not in the model) | HIFLD | high-voltage lines | about 2023 | HIFLD Electric Power Transmission Lines | `fetch-transmission` | `data/raw/place/transmission.csv` |
+| Utilities (tested, not in the model) | U.S. EIA Form 861 | utilities per county, ownership, reliability | 2015–2019 | EIA-861 archive | `fetch-utilities` | `data/raw/place/utilities.csv` |
 | Airport weather (legacy) | NOAA NCEI Global Hourly (ISD), AWS Open Data mirror | observations at St. Louis Lambert (KSTL, station 72434013994) | 2014–2025-08 | `https://noaa-global-hourly-pds.s3.amazonaws.com/<year>/72434013994.csv` | `fetch-noaa` | `data/raw/noaa/` |
 
 Each source's quirks, and what we did about them, are in [data-notes.md](data-notes.md).
@@ -133,7 +141,7 @@ this is an upper bound for a 24–48 h forecast.
 | `share_homes_pre1960` | homes built before 1960 ÷ all homes (older area ≈ older trees and lines) |
 | `median_year_built` | ACS median year built |
 | `canopy_mean_pct` | average tree canopy % (USFS/NLCD 2021) |
-| `canopy_dense_share` | share of land with ≥ 50% canopy |
+| `canopy_dense_share` | share of the region with ≥ 50% canopy |
 
 `canopy` = the two canopy features, used for ablations (`weather+place-canopy`).
 

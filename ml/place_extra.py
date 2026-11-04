@@ -1,0 +1,217 @@
+"""Does more place data improve the headline model? (docs/experiments.md, E47)
+
+Adds each new group of county inputs to the headline model (ingest/fetch_treemap.py, fetch_forest_age.py, fetch_soil.py,
+fetch_water.py, fetch_flood_zones.py, fetch_utilities.py, fetch_transmission.py), with recent rain and soil tested
+together because wet ground is how soil would matter in a storm.
+
+  select  Trained on 2020-2023, actual weather, scored on 2024 with the mean of the five HRRR runs, as the headline:
+          each group over seeds 0-4, then on five held-out sets of counties, each tested by a model without them.
+  test    Trained on 2020-2024, scored on 2025, as the headline: the current model, the kept groups together, every
+          group together, and warnings + outlook, with paired storm-day ranges and alerts on the riskiest 0.75%.
+
+The rule, fixed before any result: a group is kept if it beats the current model in at least 4 of the 5 seeds on 2024
+AND on the held-out counties. Only the kept set and the all-groups set are ever scored on 2025.
+
+Usage: pixi run python -m ml.place_extra select | test
+Writes ml/results/place_extra_select.csv (resumes if stopped) and place_extra_2025.csv.
+"""
+import argparse
+
+import numpy as np
+import pandas as pd
+
+from ml import data, models
+from ml.forecast_ensemble import RUN_AGES
+from ml.forecast_test import (
+    EQUAL_SHARE,
+    LEAD,
+    WINDOW,
+    actual_hourly,
+    forecasts,
+    tables,
+    window_from_forecast,
+    window_from_hourly,
+    with_version,
+)
+from ml.metrics import score
+from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
+from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
+
+PLACE_DIR = data.ROOT / "data" / "raw" / "place"
+FILES = ["treemap", "forest_age", "soil", "water", "flood_zones", "utilities", "transmission"]
+RAIN = ["precip_prev_72h_mm", "wind_x_wet_soil"]
+SOIL = ["soil_poor_drain_share", "soil_group_d_share", "soil_flood_share", "soil_water_table_cm", "soil_bedrock_cm"]
+WET = ["poor_drain_x_rain", "poor_drain_x_wind_rain"]
+GROUPS = {
+    "tree type": ["tm_share_oak_hickory", "tm_share_elm_ash_cottonwood", "tm_share_softwood", "tm_share_oak_pine",
+                  "tm_share_maple_beech", "tm_share_oak_gum_cypress"],
+    "tree size": ["tm_height_ft", "tm_diameter_in", "tm_live_per_acre", "tm_basal_area"],
+    "dead trees and ash": ["tm_dead_per_acre", "tm_dead_volume", "tm_ash_stem_share"],
+    "tree age": ["stand_age_mean", "stand_age_old"],
+    "soil": SOIL,
+    "recent rain": RAIN,
+    "soil + recent rain": SOIL + RAIN + WET,
+    "rivers and streams": ["water_share", "river_near_share", "stream_km_per_km2"],
+    "flood zones": ["flood_zone_share"],
+    "utilities": ["util_count", "util_share_iou", "util_share_coop", "util_share_public", "util_saidi", "util_saifi",
+                  "util_saidi_med"],
+    "transmission lines": ["transmission_km_per_km2", "transmission_hv_km_per_km2"],
+}
+ALL = "every group"
+BASE = "current model"
+SEEDS = range(5)
+FOLDS = 5
+TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
+RESULTS = data.ROOT / "ml" / "results"
+SELECT_OUT = RESULTS / "place_extra_select.csv"
+NAMES = [f"run {k} h before" for k in RUN_AGES]
+
+
+def add_place(df):
+    """Join the new county inputs onto the modeling rows."""
+    df = df.copy()
+    df["region_fips"] = df.region_fips.astype(str)
+    for name in FILES:
+        df = df.merge(pd.read_csv(PLACE_DIR / f"{name}.csv", dtype={"region_fips": str}), on="region_fips", how="left")
+    df["poor_drain_x_rain"] = df.soil_poor_drain_share * df.precip_prev_72h_mm
+    df["poor_drain_x_wind_rain"] = df.soil_poor_drain_share * df.wind_x_wet_soil
+    return df
+
+
+def all_groups():
+    return list(dict.fromkeys(c for g in GROUPS.values() for c in g))
+
+
+def features_for(base, group):
+    extra = [] if group == BASE else all_groups() if group == ALL else GROUPS[group]
+    return base + [c for c in extra if c not in base]
+
+
+def validation_tables():
+    """Train rows 2020-2023 with actual window weather, and 2024 rows with each run's window weather."""
+    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [VAL_YEAR], LEAD)
+    df["region_fips"] = df.region_fips.astype(str)
+    df = df.merge(window_from_hourly(actual_hourly(TRAIN_YEARS + [VAL_YEAR])), on=["region_fips", "block_start"],
+                  how="left")
+    train, val = df[df.year.isin(TRAIN_YEARS)], df[df.year == VAL_YEAR].copy()
+    f = forecasts(f"{VAL_YEAR - 1}-12-31", f"{VAL_YEAR}-12-31")
+    for name, k in zip(NAMES, RUN_AGES, strict=True):
+        w = window_from_forecast(f, k).rename(columns={c: f"{c}|{name}" for c in WINDOW})
+        val = val.merge(w, on=["region_fips", "block_start"], how="left")
+    keep = val[[f"win_gust_max_ms|{n}" for n in NAMES]].notna().all(axis=1)
+    print(f"2024 decisions with all five runs: {keep.sum():,} of {len(val):,}", flush=True)
+    return add_place(train), add_place(val[keep])
+
+
+def five_run_mean(model, rows, features):
+    return np.mean([model.predict_proba(with_version(rows, features, n))[:, 1] for n in NAMES], axis=0)
+
+
+def select():
+    train, val = validation_tables()
+    base = data.resolve_features(FEATURES) + WINDOW
+    rows = pd.read_csv(SELECT_OUT).to_dict("records") if SELECT_OUT.exists() else []
+    done = {(r["group"], r["setup"], r["seed"]) for r in rows}
+
+    def record(group, setup, seed, y, p):
+        s = score(y, p)
+        rows.append({"group": group, "setup": setup, "seed": seed, "onset_pr_auc": s["pr_auc"],
+                     "n_inputs_added": len(features_for(base, group)) - len(base)})
+        print(rows[-1], flush=True)
+        pd.DataFrame(rows).to_csv(SELECT_OUT, index=False)
+
+    # sorted by reversed code, so neighbouring counties land in different folds
+    regions = sorted(val.region_fips.unique(), key=lambda fips: fips[::-1])
+    fold_of = {fips: i % FOLDS for i, fips in enumerate(regions)}
+    for group in [BASE, *GROUPS, ALL]:
+        features = features_for(base, group)
+        for seed in SEEDS:
+            if (group, "2024", seed) in done:
+                continue
+            m = models.build("xgboost", PARAMS | {"random_state": seed}).fit(train[features], train["y"])
+            record(group, "2024", seed, val["y"].to_numpy(), five_run_mean(m, val, features))
+        if (group, "held-out counties", 0) not in done:
+            p = pd.Series(0.0, index=val.index)
+            for fold in range(FOLDS):
+                held = {r for r, k in fold_of.items() if k == fold}
+                t = train[~train.region_fips.isin(held)]
+                v = val[val.region_fips.isin(held)]
+                m = models.build("xgboost", PARAMS | {"random_state": 0}).fit(t[features], t["y"])
+                p[v.index] = five_run_mean(m, v, features)
+            record(group, "held-out counties", 0, val["y"].to_numpy(), p.to_numpy())
+    print(verdicts().round(4).to_string(), flush=True)
+
+
+def verdicts():
+    """The rule in the docstring, from the select results."""
+    r = pd.read_csv(SELECT_OUT)
+    y = r[r.setup == "2024"].pivot(index="group", columns="seed", values="onset_pr_auc")
+    held = r[r.setup == "held-out counties"].set_index("group").onset_pr_auc
+    gain = y.div(y.loc[BASE], axis=1) - 1
+    out = pd.DataFrame({"mean_gain_2024": gain.mean(axis=1), "seeds_better": (gain > 0).sum(axis=1),
+                        "held_out_gain": held / held[BASE] - 1})
+    out["kept"] = (out.seeds_better >= 4) & (out.held_out_gain > 0)
+    return out.drop(index=BASE).reindex([*GROUPS, ALL])
+
+
+def test():
+    v = verdicts()
+    print(v.round(4).to_string(), flush=True)
+    kept = [g for g in GROUPS if v.loc[g, "kept"]]
+    print("kept:", kept, flush=True)
+    kept_inputs = list(dict.fromkeys(c for g in kept for c in GROUPS[g]))
+    f = forecasts("2024-12-31", "2025-12-31")
+    train, _, _, test_rows = tables({n: window_from_forecast(f, k) for n, k in zip(NAMES, RUN_AGES, strict=True)})
+    train, test_rows = add_place(train), add_place(test_rows)
+    base = data.resolve_features(FEATURES) + WINDOW
+    official = "warnings + outlook"
+    versions = {official: models.NEEDS_COLUMNS["official"], BASE: base}
+    if kept:
+        versions["kept groups"] = base + [c for c in kept_inputs if c not in base]
+    versions[ALL] = features_for(base, ALL)
+    pred = test_rows[["region_fips", "block_start", "y"]].copy()
+    seed_scores = {}
+    for label, features in versions.items():
+        if label == official:
+            fitted = models.build("official").fit(train[features], train["y"])
+            pred[label] = fitted.predict_proba(test_rows[features])[:, 1]
+        else:
+            fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
+            pred[label] = five_run_mean(fitted, test_rows, features)
+            seed_scores[label] = [
+                score(pred.y, five_run_mean(models.build("xgboost", PARAMS | {"random_state": s}).fit(
+                    train[features], train["y"]), test_rows, features))["pr_auc"] for s in range(1, 5)]
+        print(label, flush=True)
+    onsets = onset_hours(2025)
+    first = storm_day(pd.Series([pd.Timestamp("2024-12-31")]))[0]
+    row_day = ((storm_day(pred.block_start) - first).dt.days).to_numpy()
+    onset_day = ((storm_day(onsets.hour) - first).dt.days).to_numpy()
+    counts, _ = day_weights(np.arange(max(row_day.max(), onset_day.max()) + 1))
+    auc = {n: pr_auc_resamples(pred.y, pred[n], row_day, counts) for n in versions}
+    rows = []
+    for n in versions:
+        p = pred[n].to_numpy()
+        r = {"model": n, "onset_pr_auc": score(pred.y, p)["pr_auc"]}
+        r["onset_pr_auc_lo"], r["onset_pr_auc_hi"] = interval(auc[n])
+        for ref in (official, BASE):
+            if n != ref:
+                r[f"ratio_vs_{ref}"] = r["onset_pr_auc"] / score(pred.y, pred[ref])["pr_auc"]
+                r[f"ratio_vs_{ref}_lo"], r[f"ratio_vs_{ref}_hi"] = interval(auc[n] / auc[ref])
+                r[f"better_vs_{ref}"] = float(np.mean(auc[n] > auc[ref]))
+        if n in seed_scores:
+            r["seed_scores_1_4"] = " ".join(f"{s:.4f}" for s in seed_scores[n])
+        flagged = pd.Series(p > np.quantile(p, 1 - EQUAL_SHARE), index=pred.index)
+        hit = np.array(caught_flags(pred, flagged, onsets, LEAD), dtype=float)
+        r["alert_share"], r["precision"] = flagged.mean(), pred.y[flagged].mean()
+        r["caught"] = hit.mean()
+        r["caught_lo"], r["caught_hi"] = interval(weighted_mean_resamples(hit, onset_day, counts))
+        r["episodes"] = episodes(pred, flagged)
+        rows.append(r)
+        print({k: round(x, 4) if isinstance(x, float) else x for k, x in r.items()}, flush=True)
+    pd.DataFrame(rows).to_csv(RESULTS / "place_extra_2025.csv", index=False)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("stage", choices=["select", "test"])
+    {"select": select, "test": test}[parser.parse_args().stage]()

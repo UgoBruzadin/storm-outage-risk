@@ -10,7 +10,8 @@ data/
 │   ├── weather/hrrr/  <region_fips>_<year>.csv.gz   (Open-Meteo HRRR)
 │   ├── geo/           county shapes, tree canopy tiles + summary
 │   ├── acs/           Census summary-file tables
-│   └── storm_events/  NOAA Storm Events + NWS zone–county file
+│   ├── storm_events/  NOAA Storm Events + NWS zone–county file
+│   └── place/         county inputs tested in experiment E47, not in the model
 ├── warehouse.duckdb   built by `pixi run build` (dbt)
 ├── mlflow.db, mlruns/ MLflow runs (`pixi run train`)
 └── app/               small Parquet files for the dashboard (`pixi run export-app`)

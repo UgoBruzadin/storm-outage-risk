@@ -376,7 +376,7 @@ The second framing, built to answer the question a utility actually faces. A dec
 
 ### E28. Calibrating the headline model on 2024 forecasts
 - **Question:** Above ~20% the headline model's probabilities run high (E21). Does a calibration map fitted on 2024, with 2024's HRRR forecasts, fix it, and what is the headline model worth in dollars?
-- **Setup:** The headline model trained on 2020–2023 and run on 2024 with the mean of 2024's five HRRR runs (909,774 decisions); an isotonic map from probability to outcome, and an alert level frozen at its top 0.75% of 2024 hours. Both applied to 2025 (`ml/calibrate_forecasts.py`, `calibration_forecasts_2025.csv`, `value_forecasts_2025.csv`).
+- **Setup:** The headline model trained on 2020–2023 and run on 2024 with the mean of 2024's five HRRR runs (909,774 decisions, June–December: see the note in E47); an isotonic map from probability to outcome, and an alert level frozen at its top 0.75% of 2024 hours. Both applied to 2025 (`ml/calibrate_forecasts.py`, `calibration_forecasts_2025.csv`, `value_forecasts_2025.csv`).
 - **Result:**
 
   | Predicted band | Raw: predicted → happened | Calibrated: predicted → happened |
@@ -474,7 +474,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 
 ### E36. Several test years
 - **Question:** Is 2025 typical?
-- **Setup:** The model without forecasts trained on 2020 to the year before and tested on each of 2022–2025. The forecast model (mean of five runs) tested on 2024, trained on 2020–2023, on the 2024 decisions where all five runs exist.
+- **Setup:** The model without forecasts trained on 2020 to the year before and tested on each of 2022–2025. The forecast model (mean of five runs) tested on 2024, trained on 2020–2023, on the 2024 decisions where all five runs exist, which are June–December (see the note in E47).
 - **Result:**
 
   | Test year | Trained on | Model | Warnings + outlook | Ratio |
@@ -483,7 +483,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   | 2023 | 2020–2022 | 0.042 | 0.026 | 1.7× |
   | 2024 | 2020–2023 | 0.048 | 0.023 | 2.1× |
   | 2025 | 2020–2024 | 0.064 | 0.039 | 1.6× |
-  | 2024, with HRRR forecasts | 2020–2023 | 0.066 | 0.024 | **2.8×** |
+  | June–December 2024, with HRRR forecasts | 2020–2023 | 0.066 | 0.024 | **2.8×** |
 
 - **Meaning:** The advantage over the official forecasts holds every year (1.6–2.1× without forecasts). The absolute scores vary much more, from 0.018 to 0.064, with how much training history there is and with the year's storms. That is why the pages quote comparisons, not absolute scores.
 
@@ -560,14 +560,71 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **The Ozarks reading in E24 isn't supported by this check:** housing and customers don't account for Missouri's correlation. It is a linear check, and the model can find patterns it would miss, so why canopy adds so little in Missouri remains open.
   - **Neighbour correlations aren't reliable enough to map,** so the pages show the variables and the hit rate side by side, with one correlation per state.
 
+### E45. The headline model without place data
+- **Question:** E39 shows the model relies on place data. Does place data explain part of its lead over the official forecasts?
+- **Setup:** The headline model retrained on 2020–2024 without its six place inputs, and two smaller models with no weather, all scored on the same 1,727,693 decisions of 2025; alerts on each one's riskiest 0.75% of county-hours (`ml/place_inputs.py`, `place_inputs_2025.csv`).
+- **Result:**
+
+  | Model | PR-AUC | vs warnings + outlook | Alerts real | Caught | Alert spells |
+  |---|---|---|---|---|---|
+  | Warnings + outlook | 0.039 | 1× | 10.8% | 16.9% | 1,047 |
+  | Model on warnings + outlook only | 0.043 | 1.10× (1.06–1.28×) | 11.9% | 19.3% | 1,076 |
+  | Model on warnings + outlook + place | 0.051 | 1.30× (1.15–1.56×) | 11.0% | 17.9% | 1,169 |
+  | Headline without place | 0.078 | 2.0× (1.6–2.7×) | 13.9% | 28.8% | 3,259 |
+  | **Headline (all inputs)** | **0.094** | **2.4× (2.0–3.3×)** | **15.0%** | **29.9%** | **2,959** |
+
+  - Without place against the headline model on the same storm days: 0.83× (0.77–0.90×); better in 0.1% of resamples.
+- **Meaning:** Place data is part of the lead: without it the model still beats the official forecasts, by less, and raises more separate alerts. Most of the lead comes from the weather. This doesn't show which place input matters, or why.
+
+### E46. Floods as a cause of new outages
+- **Question:** Are floods common enough among new outages to justify flood inputs?
+- **Setup:** For every fresh new outage in 2020–2025: was a Flood or Flash Flood report filed in that county within 6 hours, and was a wind, hail, tornado or winter report filed in the same period? (`ml/flood_outages.py`, `flood_outages.csv`.)
+- **Result:** Of 7,990 new outages, 174 (2.2%) had a flood report and 102 (1.3%) had a flood report and no other storm report. 6,251 (78%) had no report at all.
+- **Meaning:** Floods look like a small direct cause. Reports are filed by people and many outages have none, so this is a rough size, not a cause of each outage.
+
+### E47. More place data
+- **Question:** Do tree type, size, age and dead trees, soil with recent rain, rivers, flood zones, utilities or transmission lines improve the headline model?
+- **Setup:** Eleven groups of county inputs (`ingest/fetch_treemap.py`, `fetch_forest_age.py`, `fetch_soil.py`, `fetch_water.py`, `fetch_flood_zones.py`, `fetch_utilities.py`, `fetch_transmission.py`). The rule, fixed before any result: a group is kept if it beats the current model in at least 4 of 5 seeds on 2024 and on held-out counties; only the kept set and the all-groups set are scored on 2025. Selection trained on 2020–2023; the test trained on 2020–2024 and scored the same 1,727,693 decisions of 2025 (`ml/place_extra.py`, `place_extra_select.csv`, `place_extra_2025.csv`).
+- **Result on 2024:**
+
+  | Group | Inputs | Gain on 2024 | Seeds better | Gain on held-out counties | Kept |
+  |---|---|---|---|---|---|
+  | Tree type | 6 | −0.6% | 2 of 5 | −2.4% | No |
+  | Tree size | 4 | +1.6% | 2 of 5 | +1.6% | No |
+  | Dead trees and ash | 3 | +1.4% | 4 of 5 | −0.1% | No |
+  | Tree age | 2 | +0.5% | 3 of 5 | +1.2% | No |
+  | Soil | 5 | −0.3% | 1 of 5 | +0.4% | No |
+  | Recent rain | 2 | −5.2% | 0 of 5 | −3.2% | No |
+  | Soil + recent rain | 9 | −2.7% | 0 of 5 | −0.8% | No |
+  | Rivers and streams | 3 | −0.1% | 3 of 5 | +3.7% | No |
+  | Flood zones | 1 | −0.6% | 3 of 5 | +3.5% | No |
+  | Utilities | 7 | +0.9% | 3 of 5 | −1.9% | No |
+  | Transmission lines | 2 | +0.3% | 3 of 5 | −2.0% | No |
+  | **Every group** | **37** | **+1.2%** | **5 of 5** | **+7.9%** | **Yes** |
+
+- **Result on 2025:**
+
+  | Model | PR-AUC | vs warnings + outlook | Alerts real | Caught | Alert spells |
+  |---|---|---|---|---|---|
+  | Warnings + outlook | 0.039 | 1× | 10.8% | 16.9% | 1,047 |
+  | Current model | 0.0941 | 2.40× (1.97–3.29×) | 15.0% | 29.9% | 2,959 |
+  | Every group | 0.0946 | 2.42× (1.98–3.25×) | 15.2% | 30.4% | 2,868 |
+
+  - Every group against the current model on the same storm days: 1.005× (0.96–1.04×); better in 52% of resamples. Better with all 5 seeds, and less spread between them (0.0946–0.0954 against 0.0917–0.0948).
+- **Meaning:**
+  - **The current model stays.** The new data adds too little to tell from noise, for 37 more inputs. The 7.9% on held-out counties is a lead, from one seed.
+  - **The 2024 selection covers June–December only.** Before June 2024 the archive stores 9 forecast hours for 20 of each day's 24 runs, and the five-run mean needs 13, so January–May (47% of 2024's positive county-hours) drops out, and most of September with it. All of 2025 has them. This also limits E28 and E36.
+  - **2025 is no longer untouched.** It has been scored many times by now; the clean test of any new input is 2026.
+  - **Rough inputs:** utility customers are split evenly across a utility's counties; FEMA maps are blank for 28 regions and may be partial in others; stand age is blank for 37 regions; substations aren't open; soil, river and flood data are current versions, later than the years they're used on.
+
 ---
 
 ## Open experiments
 
 | Test | Why | Notes |
 |---|---|---|
-| The headline recipe on 2022 and 2023 | It has only been tested on 2024 and 2025 (E36); E42 covers other years with a different version | The forecast archive now covers 2020–2025; the five-run mean exists from December 2020 |
-| The model without place data, against warnings + outlook | The pages say place data is likely part of why the model beats the official forecasts; E39 shows the model relies on it, not that it explains the gap | Compare the ratio to warnings + outlook with and without place data, on the same rows |
+| The forecast model on 2022 and 2023 | The five-run recipe has only been tested on June–December 2024 and 2025 (E36); E42 covers other years with a different version | Newest run only: the five-run mean can't be computed before June 2024 (see E47) |
+| More place data on unseen counties | All the new groups together gained 7.9% on held-out counties in E47, from one seed on part of 2024 | A lead only; try it on the 2026 blind test rather than on 2025 again |
 | County-wide summaries on the current model | E41 only tried them on the forecast-trained model | Should be done before the blind test, since it would change the model |
 | The live model at longer leads | 2 hours may be too short to move crews; E37 tested the forecast model at 0–6 hours, not the live recipe | For example 4 hours |
 | Held-out storms | Split by storm instead of by year | |
