@@ -10,7 +10,7 @@ nodata tag says 0, which is wrong (0 is a real "no trees" value), so we mask
 by value instead.
 
 Output: data/raw/geo/tree_canopy_2021.csv
-  canopy_mean_pct     average canopy cover over the region's land
+  canopy_mean_pct     average canopy cover over the whole region; water counts as 0%
   canopy_dense_share  share of pixels with >= 50% canopy (forest-like)
 
 Usage: pixi run fetch-tree-canopy   (~5 min; needs fetch-counties first)

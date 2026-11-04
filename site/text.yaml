@@ -302,8 +302,8 @@ trees:
   lead: >-
     I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But the same storm doesn't hit
     every county the same way. Official warnings only look at the weather. Our model also knows each county's trees,
-    homes and customers, and that's **likely part of why it beats them**. Scramble those facts and it loses about a third
-    of its score. Exactly why? We don't know yet.
+    homes and customers, and that's **part of why it beats them**: take those facts away and its lead shrinks from 2.4×
+    to 2.0×. Exactly why? We don't know yet.
   map_hit: Storm hit rate
   legend_hit: share of storm periods that caused an outage
   # {mo}, {il}: each state's correlation between the selected map and the storm hit rate
@@ -311,7 +311,7 @@ trees:
   # {mo}, {il}: what canopy adds to the model in each state
   note: >-
     Hit rate covers 2020–2025. Correlations compare counties within each state, with a log scale for housing density and
-    customers. Score lost: model without forecasts. Adding canopy changes the score by {mo} in Missouri, {il} in Illinois.
+    customers. Adding canopy changes the score by {mo} in Missouri, {il} in Illinois.
   # {label}, {value}: the selected map's county value; {hit}: its storm hit rate
   tip: "{label} {value} · storm hit rate {hit}"
   tabs:                                 # the buttons, in order

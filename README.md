@@ -76,7 +76,8 @@ little. Almost all the avoided cost is businesses'. Code: `ml/value_hourly.py`, 
 ### Limitations
 
 - **Few test years for the full recipe.** The model without forecasts beat the official forecasts on each of 2022–2025
-  (1.6–2.1×), but the headline recipe has only been tested on 2024 and 2025. The ranges cover which storms hit 2025, not
+  (1.6–2.1×), but the headline recipe has only been tested on June–December 2024 and 2025: the archive doesn't hold enough forecast
+  hours before June 2024. The ranges cover which storms hit 2025, not
   how different another year could be.
 - **Trained on actual weather.** The headline model learned from what happened and is scored on forecasts, so its highest
   probabilities run a little high. Training on forecasts instead scored lower (2.0× against 2.3× with the newest run on
