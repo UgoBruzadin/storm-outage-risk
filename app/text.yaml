@@ -18,7 +18,7 @@ storm_room:
   intro: >-
     Replay a 2025 storm as if it were happening now. Every hour, the model looks **two hours ahead** and gives
     every county its chance of a new outage in the following six hours, using only what was known at the time,
-    including the weather forecasts available then. The model never saw 2025 while it was being built.
+    including the weather forecasts available then. The model never trained on 2025.
   storm: Storm
   # {when}: the hour, e.g. "Fri 14 Mar, 4 PM"; {window}: e.g. "6 PM – midnight"
   hour: Decision time
@@ -26,7 +26,7 @@ storm_room:
   # {decided}: decision time; {window}: the six hours it is about
   situation: "It's **{decided}**. Where will the power go out between **{window}**?"
   tile_alerts: Counties on alert
-  tile_alerts_help: Counties above the alert level (the riskiest 0.75% of county-hours in 2025).
+  tile_alerts_help: Counties above the alert level (the riskiest 0.75% of county-hours across all of 2025). The level is set over the whole year, so a big storm can put most counties on alert at once.
   tile_customers: Customers on alert
   tile_expected: New outages expected
   tile_expected_help: The sum of every county's chance. Over many storms, about this many new outages happen.
@@ -90,7 +90,7 @@ alert_level:
 trust:
   title: ✅ Can we trust it?
   intro: >-
-    How the model did in 2025, a year it never saw while it was being built, compared with what utilities already
+    How the model did in 2025, a year it never trained on, compared with what utilities already
     have: NWS warnings and the SPC outlook.
   # {ratio}, {lo}, {hi}: times better than the official forecasts and its 95% range
   tile_better: vs. official warnings
@@ -158,7 +158,8 @@ about:
     EAGLE-I), and what the place is like (tree cover, housing, density).
 
 
-    **How it was tested.** Trained on 2020–2024, settings chosen on 2024, tested once on 2025. Every number in this
+    **How it was tested.** Trained on 2020–2024. Base settings were chosen on 2024, and the forecast versions were compared on 2025, so it isn't a
+    pristine test. Every number in this
     dashboard is from 2025. The pipeline was audited for anything that could see the future.
 
 

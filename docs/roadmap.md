@@ -24,14 +24,14 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 
 ## ✅ 3 — County traits (geo features)
 - [x] County shapes (Census), tree canopy % (USFS/NLCD 2021), housing age + density (ACS 2024)
-- [ ] Utility per county (HIFLD service territories): investor-owned vs co-op vs municipal — likely a strong confounder for canopy
-- [ ] Canopy near people/lines instead of county-wide (e.g. canopy within developed land or along roads)
+- [x] Utility per county: investor-owned vs co-op vs municipal (EIA-861, E47, E49): co-op share was standing in for long treed lines
+- [x] Canopy along roads instead of county-wide (E49)
 
 ## ✅ 4 — Resilience metrics (first version)
 - [x] Events (gaps-and-islands on 6-hour blocks), events/yr, outage hours per customer, storm hit rate, 7-day repeats
 - [ ] Recovery time from 15-minute snapshots (peak → 90% restored), larger events only
 - [ ] Repeats "with no storm in between" (needs Storm Events between the two events)
-- [ ] Size-adjusted events (a fixed 1% threshold makes small counties look fragile)
+- [x] Size-adjusted events (a fixed 1% threshold makes small counties look fragile): outages beyond the weather after size (E49)
 
 ## 5 — Model
 - [x] 6-hour storm-outage classifier, feature-set ablation, time / county / random splits, MLflow
@@ -51,5 +51,5 @@ Status of the project, by milestone. Unchecked items are planned next steps.
 - [ ] Make the repo and Space public when ready to show
 
 ## 9 — Write-up
-- [ ] README: screenshots, live link, key findings, limitations
+- [x] README: screenshots, live link, key findings, limitations
 - [ ] Short "data traps" section from [data notes](data-notes.md)

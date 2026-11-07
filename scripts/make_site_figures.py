@@ -6,7 +6,6 @@
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
   value.jpg           what staging crews on each forecast was worth in 2025 (ml/value_hourly.py)
-  social.jpg          1200x630 link-preview card (og:image): the March 2025 storm, risk decided 2 hours ahead
   storm.mp4           the March 2025 storm hour by hour, for social posts
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
 
@@ -182,7 +181,7 @@ def results():
     a.set_title("How early can you know?", loc="left", fontsize=13, fontweight="bold")
     a.tick_params(axis="y", length=0)
     runs = [("Warnings + outlook (rate table)", "Warnings + outlook alone", HATCH),
-            ("Model: weather + place + recent", "Model, weather so far only", ORANGE[3]),
+            ("Model: weather + place + recent", "Model, weather only (no warnings)", ORANGE[3]),
             ("+ neighbours (final)", "Model + warnings + outlook", BLUE[4])]
     for run, label, color in runs:
         d = lead[lead.run == run].sort_values("lead_hours")
@@ -348,6 +347,21 @@ def place_data(canopy):
                         for state in ("Missouri", "Illinois")} for key, v in values.items()}}
 
 
+def lines_data(order):
+    """The trees slide's line-exposure maps: public road per customer and the share of it under dense canopy
+    (ingest/fetch_roads.py), co-op share (EIA-861), and outages beyond the weather after county size
+    (ml/place_fragility.py), with counties the outage data barely covers marked."""
+    place = ROOT / "data" / "raw" / "place"
+    roads = pd.read_csv(place / "roads.csv", dtype={"region_fips": str}).set_index("region_fips").reindex(order)
+    coop = pd.read_csv(place / "utilities.csv", dtype={"region_fips": str}).set_index("region_fips").reindex(order)
+    frag = pd.read_csv(RESULTS / "place_fragility.csv", dtype={"region_fips": str}).set_index("region_fips")
+    frag = frag.reindex(order)
+    return {"road_m": [round(float(v)) for v in roads.road_km / frag.customers * 1000],
+            "road_treed": [round(float(v), 3) for v in roads.road_treed_share],
+            "coop": [round(float(v), 3) if pd.notna(v) else None for v in coop.util_share_coop],
+            "beyond": [round(float(v), 3) for v in np.log2(frag.ratio_after_size)],
+            "tracked": [bool(v) for v in frag.tracked]}
+
 def story_data(gdf):
     """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm
     hour by hour, the heartbeat example, and the hourly results (ml/export_hourly.py)."""
@@ -421,7 +435,7 @@ def story_data(gdf):
     lead_time = pd.read_parquet(APP / "lead_time.parquet")
     # each line's key in text.yaml (lead.labels), and a fallback label
     runs = {"Warnings + outlook (rate table)": ("official", "Warnings + outlook alone"),
-            "Model: weather + place + recent": ("weather", "Model, weather so far only"),
+            "Model: weather + place + recent": ("weather", "Model, weather only (no warnings)"),
             "+ neighbours (final)": ("model", "Model + warnings + outlook")}
     at = meta["at_headline_share"]
     calib = pd.read_parquet(APP / "calibration.parquet")
@@ -472,6 +486,7 @@ def story_data(gdf):
                    # what knowing the canopy adds to the model, per state (ml/canopy_by_state.py: pooled model, 2024)
                    "model": canopy_effect()},
         "place": place_data(canopy),
+        "lines": lines_data(order),
         "holds": holds(meta),
         "value": {
             "forecasts": [{"key": col, "label": label, "ours": col == "headline",
@@ -550,13 +565,6 @@ class StormFrame:
         self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}")
 
 
-def social_card(gdf, story):
-    frame = StormFrame(gdf, story)
-    frame.draw(frame.peak)
-    frame.fig.savefig(OUT / "social.jpg", pil_kwargs={"quality": 90})      # no tight bbox: exactly 1200x630
-    plt.close(frame.fig)
-
-
 def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):
     """MP4 (H.264, needs ffmpeg) for LinkedIn and Reddit: each hour held `hold` seconds, `tween` seconds of
     blending to the next, and the last hour held five times as long."""
@@ -580,12 +588,11 @@ def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):
 if __name__ == "__main__":
     import sys
     gdf = load()
-    if "--story" in sys.argv:                  # only the story page's data and the storm card and clip
+    if "--story" in sys.argv:                  # only the story page's data and the storm clip
         story = story_data(gdf)
         frames = json.loads(story.read_text())
-        social_card(gdf, frames)
         storm_clip(gdf, frames)
-        print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB), social.jpg, storm.mp4")
+        print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB), storm.mp4")
         sys.exit()
     accuracy(gdf)
     burden_map(gdf)
@@ -595,7 +602,6 @@ if __name__ == "__main__":
     value_figure()
     story = story_data(gdf)
     frames = json.loads(story.read_text())
-    social_card(gdf, frames)
     storm_clip(gdf, frames)
     print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
           ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))

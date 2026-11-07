@@ -3,9 +3,11 @@
 name: Storm Outage Risk
 repo: storm-outage-risk
 image: https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg
+video: https://ugobruzadin.github.io/storm-outage-risk/assets/year-2025.mp4
+headline: "Ranks new power outages 2.4× better than NWS warnings and SPC outlooks, two hours ahead, on a year it never trained on"
 summary: >-
   Which Missouri and Illinois counties will lose power in the next few hours? An hourly, county-level outage
-  forecast built on public data and real weather forecasts, tested two hours ahead on a year it never saw, with a
+  forecast built on public data and real weather forecasts, tested two hours ahead on a year it never trained on, with a
   story page, a full write-up and a decision dashboard.
 tags: [XGBoost, Forecasting, dbt, DuckDB, SQL, Geospatial, Streamlit, Python]
 why: >-
@@ -20,14 +22,15 @@ approach: >-
   weather, HRRR forecasts as issued (read from the hourly forecast archive on AWS), NWS warnings, SPC outlooks, tree
   canopy and Census housing. Every hour, an XGBoost model scores every county for the six hours starting two hours
   later, using only inputs known at that moment, including the last five forecast runs, which also give each
-  prediction a range. Trained on 2020-2024, choices made on 2024, tested once on 2025; storm-day bootstrap ranges,
+  prediction a range. Trained on 2020-2024, with base settings chosen on 2024 and the forecast versions compared on 2025; June-December
+  2024 gives a second check (2.8x), and a frozen live model is the clean test. Storm-day bootstrap ranges,
   paired permutation tests, and an audit for look-ahead and leakage.
 results: >-
   Two hours ahead, it ranks new outages 2.4x better than NWS warnings plus SPC outlooks (95% range 2.0-3.3x,
-  p < 0.001). Alerting on the riskiest 0.75% of county-hours, 15% of alerts were followed by a new outage (31x the
+  p <= 0.001). Alerting on the riskiest 0.75% of county-hours, 15% of alerts were followed by a new outage (31x the
   base rate) and they caught 30% of 2025's 1,436 new outages; the official forecasts, alerting as often, were right
   11% of the time and caught 17%. Real forecasts recover most of what perfect knowledge of the weather would add,
-  and its probabilities come true about as often as stated.
+  and up to about 20% its probabilities come true about as often as stated.
 stack: [Python, SQL, dbt, DuckDB, XGBoost, scikit-learn, MLflow, GeoPandas, D3, Streamlit, Docker]
 github: https://github.com/UgoBruzadin/storm-outage-risk
 demo: https://ugobruzadin.github.io/storm-outage-risk/

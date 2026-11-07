@@ -64,13 +64,13 @@ live:
 storm:
   menu: A past storm                   # the name in the side dots' tooltip
   kicker: 14–15 March 2025 · Missouri and Illinois
-  title: Here it is on a storm it never saw.
+  title: Here it is on a storm it never trained on.
   lead: >-
     One of 2025's worst storms, a year it never trained on, replayed hour by hour: the risk map, decided two hours
     ahead, next to what actually happened. This display version has the full model's inputs but also counts outages
     already underway, so its map follows the storm. Its scores aren't quoted anywhere; the results below are for new
     outages only.
-  map_risk: Risk, decided 2 hours before
+  map_risk: Risk, decided 2 hours before (display version)
   map_actual: "What happened: worst share of customers out"
   legend_risk: "chance of being ≥ 5% out in the 6 hours"
   legend_actual: "worst share of customers out in the 6 hours"
@@ -140,7 +140,7 @@ traps:
     lead: >-
       The first version summarized the weather *during* the hours it was predicting. That's not a leak in the code,
       but nobody knows that weather in advance. Rebuilt so that every input is known at the moment of the decision,
-      the score dropped by a third. Real forecasts win most of it back.
+      the score fell by more than half, from 0.106 to 0.043. Real forecasts win most of it back.
     window: the 6 hours being predicted
     window_narrow: predicted
     decision: decision
@@ -155,7 +155,7 @@ traps:
 
 ladder:
   menu: The result
-  kicker: The result · 2025, a year the model never saw
+  kicker: The result · 2025, a year the model never trained on
   # {ratio}: how many times better than warnings + outlook, e.g. "2.5"
   title: "Two hours ahead, the model ranks new outages {ratio}× better than official warnings alone."
   baseline: warnings + outlook alone = 1×
@@ -164,10 +164,10 @@ ladder:
   bar_detail: "  ({lo}–{hi}) · score {score}"
   # {decisions}: decisions scored; {outages}: new outages; {p_ceiling}: p-value, ceiling vs forecasts
   note: >-
-    Each bar: how many times better than NWS warnings + SPC outlook alone at ranking new outages of ≥ 5% of customers
+    Scores are PR-AUC: random guessing scores about 0.005, so the headline model's 0.094 is about 19× random. Each bar: how many times better than NWS warnings + SPC outlook alone at ranking new outages of ≥ 5% of customers
     in the 6 hours starting 2 hours after each decision, every county and hour of 2025 ({decisions} decisions,
     {outages} new outages). Whiskers: the 95% range when 2025's storm days are resampled, both scored on the same
-    days. Every version beat the official forecasts in all 1,000 resamples (p < 0.001). Knowing the weather in advance
+    days. Every version beat the official forecasts in all 1,000 resamples (p ≤ 0.001). Knowing the weather in advance
     is not significantly better than the real forecasts (p = {p_ceiling}). The live forecast at the top of this page is
     the last-five-forecasts version without current outage data: 2.2× (1.8–3.0×), 14.4% of its alerts real, 29.5% of
     outages caught.
@@ -187,7 +187,7 @@ lead:
   axis: hours ahead
   labels:                               # the lines
     official: Warnings + outlook alone
-    weather: Model, weather so far only
+    weather: Model, weather only (no warnings)
     model: Model + warnings + outlook
   # {score}: the forecast version's score at 2 hours
   point: "+ last five HRRR forecasts: {score}"
@@ -304,17 +304,41 @@ trees:
     every county the same way. Official warnings only look at the weather. Our model also knows each county's trees,
     homes and customers, and that's **part of why it beats them**: take those facts away and its lead shrinks from 2.4×
     to 2.0×. Exactly why? We don't know yet.
-  map_hit: Storm hit rate
-  legend_hit: share of storm periods that caused an outage
-  # {mo}, {il}: each state's correlation between the selected map and the storm hit rate
-  r: "Correlation with the storm hit rate: Missouri {mo} · Illinois {il}"
   # {mo}, {il}: what canopy adds to the model in each state
   note: >-
     Hit rate covers 2020–2025. Correlations compare counties within each state, with a log scale for housing density and
     customers. Adding canopy changes the score by {mo} in Missouri, {il} in Illinois.
   # {label}, {value}: the selected map's county value; {hit}: its storm hit rate
   tip: "{label} {value} · storm hit rate {hit}"
-  tabs:                                 # the buttons, in order
+  right:                                # the switch above the right-hand map
+    hit:
+      title: Storm hit rate
+      label: Storm hit rate by county, 2020 to 2025
+      legend: share of storm periods that caused an outage
+      # {mo}, {il}: each state's correlation between the selected map and the storm hit rate
+      r: "Correlation with the storm hit rate: Missouri {mo} · Illinois {il}"
+    beyond:
+      title: Beyond the weather
+      label: New outages compared with what the weather and county size predict, by county, 2020 to 2025
+      legend: new outages ÷ what weather and county size predict
+      # {mo}, {il}: each state's correlation between the selected map and the map on the right
+      r: "Correlation with outages beyond the weather: Missouri {mo} · Illinois {il}"
+      note: >-
+        New outages 2020–2025 against a weather-only model that never saw the county, adjusted for customers and
+        housing density. Hatched: someone was out in under 5% of hours, so the outage data barely covers the county.
+        Across both states, road per customer and the share of it under trees explain about a third of what size
+        leaves unexplained; co-op share and county-wide canopy add nothing once those are known.
+      # {label}, {value}: the selected map's county value; {beyond}: e.g. 2.3×
+      tip: "{label} {value} · {beyond} the outages weather and size predict"
+      tip_thin: "{label} {value} · too little outage data"
+  groups:                               # the tab rows above the left map, each with its label and tabs in order
+    county:
+      label: The county
+      tabs: [trees, homes, density, customers]
+    lines:
+      label: The lines
+      tabs: [roads, road_trees, coop]
+  tabs:                                 # each tab's words
     trees:
       tab: Trees
       title: Tree canopy cover
@@ -335,6 +359,21 @@ trees:
       title: Customers
       legend: customers tracked
       tip: customers
+    roads:
+      tab: Roads
+      title: Public road per customer
+      legend: road per customer (power lines follow roads)
+      tip: road per customer
+    road_trees:
+      tab: Trees by roads
+      title: Roads under dense tree canopy
+      legend: share of public road under ≥ 50% canopy
+      tip: road under trees
+    coop:
+      tab: Co-ops
+      title: Customers served by an electric co-op
+      legend: share of customers (EIA-861, 2015–2019)
+      tip: co-op customers
 
 value:
   menu: What it's worth
@@ -342,7 +381,7 @@ value:
   # {low}, {high}: the smallest and largest gap between the model and the official forecasts, in millions, each
   # within one scenario
   title: >-
-    Using the model would have netted ${low} million to ${high} million more than following the official forecasts in 2025.
+    By my estimate, using the model would have netted ${low} million to ${high} million more than following the official forecasts in 2025.
   lead: >-
     Suppose a utility had sent repair crews to wait wherever each forecast pointed, two hours ahead. Crews cost money
     every time, and pay off when the power goes out, because it comes back sooner. Each dot is one scenario.
@@ -368,15 +407,20 @@ end:
       text: >-
         Every forecast is saved before the weather happens. When the official outage records come out, we'll see if the
         live model holds up.
-    - title: Better place data
-      text: Which utility serves each county, and trees near power lines rather than county-wide.
+    - title: Three more states
+      text: >-
+        Iowa, Indiana and Michigan are in. In an early test, a model trained only on Missouri and Illinois caught 31%
+        of new outages in those three states, which it never saw, against 19% for warnings + outlook. Next: this whole
+        page on five states.
     - title: A chance for your home
       text: >-
-        Today's forecast asks if a county will pass 5% of customers out. Next: what are the odds for one household?
+        Today's forecast asks whether a county will pass 5% of customers out. Next: an app that takes an address and
+        gives the chance that home loses power in the next few hours, and how long it might last, from a set of models
+        all tested the same way.
   dashboard: Open the dashboard
   writeup: Read the full write-up
   code: Code on GitHub
   portfolio: See my other projects
   credits: >-
     Ugo Bruzadin Nunes, PhD · Data: DOE / ORNL EAGLE-I, NOAA HRRR via Open-Meteo and the University of Utah HRRR archive,
-    NOAA Storm Events, NWS and SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau.
+    NOAA Storm Events, NWS and SPC via the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau, EIA-861.

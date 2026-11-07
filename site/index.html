@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storm Outage Risk, in Two Minutes</title>
-<meta name="description" content="How early can you know which counties will lose power in a storm? A county-level outage model for Missouri and Illinois, tested two hours ahead on a year it never saw.">
+<meta name="description" content="How early can you know which counties will lose power in a storm? A county-level outage model for Missouri and Illinois, tested two hours ahead on a year it never trained on.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ugobruzadin.github.io/storm-outage-risk/">
 <meta property="og:title" content="Which counties will lose power in the next storm, two hours ahead?">
-<meta property="og:description" content="A county-level outage model built on public data and real weather forecasts. Two hours ahead, it ranks new outages 2.5× better than official warnings alone (95% range 2.1–3.4×), tested on 2025.">
+<meta property="og:description" content="A county-level outage model built on public data and real weather forecasts. Two hours ahead, it ranks new outages 2.4× better than official warnings and outlooks (95% range 2.0–3.3×), tested on 2025.">
 <meta property="og:image" content="https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Two maps of Missouri and Illinois during the March 2025 storm: outage risk by county, decided two hours ahead, beside the share of customers who actually lost power.">
+<meta property="og:image:alt" content="Two maps of Missouri and Illinois with all 1,436 new outages of 2025 as dots, blue where the forecast alerted in time: the model caught 429, official warnings and outlooks caught 243.">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <script>
@@ -91,6 +91,20 @@ strong { color: var(--ink); }
 .county.linked { stroke: var(--ink); stroke-width: 1.4; }
 #trees .map svg { max-height: 36svh; }
 #trees .tabs { margin-bottom: 12px; }
+/* the trees slide's tabs, in labeled groups that wrap instead of scrolling */
+#place-tabs { display: grid; gap: 2px; border-bottom: 1px solid var(--line); overflow: visible; }
+.tabgroup { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 2px; }
+.tabgroup-label { flex: 0 0 8.5em; white-space: nowrap; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); }
+#place-tabs .tab { padding: 6px 10px 7px; margin-bottom: 0; }
+@media (max-width: 760px) {
+  .tabgroup-label { flex-basis: 100%; margin-top: 6px; }
+  #place-tabs .tab { padding: 5px 8px 6px; font-size: 0.92rem; }
+}
+.hit-switch button { all: unset; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+.hit-switch button:hover { color: var(--ink-2); }
+.hit-switch button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.hit-switch button:focus-visible { outline: 2px solid var(--accent); border-radius: 4px; }
 #trees .lead { margin-bottom: 14px; }
 .place-r { margin: 12px 0 4px; font-weight: 600; }
 
@@ -406,7 +420,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <div class="tabs" role="tablist" id="place-tabs"></div>
   <div class="maps">
     <div class="map"><h3 id="place-title"></h3><svg id="map-place" viewBox="0 0 460 470" role="img"></svg></div>
-    <div class="map"><h3 data-t="trees.map_hit"></h3><svg id="map-hit" viewBox="0 0 460 470" role="img" aria-label="Storm hit rate by county, 2020 to 2025"></svg></div>
+    <div class="map"><h3 class="hit-switch" id="hit-switch"></h3><svg id="map-hit" viewBox="0 0 460 470" role="img"></svg></div>
   </div>
   <p class="place-r" id="place-r"></p>
   <p class="note" id="trees-note"></p>
@@ -1246,32 +1260,56 @@ function accuracy(data, features, states, fc, animate) {
     .delay((d, j) => 200 + (judged[j] ? share[j] * 1600 : 1800)).duration(500).attr("opacity", 1).attr("fill", fill));
 }
 
-let placeTab = "trees", placePaint = () => {};
+let placeTab = "trees", hitTab = "hit", placePaint = () => {};
+// the trees slide: a county fact on the left (tabs), and on the right either the storm hit rate or the outages
+// beyond what the weather and county size predict (ml/place_fragility.py); the line under the maps correlates the two
 function trees(data, features, states, fc, animate) {
   const still = REDUCE || !animate;
-  const c = data.canopy, p = data.place, t = TEXT.trees.tabs, index = new Map(features.map((f, j) => [f, j]));
+  const c = data.canopy, p = data.place, ln = data.lines, t = TEXT.trees.tabs, index = new Map(features.map((f, j) => [f, j]));
   const mo = c.model.Missouri, il = c.model.Illinois, sgn = v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%";
   document.querySelector("#trees-lead").innerHTML = T("trees.lead");
-  document.querySelector("#trees-note").innerHTML = T("trees.note", { mo: sgn(mo.mean), il: sgn(il.mean) });
   const thousands = d => (d < 6 ? `${10 ** (d - 3)}k` : "1M");
-  // density and customers span orders of magnitude: mapped by their logarithm, shown in plain numbers
+  const meters = d => (d >= 1000 ? `${+(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`);
+  // density, customers and road per customer span orders of magnitude: mapped by their logarithm, shown in plain numbers
   const views = {
-    trees: { color: "green", values: c.pct, domain: [0, 70], ticks: [0, 35, 70], tick: d => d + "%", show: d => d + "%", r: c.r },
-    homes: { color: "purple", values: p.homes, domain: [0, 0.6], ticks: [0, 0.2, 0.4, 0.6], tick: pct, show: pct, r: p.r.homes },
+    trees: { color: "green", values: c.pct, domain: [0, 70], ticks: [0, 35, 70], tick: d => d + "%", show: d => d + "%" },
+    homes: { color: "purple", values: p.homes, domain: [0, 0.6], ticks: [0, 0.2, 0.4, 0.6], tick: pct, show: pct },
     density: { color: "magenta", values: p.density.map(Math.log10), raw: p.density, domain: [0, 3], ticks: [0, 1, 2, 3],
-      tick: d => fmt(10 ** d), show: fmt, r: p.r.density },
+      tick: d => fmt(10 ** d), show: fmt },
     customers: { color: "blue", values: p.customers.map(Math.log10), raw: p.customers, domain: [3, 6], ticks: [3, 4, 5, 6],
-      tick: thousands, show: fmt, r: p.r.customers },
+      tick: thousands, show: fmt },
+    roads: { color: "purple", values: ln.road_m.map(Math.log10), raw: ln.road_m, domain: [Math.log10(30), Math.log10(2000)],
+      ticks: [30, 100, 300, 1000].map(Math.log10), tick: d => meters(Math.round(10 ** d)), show: meters },
+    road_trees: { color: "green", values: ln.road_treed, domain: [0, 0.5], ticks: [0, 0.25, 0.5],
+      tick: d => (d === 0.5 ? "50%+" : pct(d)), show: pct },
+    coop: { color: "blue", values: ln.coop, domain: [0, 1], ticks: [0, 0.5, 1], tick: pct, show: pct },
+  };
+  // right map: storm hit rate, or new outages ÷ what weather and size predict (log2), hatched where barely tracked
+  const DIVERGING = { light: ["#184f95", "#6da7ec", "#efeee9", "#f2925f", "#9c3c16"],
+                      dark: ["#b7d3f6", "#3987e5", "#2e2d2a", "#eb6834", "#fbd2bf"] };
+  const diverging = () => DIVERGING[isDark() ? "dark" : "light"];
+  const times = d => ({ "-2": "¼×", "-1": "½×", 0: "1×", 1: "2×", 2: "4×" })[d];
+  const rights = {
+    hit: { colors: () => ramp("orange"), values: c.hit, domain: [0, 0.3], ticks: [0, 0.1, 0.2, 0.3],
+      tick: d => (d === 0.3 ? "30%+" : pct(d)), ok: () => true },
+    beyond: { colors: diverging, values: ln.beyond, domain: [-2, 2], ticks: [-2, -1, 0, 1, 2], tick: times,
+      ok: j => ln.tracked[j] },
   };
   const left = d3.select("#map-place"), right = d3.select("#map-hit");
   [left, right].forEach(svg => {
     svg.selectAll("*").remove();
     d3.select(svg.node().parentNode).selectAll(".mlegend").remove();
   });
-  const hitColor = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, 0.3]).clamp(true);
-  const placeColor = v => d3.scaleSequential(d3.interpolateRgbBasis(ramp(v.color))).domain(v.domain).clamp(true);
-  const fillPlace = (d, j) => placeColor(views[placeTab])(views[placeTab].values[index.get(d)]);
-  const fillHit = d => hitColor()(c.hit[index.get(d)]);
+  hatch(right, "hatch-thin");
+  const scale = (colors, domain) => d3.scaleSequential(d3.interpolateRgbBasis(colors)).domain(domain).clamp(true);
+  const fillPlace = d => {
+    const v = views[placeTab], x = v.values[index.get(d)];
+    return x == null ? "var(--idle)" : scale(ramp(v.color), v.domain)(x);
+  };
+  const fillHit = d => {
+    const v = rights[hitTab], j = index.get(d);
+    return v.ok(j) ? scale(v.colors(), v.domain)(v.values[j]) : "url(#hatch-thin)";
+  };
   const placed = countyMap(left, features, states, fc, 460, 410), hit = countyMap(right, features, states, fc, 460, 410);
   placed.attr("fill", fillPlace);
   hit.attr("fill", fillHit);
@@ -1280,7 +1318,11 @@ function trees(data, features, states, fc, animate) {
     legend(g, 80, 445, 300, () => ramp(v.color), v.domain, v.ticks, v.tick, Tp(`trees.tabs.${k}.legend`));
     return [k, g];
   }));
-  legend(right, 80, 445, 300, () => ramp("orange"), [0, 0.3], [0, 0.1, 0.2, 0.3], d => (d === 0.3 ? "30%+" : pct(d)), Tp("trees.legend_hit"));
+  const rightKeys = Object.fromEntries(Object.entries(rights).map(([k, v]) => {
+    const g = right.append("g");
+    legend(g, 80, 445, 300, v.colors, v.domain, v.ticks, v.tick, Tp(`trees.right.${k}.legend`));
+    return [k, g];
+  }));
   // a compact legend under each map, shown on phones instead of the in-map one
   const mini = svg => {
     const box = d3.select(svg.node().parentNode).append("div").attr("class", "mlegend");
@@ -1289,28 +1331,62 @@ function trees(data, features, states, fc, animate) {
   };
   const miniLeft = mini(left), miniRight = mini(right);
   const paintMini = () => {
-    const v = views[placeTab];
+    const v = views[placeTab], h = rights[hitTab];
     miniLeft(ramp(v.color), v.tick(v.domain[0]), v.tick(v.domain[1]));
-    miniRight(ramp("orange"), "0%", "30%+");
+    miniRight(h.colors(), h.tick(h.domain[0]), h.tick(h.domain[1]));
+  };
+  // Pearson correlation between the two maps within a state, on the mapped (log where noted) values
+  const corr = state => {
+    const v = views[placeTab], h = rights[hitTab], xs = [], ys = [];
+    features.forEach((f, j) => {
+      if (f.properties.state !== state || v.values[j] == null || !h.ok(j)) return;
+      xs.push(v.values[j]); ys.push(h.values[j]);
+    });
+    const mx = d3.mean(xs), my = d3.mean(ys);
+    return d3.sum(xs, (x, i) => (x - mx) * (ys[i] - my)) /
+      Math.sqrt(d3.sum(xs, x => (x - mx) ** 2) * d3.sum(ys, y => (y - my) ** 2));
   };
   repaint.push(() => { placed.attr("fill", fillPlace); hit.attr("fill", fillHit); paintMini(); });
+  const hitSwitch = document.querySelector("#hit-switch");
   placePaint = fade => {
-    const v = views[placeTab], tt = t[placeTab];
+    const tt = t[placeTab];
     document.querySelector("#place-title").textContent = tt.title;
     left.attr("aria-label", `${tt.title} by county`);
-    document.querySelector("#place-r").innerHTML = T("trees.r", { mo: signed(v.r.Missouri), il: signed(v.r.Illinois) });
+    right.attr("aria-label", Tp(`trees.right.${hitTab}.label`));
+    document.querySelector("#place-r").innerHTML = T(`trees.right.${hitTab}.r`,
+      { mo: signed(corr("Missouri")), il: signed(corr("Illinois")) });
+    document.querySelector("#trees-note").innerHTML = hitTab === "hit"
+      ? T("trees.note", { mo: sgn(mo.mean), il: sgn(il.mean) }) : T("trees.right.beyond.note");
     Object.entries(keys).forEach(([k, g]) => g.style("display", k === placeTab ? null : "none"));
+    Object.entries(rightKeys).forEach(([k, g]) => g.style("display", k === hitTab ? null : "none"));
     paintMini();
     (fade ? placed.transition().duration(450) : placed).attr("fill", fillPlace);
+    (fade ? hit.transition().duration(450) : hit).attr("fill", fillHit);
     document.querySelectorAll("#place-tabs .tab").forEach(b => b.setAttribute("aria-selected", b.dataset.key === placeTab));
+    hitSwitch.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.key === hitTab));
   };
   const tabs = document.querySelector("#place-tabs");
   if (!tabs.children.length) {
-    Object.keys(t).forEach(k => {
+    Object.values(TEXT.trees.groups).forEach(grp => {
+      const row = document.createElement("div"), label = document.createElement("span");
+      row.className = "tabgroup"; label.className = "tabgroup-label"; label.textContent = grp.label;
+      row.append(label);
+      grp.tabs.forEach(k => {
+        const b = document.createElement("button");
+        b.className = "tab"; b.setAttribute("role", "tab"); b.dataset.key = k; b.textContent = t[k].tab;
+        b.addEventListener("click", () => { placeTab = k; placePaint(!REDUCE); });
+        row.append(b);
+      });
+      tabs.append(row);
+    });
+  }
+  if (!hitSwitch.children.length) {
+    Object.keys(rights).forEach((k, i) => {
+      if (i) hitSwitch.append(" · ");
       const b = document.createElement("button");
-      b.className = "tab"; b.setAttribute("role", "tab"); b.dataset.key = k; b.textContent = t[k].tab;
-      b.addEventListener("click", () => { placeTab = k; placePaint(!REDUCE); });
-      tabs.append(b);
+      b.dataset.key = k; b.textContent = T(`trees.right.${k}.title`);
+      b.addEventListener("click", () => { hitTab = k; placePaint(!REDUCE); });
+      hitSwitch.append(b);
     });
   }
   placePaint(false);
@@ -1318,9 +1394,13 @@ function trees(data, features, states, fc, animate) {
     const other = side ? placed : hit;
     sel.on("pointermove", (e, d) => {
       const j = index.get(d), v = views[placeTab], raw = v.raw ? v.raw[j] : v.values[j];
+      const value = raw == null ? "–" : v.show(raw);
       other.classed("linked", o => o === d);
-      showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` +
-        T("trees.tip", { label: t[placeTab].tip, value: v.show(raw), hit: pct(c.hit[j]) }));
+      const tip = hitTab === "hit" ? T("trees.tip", { label: t[placeTab].tip, value, hit: pct(c.hit[j]) })
+        : ln.tracked[j] ? T("trees.right.beyond.tip", { label: t[placeTab].tip, value,
+          beyond: d3.format(".1f")(2 ** ln.beyond[j]) + "×" })
+        : T("trees.right.beyond.tip_thin", { label: t[placeTab].tip, value });
+      showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` + tip);
     }).on("pointerleave", () => { other.classed("linked", false); hideTip(); });
   });
   if (still) return;

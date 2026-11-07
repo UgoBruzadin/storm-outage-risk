@@ -617,6 +617,61 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **2025 is no longer untouched.** It has been scored many times by now; the clean test of any new input is 2026.
   - **Rough inputs:** utility customers are split evenly across a utility's counties; FEMA maps are blank for 28 regions and may be partial in others; stand age is blank for 37 regions; substations aren't open; soil, river and flood data are current versions, later than the years they're used on.
 
+
+### E48. Counties the outage data barely covers
+- **Question:** EAGLE-I misses some utilities, so in some counties almost nobody is ever recorded out. Does the headline depend on them?
+- **Setup:** Coverage = the share of hours with anyone out, 2020–2024 (no 2025 data used to choose). The headline model (mean of five HRRR runs, 2025) retrained without the 10 counties under 5% and without the 32 under 8%, each with its own warnings + outlook baseline; every model scored on all 216 counties and on the 184 well covered (`ml/coverage_test.py`, first run as a script).
+- **Result:**
+
+  | Trained on | Scored on all 216 | Scored on the 184 well covered |
+  |---|---|---|
+  | All counties | 2.40× (1.97–3.29×) | 2.37× |
+  | Without the 10 under 5% | 2.31× | 2.34× |
+  | Without the 32 under 8% | 2.31× | 2.32× |
+
+- **Meaning:** The headline doesn't rest on the gaps. The maps mark counties under 5% as barely tracked.
+
+### E49. Roads and trees along them
+- **Question:** County-wide canopy goes with outages in Missouri but not Illinois (E24). Is it the lines? Distribution lines mostly follow roads, and no public map of them exists.
+- **Setup:** Census TIGER 2023 public roads (primary, secondary, local; `ingest/fetch_roads.py`), drawn onto the canopy tiles: road km per customer, and the share of road under ≥ 50% canopy. Against each county's new outages over what a weather-only model expects (cross-fitted over 5 county folds, 2020–2025), adjusted for county size and housing density (`ml/place_fragility.py`). 206 tracked counties, cross-validated R² for log(observed ÷ expected).
+- **Result:**
+
+  | Facts | R² |
+  |---|---|
+  | Size (customers, housing density) | 0.577 |
+  | Road per customer alone | 0.607 |
+  | Size + road per customer | 0.660 |
+  | … + share of road under trees | 0.709 |
+  | … + co-op share | 0.706 |
+
+  - Once size and roads are known, co-op share's partial correlation falls from +0.24 to +0.04, and county-wide canopy's from +0.20 to −0.09.
+  - Transmission per home (HIFLD) added nothing.
+- **Meaning:**
+  - Roads and trees along them explain about a third of what size leaves unexplained. Co-ops and county-wide canopy were standing in for long, treed lines.
+  - **Illinois:** the median share of road under dense canopy is 9% (Missouri 14%); 7 Illinois counties pass 25%, against 30 in Missouri. In Missouri the link appears above 25% (1.28× at 25–40%, 1.83× above 40%); between 2% and 25% neither state shows one. Consistent with a threshold Illinois rarely reaches, but too few treed Illinois counties to tell. The five-state data will test it.
+
+### E50. Three more states (early)
+- **Question:** Does the model work in states it never trained on, and does more training data help?
+- **Setup:** Iowa, Indiana and Michigan added (490 counties). All weather for all five states from NOAA's HRRR GRIB archive (`ingest/fetch_hrrr_grib.py`, `ingest/grib_to_study.py`). The headline recipe trained on MO + IL only and on all five, scored on 2025 (`ml/midwest_test.py`). One training each.
+- **Result:**
+
+  | Scored on | Trained on MO + IL | Trained on all five |
+  |---|---|---|
+  | MO + IL | 2.57× (2.15–3.46×) | 2.80× (2.35–3.83×) |
+  | IA + IN + MI, never seen by the MO + IL model | 2.96× (2.15–4.27×); caught 31% vs 19% | 4.27× (3.14–6.01×) |
+  | All five | 2.76× (2.24–3.70×) | 3.54× (2.90–4.75×) |
+
+- **Meaning:**
+  - The model travels to states it never saw.
+  - On MO + IL, GRIB weather gives 2.57× against the published 2.40× on Open-Meteo + hrrrzarr, so the national archive is at least as good.
+  - Early: one training, ranges by storm day only; the coverage check and place data for the new states are still to run (`pixi run pipeline`).
+
+### E51. A typical home's chance (early, Michigan only)
+- **Question:** Can the forecast give a household a probability rather than a county alarm?
+- **Setup:** Target: the share of a county's customers who newly lose power in the 6 hours starting 2 hours later, which is the chance for a typical home. A lower bound, since EAGLE-I counts customers per hour. Every decision hour kept; the headline features and five-run window weather; cross-entropy on the share. Against the county's usual share for the month, and against warnings + outlook (`ml/home_chance.py --states MI`).
+- **Result (Michigan, 2025, 709,834 decisions):** cross-entropy skill against the usual month: model 19% (12–24%), warnings + outlook 5% (0–9%). Calibrated: when the model said 5.1%, 5.3% of homes lost power; 15.7% → 17.7%; its top bin (151 hours) says 41%, 34% happened. Warnings + outlook's top bin says 41%, 11% happened.
+- **Meaning:** A household number is feasible and honest at the county level. Next: all five states, then how long the outage lasts.
+
 ---
 
 ## Open experiments
@@ -629,4 +684,4 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | The live model at longer leads | 2 hours may be too short to move crews; E37 tested the forecast model at 0–6 hours, not the live recipe | For example 4 hours |
 | Held-out storms | Split by storm instead of by year | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | By storm type in E29: wind and rain without storm energy are the hard cases |
-| Restoration time | Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
+| Restoration time | Next, after E51. Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

@@ -9,6 +9,9 @@ Census housing data. The pipeline runs locally on DuckDB and dbt; results are se
 [write-up](https://ugobruzadin.github.io/storm-outage-risk/writeup/) and a
 [Streamlit dashboard](https://storm-outage-risk.streamlit.app).
 
+Iowa, Indiana and Michigan are being added (`dbt/seeds/study_states.csv`; early results in
+[E50](docs/experiments.md)). Every number below is still Missouri and Illinois.
+
 ## Live forecast (beta)
 
 The story page opens with a live map, updated from [storm-outage-live](https://github.com/UgoBruzadin/storm-outage-live),
@@ -29,7 +32,9 @@ forecasts haven't been graded yet: that needs EAGLE-I's release. Experimental: d
 
 ## Results
 
-Trained on 2020–2024, features and settings chosen on 2024, tested once on 2025. PR-AUC on new ≥ 5% outages, two hours
+Trained on 2020–2024. Base features and settings were chosen on 2024, but the forecast versions were compared on 2025,
+so it isn't a pristine test: June–December 2024 gives a second check (2.8×), and the frozen live model is the clean test.
+PR-AUC on new ≥ 5% outages, two hours
 ahead; 95% ranges from resampling 2025's storm days, ratios paired on the same days
 ([docs/experiments.md](docs/experiments.md), E19–E26).
 
@@ -120,7 +125,7 @@ Design choices worth knowing:
   county in the U.S. reporting) separates "no outages" from "no data".
 - **Leakage guards:** every input is known at the decision, checked by recomputing inputs from the raw tables
   (`ml/audit.py`); forecasts come from runs issued before it; storm reports are context, never inputs.
-- **Validation:** a validation year (2024) for every choice, one untouched test year (2025), storm-day bootstrap
+- **Validation:** a validation year (2024) for the base model's choices, a test year (2025) that the forecast versions were also compared on, storm-day bootstrap
   ranges and paired permutation tests, always against the official forecasts.
 - **The dashboard reads precomputed Parquet only** — it never runs a model, and shows 2025, not the live forecast.
 
