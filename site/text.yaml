@@ -298,12 +298,14 @@ holds:
 trees:
   menu: Trees
   kicker: The hunch that started it
-  title: Trees matter, just not the way I expected.
+  title: Trees matter where the power lines run under them.
   lead: >-
-    I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But the same storm doesn't hit
-    every county the same way. Official warnings only look at the weather. Our model also knows each county's trees,
-    homes and customers, and that's **part of why it beats them**: take those facts away and its lead shrinks from 2.4×
-    to 2.0×. Exactly why? We don't know yet.
+    I expected tree-heavy counties to fail more often in storms. In Missouri they do; in Illinois they don't. I was
+    looking at the wrong map: power lines don't blanket a county, they follow its roads. What matters is how much road
+    each customer depends on, and how much of it runs under trees. Those two explain about a third of what county size
+    leaves unexplained, and once they're known, county-wide canopy and co-ops add nothing. Illinois has few roads under
+    dense trees, which may be why its trees barely show. Knowing each county's trees, homes and customers is **part of
+    why the model beats official warnings**: without them its lead shrinks from 2.4× to 2.0×.
   # {mo}, {il}: what canopy adds to the model in each state
   note: >-
     Hit rate covers 2020–2025. Correlations compare counties within each state, with a log scale for housing density and
@@ -326,8 +328,9 @@ trees:
       note: >-
         New outages 2020–2025 against a weather-only model that never saw the county, adjusted for customers and
         housing density. Hatched: someone was out in under 5% of hours, so the outage data barely covers the county.
-        Across both states, road per customer and the share of it under trees explain about a third of what size
-        leaves unexplained; co-op share and county-wide canopy add nothing once those are known.
+        County size alone explains 58% of the differences between counties; adding road per customer and the share of
+        it under trees, 71% (206 well-covered counties). In Missouri the excess appears where over a quarter of the road
+        runs under dense canopy; 30 Missouri counties get there, only 7 in Illinois, too few to tell.
       # {label}, {value}: the selected map's county value; {beyond}: e.g. 2.3×
       tip: "{label} {value} · {beyond} the outages weather and size predict"
       tip_thin: "{label} {value} · too little outage data"
