@@ -11,7 +11,11 @@
 
 Reads data/app/ (pixi run export-app, then python -m ml.export_hourly), ml/results/ and the warehouse
 (read-only), and data/cache/forecast_ensemble_2025.parquet (python -m ml.forecast_ensemble).
-Usage: pixi run python scripts/make_site_figures.py [--story]
+Usage: pixi run python scripts/make_site_figures.py [--publish | --out DIR] [--story] [--no-clip]
+  (default)   a preview in data/site_preview/ (assets/, data/story.json): the published site is never touched
+  --publish   write into site/, the published page
+  --out DIR   a preview somewhere else
+  --no-clip   skip storm.mp4 (slow)
 Then bump the ?v= on the image links in site/writeup/index.html, or browsers keep showing the old files.
 """
 import json
@@ -32,17 +36,20 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "assets"
 APP = ROOT / "data" / "app"
 RESULTS = ROOT / "ml" / "results"
+STORY = ROOT / "site" / "data" / "story.json"
 
 SURFACE, INK, INK_2, MUTED, LINE = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
 HATCH = "#c3c2b7"                                               # hatching: counties with too little to judge
-STATE = {"Illinois": "#2a78d6", "Missouri": "#eb6834"}          # categorical slots 1 and 2
 # sequential ramps, light -> dark (the dashboard's, app/lib.py)
 BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 ORANGE = ["#fde0d2", "#f8b998", "#f2925f", "#eb6834", "#c84f1f", "#9c3c16", "#6e2a0f"]
 GREEN = ["#eef6ee", "#a9d4a9", "#4fa64f", "#008300", "#004d00"]
 # diverging: blue (fewer than expected) <- gray -> orange (more than expected)
 DIVERGING = ["#184f95", "#6da7ec", "#f0efec", "#f2925f", "#9c3c16"]
-LABELS = {"29203": "Shannon", "17019": "Champaign", "29189+29510": "St. Louis", "17031": "Cook"}
+LABELS = {"29203": "Shannon", "17019": "Champaign", "29189+29510": "St. Louis", "17031": "Cook",   # where present
+          "19153": "Polk", "18097": "Marion", "26163": "Wayne"}
+STATE_NAMES = dict(pd.read_csv(ROOT / "dbt" / "seeds" / "study_states.csv", dtype=str)[["state_fips", "state_name"]]
+                   .itertuples(index=False))                   # "29" -> "Missouri"
 MIN_EVENTS = 3          # as in the dashboard's Accuracy tab
 
 plt.rcParams.update({
@@ -65,7 +72,11 @@ def load():
     """).df()
     con.close()
     shapes = gpd.read_parquet(ROOT / "data" / "raw" / "geo" / "regions_study.parquet")[["region_fips", "geometry"]]
-    return shapes.merge(scores, on="region_fips").to_crs(5070)    # equal-area projection for the maps
+    gdf = shapes.merge(scores, on="region_fips").to_crs(5070)     # equal-area projection for the maps
+    global ASPECT
+    minx, miny, maxx, maxy = gdf.total_bounds
+    ASPECT = (maxx - minx) / (maxy - miny)
+    return gdf
 
 
 def county_map(ax, gdf, column, colors, vmin, vmax, judged=None):
@@ -82,7 +93,7 @@ def county_map(ax, gdf, column, colors, vmin, vmax, judged=None):
     ax.set_axis_off()
 
 
-ASPECT = 0.96           # width / height of Missouri + Illinois in EPSG:5070
+ASPECT = 0.96           # width / height of the study area in EPSG:5070; load() sets it from the counties
 
 
 def map_figure(panels):
@@ -293,6 +304,8 @@ def canopy_map(gdf):
     fig, (ax,), (cax,) = map_figure(1)
     county_map(ax, gdf, "canopy_mean_pct", GREEN, 0, 75)
     for fips, name in LABELS.items():
+        if fips not in set(gdf.region_fips):
+            continue
         row = gdf[gdf.region_fips == fips].iloc[0]
         pt = row.geometry.representative_point()
         ax.annotate(f"{name}\n{row.canopy_mean_pct:.0f}%", (pt.x, pt.y), ha="center", va="center", fontsize=9,
@@ -304,24 +317,37 @@ def canopy_map(gdf):
 
 
 def canopy_scatter(gdf):
-    fig, ax = plt.subplots(figsize=(8, 5), dpi=200)
-    for state, color in STATE.items():
+    """Canopy against the storm hit rate, one panel per state on shared axes (states differ, so they are compared
+    side by side rather than in colors that can't all be told apart)."""
+    states = sorted(gdf.state.unique())
+    cols = min(len(states), 3)
+    rows_n = -(-len(states) // cols)
+    fig, axes = plt.subplots(rows_n, cols, figsize=(3.2 * cols, 2.9 * rows_n), dpi=200, sharex=True, sharey=True,
+                             squeeze=False)
+    for ax, state in zip(axes.flat, states, strict=False):
         rows = gdf[gdf.state == state]
         r = np.corrcoef(rows.canopy_mean_pct, rows.storm_hit_rate)[0, 1]
-        ax.scatter(rows.canopy_mean_pct, rows.storm_hit_rate * 100, s=42, color=color, alpha=0.85,
-                   edgecolor=SURFACE, linewidth=1.2, label=f"{state} (r = {r:+.2f})", zorder=3)
+        ax.scatter(gdf.canopy_mean_pct, gdf.storm_hit_rate * 100, s=10, color=LINE, zorder=2)   # every county
+        ax.scatter(rows.canopy_mean_pct, rows.storm_hit_rate * 100, s=22, color=BLUE[4], edgecolor=SURFACE,
+                   linewidth=0.8, zorder=3)
+        ax.set_title(f"{state}  r = {r:+.2f}", loc="left", fontsize=10.5, fontweight="bold")
+        ax.grid(color=LINE, linewidth=0.6, zorder=0)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+    for ax in axes.flat[len(states):]:
+        ax.set_visible(False)
+    for i, ax in enumerate(axes.flat[:len(states)]):
+        if i + cols >= len(states):            # nothing below it: it carries the x axis
+            ax.xaxis.set_tick_params(labelbottom=True)
+            ax.set_xlabel("Average tree canopy cover (%)")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Storm hit rate (%)")
     r = np.corrcoef(gdf.canopy_mean_pct, gdf.storm_hit_rate)[0, 1]
-    ax.grid(color=LINE, linewidth=0.6, zorder=0)
-    for side in ("top", "right"):
-        ax.spines[side].set_visible(False)
-    ax.set_xlabel("Average tree canopy cover (%)")
-    ax.set_ylabel("Storm hit rate (%)")
-    ax.legend(frameon=False, loc="lower left", bbox_to_anchor=(0, 1.0), ncol=2, borderaxespad=0.2,
-              handletextpad=0.3, columnspacing=1.2)
-    fig.suptitle(f"Trees and outages: linked in Missouri, not in Illinois (r = {r:.2f})", x=0.125, y=1.0, ha="left",
-                 fontsize=14, fontweight="bold")
-    fig.text(0.01, -0.02, "One dot per county. Storm hit rate: share of blocks with a NOAA storm report that had "
-             "≥ 1% of customers out, 2020–2025.", color=MUTED, fontsize=8.5)
+    fig.suptitle(f"Trees and outages, state by state (all counties: r = {r:.2f})", x=0.01, ha="left", fontsize=14,
+                 fontweight="bold")
+    fig.text(0.01, -0.02, "One dot per county; gray: every other state's counties. Storm hit rate: share of blocks "
+             "with a NOAA storm report that had ≥ 1% of customers out, 2020–2025.", color=MUTED, fontsize=8.5)
+    fig.tight_layout()
     save(fig, "canopy-scatter.jpg")
 
 
@@ -344,7 +370,7 @@ def place_data(canopy):
             "customers": [int(v) for v in canopy.customers],
             "r": {key: {state: round(float(np.corrcoef(v[canopy.state == state],
                                                        canopy.storm_hit_rate[canopy.state == state])[0, 1]), 2)
-                        for state in ("Missouri", "Illinois")} for key, v in values.items()}}
+                        for state in sorted(canopy.state.unique())} for key, v in values.items()}}
 
 
 def lines_data(order):
@@ -419,7 +445,8 @@ def story_data(gdf):
             "start": t.isoformat() + "Z",
             "prob": [r3(v) for v in e.p_mean], "low": [r3(v) for v in e.p_low], "high": [r3(v) for v in e.p_high],
             "pct": [None if pd.isna(v) else round(float(v), 1) for v in worst],
-            "out_mo": int(now[now.index.str.startswith("29")].sum()),
+            "out": {name: int(now[now.index.str.startswith(code)].sum()) for code, name in STATE_NAMES.items()},
+            "out_mo": int(now[now.index.str.startswith("29")].sum()),        # the current page reads these two
             "out_il": int(now[now.index.str.startswith("17")].sum()),
         })
 
@@ -495,7 +522,7 @@ def story_data(gdf):
             "scenarios": [{"cut": float(r.restoration_cut), "cost": int(r.staging_cost)} for r in dollars.itertuples()],
         },
     }
-    out = ROOT / "site" / "data" / "story.json"
+    out = STORY
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")))
     return out
@@ -512,7 +539,7 @@ class StormFrame:
         self.when = [pd.Timestamp(f["start"]) for f in frames]
         self.prob = np.array([[np.nan if v is None else v for v in f["prob"]] for f in frames], dtype=float)
         self.pct = np.array([[np.nan if v is None else v for v in f["pct"]] for f in frames], dtype=float)
-        self.out = [(f["out_mo"], f["out_il"]) for f in frames]
+        self.out = [f.get("out") or {"Missouri": f["out_mo"], "Illinois": f["out_il"]} for f in frames]
         self.vmax_p, self.vmax_o = 0.4, 25.0          # outages above 25% share the darkest color
         self.peak = int(np.nanargmax(np.nansum(self.prob, axis=1)))       # the hour with the most risk ahead
 
@@ -561,8 +588,7 @@ class StormFrame:
         decided = ct - pd.Timedelta(hours=self.lead)
         self.subtitle.set_text(f"{ct:%-d %B, %-I %p}–{ct + pd.Timedelta(hours=6):%-I %p} CT, as seen at "
                                f"{decided:%-I %p} from the forecasts available then. A storm it never trained on.")
-        mo, il = self.out[step]
-        self.totals.set_text(f"Customers out: Missouri {mo:,} · Illinois {il:,}")
+        self.totals.set_text("Customers out: " + " · ".join(f"{s} {n:,}" for s, n in self.out[step].items()))
 
 
 def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):
@@ -587,12 +613,20 @@ def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):
 
 if __name__ == "__main__":
     import sys
+    if "--publish" not in sys.argv:            # a preview, never over the published site/ unless asked
+        base = Path(sys.argv[sys.argv.index("--out") + 1]).resolve() if "--out" in sys.argv \
+            else ROOT / "data" / "site_preview"
+        OUT, STORY = base / "assets", base / "data" / "story.json"
+    for d in (OUT, STORY.parent):
+        d.mkdir(parents=True, exist_ok=True)
+    clip = "--no-clip" not in sys.argv
     gdf = load()
     if "--story" in sys.argv:                  # only the story page's data and the storm clip
         story = story_data(gdf)
         frames = json.loads(story.read_text())
-        storm_clip(gdf, frames)
-        print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB), storm.mp4")
+        if clip:
+            storm_clip(gdf, frames)
+        print(f"wrote {story} ({story.stat().st_size / 1e3:.0f} kB)" + (", storm.mp4" if clip else ""))
         sys.exit()
     accuracy(gdf)
     burden_map(gdf)
@@ -602,6 +636,7 @@ if __name__ == "__main__":
     value_figure()
     story = story_data(gdf)
     frames = json.loads(story.read_text())
-    storm_clip(gdf, frames)
-    print(f"wrote {story.relative_to(ROOT)} ({story.stat().st_size / 1e3:.0f} kB),",
+    if clip:
+        storm_clip(gdf, frames)
+    print(f"wrote {story} ({story.stat().st_size / 1e3:.0f} kB),",
           ", ".join(p.name for p in sorted(OUT.glob("*.jpg"))))

@@ -74,9 +74,11 @@ STEPS = [
          ["data/app/meta.json", "data/app/regions.parquet"], needs=["benchmark_final"]),
     Step("export_hourly", f"{PY} ml.export_hourly", ["data/app/meta_hourly.json", "data/app/ladder.parquet"],
          needs=["export_app", "moving_window", "forecast_test", "forecast_ensemble", "value_hourly"]),
-    Step("site", "python scripts/make_site_figures.py", ["site/data/story.json"],
+    Step("site", "python scripts/make_site_figures.py --no-clip",
+         ["data/site_preview/data/story.json"],
          needs=["export_hourly", "display_model", "calibrate", "significance", "extra", "canopy_by_state",
-                "place_fragility", "states"], about="figures and story.json (not the storm video)"),
+                "place_fragility", "states"],
+         about="figures and story.json in data/site_preview/, never over site/ (no storm video)"),
 ]
 BY_NAME = {s.name: s for s in STEPS}
 
