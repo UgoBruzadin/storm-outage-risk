@@ -28,7 +28,7 @@ import requests
 
 IEM = "https://mesonet.agron.iastate.edu/cgi-bin/request/gis"
 YEARS = range(2014, 2026)
-STATES = "MO,IL"
+STATES = ",".join(pd.read_csv("dbt/seeds/study_states.csv", dtype=str).state_abbr)   # the study area
 PHENOMENA = ["SV", "TO", "HW", "IS", "WS", "BZ"]
 CATEGORICAL = {"TSTM": 1, "MRGL": 2, "SLGT": 3, "ENH": 4, "MDT": 5, "HIGH": 6}
 REGIONS = Path("data/raw/geo/regions_study.parquet")

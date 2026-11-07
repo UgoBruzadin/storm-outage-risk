@@ -2,7 +2,7 @@
 authors = ["Ugo Bruzadin Nunes <25592470+UgoBruzadin@users.noreply.github.com>"]
 channels = ["conda-forge"]
 name = "storm-outage-risk"
-platforms = ["osx-arm64", "linux-64"]   # linux-64: the Docker image
+platforms = ["osx-arm64", "linux-64", "win-64"]   # linux-64: the Docker image; win-64: the desktop
 version = "0.1.0"
 
 [tasks]
@@ -47,6 +47,7 @@ rasterstats = ">=0.21.0,<0.22"
 pyarrow = ">=21,!=25.0.0"
 numcodecs = ">=0.17.1,<0.18"
 openpyxl = ">=3.1.5,<4"
+libgdal-grib = ">=3.13.3,<4"
 
 [feature.models.dependencies]
 # Benchmark models beyond scikit-learn (default environment only)
