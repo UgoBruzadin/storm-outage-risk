@@ -1,12 +1,12 @@
-"""Does tree canopy help the model in Missouri, in Illinois, or both? (docs/experiments.md, E24)
+"""Does tree canopy help the model, state by state? (docs/experiments.md, E24)
 
-The story page's tree finding is a correlation: across counties, canopy goes with storm damage in Missouri
-(r = +0.43) and not in Illinois (−0.10). This asks the modelling question instead: does knowing a county's
-canopy improve predictions there? The moving-window model (2 h ahead, no HRRR forecasts) with and without the
-canopy features, over seeds, on the 2024 validation year (trained 2020–2023), two ways:
+The story page's tree finding is a correlation: across counties, canopy goes with storm damage in some states
+and not in others (Missouri +0.43, Illinois −0.10 in the first two). This asks the modelling question instead:
+does knowing a county's canopy improve predictions there? The moving-window model (2 h ahead, no HRRR
+forecasts) with and without the canopy features, over seeds, on the 2024 validation year (trained 2020–2023), two ways:
 
-  pooled   one model trained on both states, scored on each state's counties separately
-  state    a model trained and scored on one state only, so it can't borrow from the other
+  pooled   one model trained on every state, scored on each state's counties separately
+  state    a model trained and scored on one state only, so it can't borrow from the others
 
 Usage: pixi run python -m ml.canopy_by_state [--seeds 0,1,2]
 Writes ml/results/canopy_by_state.csv.
@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--seeds", default="0,1,2")
     seeds = [int(s) for s in parser.parse_args().seeds.split(",")]
     df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [VAL_YEAR], LEAD)
-    df["state"] = df.region_fips.str[:2].map({"29": "Missouri", "17": "Illinois"})
+    df["state"] = df.region_fips.str[:2].map(data.STATES)
     train, val = df[df.year.isin(TRAIN_YEARS)], df[df.year == VAL_YEAR]
     rows = []
 
@@ -47,7 +47,7 @@ def main():
             pooled = models.build("xgboost", params).fit(train[features], train["y"])
             for state, v in val.groupby("state"):
                 record("pooled", state, spec_name, seed, v["y"].to_numpy(), pooled.predict_proba(v[features])[:, 1])
-            for state in ("Missouri", "Illinois"):
+            for state in sorted(val.state.unique()):
                 t, v = train[train.state == state], val[val.state == state]
                 fitted = models.build("xgboost", params).fit(t[features], t["y"])
                 record("state", state, spec_name, seed, v["y"].to_numpy(), fitted.predict_proba(v[features])[:, 1])

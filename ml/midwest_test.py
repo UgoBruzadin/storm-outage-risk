@@ -25,10 +25,12 @@ from ml.moving_window import FEATURES, PARAMS, caught_flags, episodes, onset_hou
 from ml.place_extra import NAMES, five_run_mean
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
-STATES = {"17": "IL", "18": "IN", "19": "IA", "26": "MI", "29": "MO"}
-GROUPS = {"MO+IL": ["MO", "IL"], "IA+IN+MI": ["IA", "IN", "MI"], "all 5": list(STATES.values()),
-          **{s: [s] for s in STATES.values()}}
-TRAININGS = {"MO+IL": ["MO", "IL"], "all 5": list(STATES.values())}
+STATES = data.STATE_ABBR
+FIRST = ["MO", "IL"]                                       # the study's first two states
+NEW = [s for s in STATES.values() if s not in FIRST]
+ALL = f"all {len(STATES)}"
+GROUPS = {"MO+IL": FIRST, "+".join(NEW): NEW, ALL: list(STATES.values()), **{s: [s] for s in STATES.values()}}
+TRAININGS = {"MO+IL": FIRST, ALL: list(STATES.values())}
 OFFICIAL = "warnings + outlook"
 OUT = data.ROOT / "ml" / "results" / "midwest_2025.csv"
 

@@ -6,7 +6,7 @@ exist, so re-running is safe. Run them with the pixi tasks:
 | Task | Script | Source | Output |
 |---|---|---|---|
 | `fetch-noaa` | `fetch_noaa.py` | NOAA Global Hourly (KSTL airport), AWS mirror | `noaa/` |
-| `fetch-counties` | `fetch_counties.py` | Census cartographic county boundaries | `geo/regions_study.*` (216 regions) |
+| `fetch-counties` | `fetch_counties.py` | Census cartographic county boundaries | `geo/regions_study.*` (216 regions for MO + IL, 490 for five states) |
 | `fetch-weather` | `fetch_weather.py` | HRRR storm ingredients via Open-Meteo (rate-limited, ~a day) | `weather/hrrr/` |
 | `fetch-hrrr-forecast` | `fetch_hrrr_forecast.py` | HRRR forecasts as issued (hourly runs, forecast hours 1–13) from the hrrrzarr archive on AWS; ~1 min per day of runs | `weather/hrrr_fcst/` |
 | `fetch-tree-canopy` | `fetch_tree_canopy.py` | USFS/NLCD Tree Canopy Cover 2021 via MRLC WCS | `geo/tree_canopy_2021.csv` |
@@ -19,5 +19,10 @@ exist, so re-running is safe. Run them with the pixi tasks:
 | `fetch-flood-zones` | `fetch_flood_zones.py` | FEMA flood zones (slow, resumable) | `place/flood_zones.csv` |
 | `fetch-transmission` | `fetch_transmission.py` | HIFLD transmission lines | `place/transmission.csv` |
 | `fetch-utilities` | `fetch_utilities.py` | EIA-861 utilities and reliability, 2015–2019 | `place/utilities.csv` |
+| `fetch-roads` | `fetch_roads.py` | Census TIGER 2023 public roads, drawn onto the canopy tiles | `place/roads.csv` |
+| `fetch-nws` | `fetch_nws.py` | NWS warnings and SPC Day 1 outlooks (Iowa Environmental Mesonet) | `nws/` |
+| `fetch-hrrr-grib` | `fetch_hrrr_grib.py`, then `grib_to_study.py` | HRRR from NOAA's GRIB archive on AWS, any states; replaces Open-Meteo + hrrrzarr for the five-state study | `weather/hrrr/`, `weather/hrrr_fcst/` |
+
+Which states: `dbt/seeds/study_states.csv`; every fetcher reads it.
 
 EAGLE-I outages are a manual download — see `../data/README.md`.

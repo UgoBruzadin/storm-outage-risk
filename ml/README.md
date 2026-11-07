@@ -37,7 +37,13 @@ the git commit).
 | `forecast_ensemble.py` | a probability range per decision from the HRRR runs issued 2–6 h before | change `RUN_AGES` |
 | `uncertainty.py` | paired bootstrap over storm days: 95% ranges for scores and differences | change `N_RESAMPLES` |
 | `significance.py` | paired tests between models: storm-day bootstrap and permutation p-values | change `COMPARISONS` |
-| `canopy_by_state.py` | does canopy help the model in Missouri, Illinois or both | — |
+| `canopy_by_state.py` | does canopy help the model, state by state | — |
+| `pipeline.py` | **every experiment behind the story page, in order** (`pixi run pipeline`); reruns what's out of date | add a `Step` |
+| `summary.py` | the headline numbers against the last commit → `results/summary.md` | add a number in `numbers()` |
+| `coverage_test.py` | the headline without counties the outage data barely covers (E48) | change `CUTS` |
+| `place_fragility.py` | outages beyond the weather per county, and how much roads and trees explain (E49) | — |
+| `midwest_test.py` | state by state, and states the model never trained on (E50) | — |
+| `home_chance.py` | the chance a typical home loses power: expected share newly out (E51) | — |
 | `audit.py` | checks for look-ahead, clock and leakage problems (docs/audit.md) | — |
 | `export_hourly.py` | the hourly results the site and dashboard read | change `HEADLINE` or `SHARES` |
 

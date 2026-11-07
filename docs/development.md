@@ -17,7 +17,9 @@ pixi run fetch-storm-events   # NOAA storm reports              (~1 min)
 # 2. warehouse
 pixi run build                # dbt deps + dbt build
 
-# 3. models (see ml/README.md)
+# 3. every result behind the story page (see ml/README.md), for the states in dbt/seeds/study_states.csv
+pixi run pipeline --dry-run   # what's out of date
+pixi run pipeline             # reruns it (hours), then writes ml/results/summary.md
 pixi run train                # quick benchmark: baselines vs model families
 pixi run benchmark ml/benchmarks/full.yaml   # grid search + ablations (hours)
 pixi run mlflow-ui            # browse and compare runs at http://127.0.0.1:5000

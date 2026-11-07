@@ -8,7 +8,7 @@ of the model's weather inputs.
 
 NCEI re-publishes files when they're revised, so the file name carries a
 creation date (..._d2024_c20260728.csv.gz). We list the directory and take
-the newest file per year. dbt filters to MO + IL.
+the newest file per year. dbt filters to the study states.
 
 Winter events (ice storm, winter storm, high wind...) are reported by NWS
 forecast *zone* (CZ_TYPE = 'Z'), not county. The NWS zone–county correlation

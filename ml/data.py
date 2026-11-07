@@ -16,6 +16,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 DB = ROOT / "data" / "warehouse.duckdb"
+_SEED = pd.read_csv(ROOT / "dbt" / "seeds" / "study_states.csv", dtype=str)
+STATES = dict(zip(_SEED.state_fips, _SEED.state_name, strict=True))      # the study area: "29" -> "Missouri"
+STATE_ABBR = dict(zip(_SEED.state_fips, _SEED.state_abbr, strict=True))  # "29" -> "MO"
 
 FEATURE_GROUPS = {
     # storm ingredients (HRRR) + interaction terms + calendar
@@ -127,14 +130,15 @@ HOURLY_LEADS = (0, 1, 2, 3, 6)
 FRESH_HOURS = 24
 
 
-def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db=DB):
+def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db=DB, states=None):
     """The moving-window table (marts.mart_study__region_1h) for one lead: a row is a decision at the
     start of `hour` about the 6 hours starting `lead` hours later. Features use only what had happened
     by `hour`; y = the window's worst hour >= threshold_pct; is_onset = the region was known to be below
     the threshold when the window began. With onsets_only, a row is kept only if no hour in the FRESH_HOURS
     before the window reached the threshold (hours after `hour` only select rows, they are never features).
     Columns are renamed so the 6-hour feature groups apply:
-    hour -> block_start (the decision time), hour_utc -> block_hour_utc."""
+    hour -> block_start (the decision time), hour_utc -> block_hour_utc.
+    states: state FIPS codes to keep (default: every study state)."""
     if lead not in HOURLY_LEADS:
         raise ValueError(f"lead must be one of {HOURLY_LEADS}")
     con = duckdb.connect(str(db), read_only=True)
@@ -160,6 +164,7 @@ def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db
         WHERE has_weather
           AND fut_max_pct_{lead} IS NOT NULL
           AND year(hour) IN ({year_list})
+          {"AND left(region_fips, 2) IN (" + ", ".join(f"'{x}'" for x in states) + ")" if states else ""}
           {f"AND start_pct_{lead} < {float(threshold_pct)}" if onsets_only else ""}
           {f"AND coalesce(max_pct_before_window, 0) < {float(threshold_pct)}" if onsets_only else ""}
         ORDER BY region_fips, hour

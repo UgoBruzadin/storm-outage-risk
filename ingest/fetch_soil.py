@@ -19,7 +19,8 @@ import pandas as pd
 import requests
 
 URL = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/post.rest"
-STATES = {"MO": "29", "IL": "17"}
+SEED = pd.read_csv("dbt/seeds/study_states.csv", dtype=str)                   # the study area
+STATES = dict(zip(SEED.state_abbr, SEED.state_fips, strict=True))
 REGIONS = Path("data/raw/geo/regions_study.csv")
 OUT = Path("data/raw/place/soil.csv")
 RAW = Path("data/raw/place/soil/map_units_{state}.csv")

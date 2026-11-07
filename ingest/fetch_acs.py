@@ -2,7 +2,7 @@
 
 The Census API now requires a key, so this uses the key-free "table-based
 summary files" instead: one pipe-delimited file per table, every geography.
-dbt filters them to MO + IL counties (GEO_ID '0500000US<fips>').
+dbt filters them to the study counties (dbt/seeds/study_states.csv) (GEO_ID '0500000US<fips>').
 
   B25034  year structure built (counts by decade)   -> share of homes built before 1960
   B25035  median year structure built

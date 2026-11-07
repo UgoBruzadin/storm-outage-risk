@@ -30,7 +30,8 @@ COUNTIES = Path("data/raw/geo/cb_2023_us_county_500k.zip")
 REGIONS = Path("data/raw/geo/regions_study.csv")
 OUT = Path("data/raw/place/utilities.csv")
 YEARS, LATEST = range(2015, 2020), 2019
-STATES = {"MO": "29", "IL": "17"}
+SEED = pd.read_csv("dbt/seeds/study_states.csv", dtype=str)                   # the study area
+STATES = dict(zip(SEED.state_abbr, SEED.state_fips, strict=True))
 GROUPS = {"Investor Owned": "iou", "Cooperative": "coop", "Municipal": "public", "Political Subdivision": "public",
           "State": "public", "Federal": "public"}
 

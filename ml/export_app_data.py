@@ -11,7 +11,7 @@ prediction in the app is for a year the model never saw.
 Writes data/app/:
   regions.parquet      216 regions: name, GeoJSON shape (simplified), place + resilience metrics
   yearly.parquet       each region's year, 2020–2025: outage hours per customer, events, worst outage
-  states.json          Missouri and Illinois outlines (GeoJSON) for the dashboard's maps
+  states.json          study state outlines (GeoJSON) for the dashboard's maps
   predictions.parquet  test year, every region x 6-hour block: probability, actual outage, new-outage flag, weather
   storms.parquet       the biggest test-year outage blocks, for the storm-replay picker
   importance.parquet   permutation importance of the final model's features, on all blocks and on new outages
