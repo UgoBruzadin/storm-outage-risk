@@ -167,3 +167,44 @@ def gray_missing(fig, df, value, note):
             marker_line_width=0.5, marker_line_color=t["surface"], customdata=missing.region,
             hovertemplate="<b>%{customdata}</b><br>" + note + "<extra></extra>"))
     return fig
+
+
+# --- page furniture, in the story page's style --------------------------------------------------------
+LIVE_LATEST = "https://raw.githubusercontent.com/UgoBruzadin/storm-outage-live/main/latest.json"
+
+
+def kicker(words):
+    """The small uppercase line above a title, as on the story page."""
+    st.markdown(f"<p style='font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;"
+                f"color:{theme()['muted']};margin:0 0 -6px'>{words}</p>", unsafe_allow_html=True)
+
+
+def stat_row(stats):
+    """Big numbers with a line of explanation under each: [(value, explanation), ...]."""
+    t = theme()
+    cells = "".join(
+        f"<div style='flex:1 1 220px;min-width:0'>"
+        f"<div style='font-size:clamp(2.2rem,5vw,3.4rem);font-weight:800;line-height:1;color:{t['ink']};"
+        f"font-variant-numeric:tabular-nums'>{value}</div>"
+        f"<div style='margin-top:8px;font-size:.95rem;line-height:1.4;color:{t['ink2']}'>{about}</div></div>"
+        for value, about in stats)
+    st.markdown(f"<div style='display:flex;flex-wrap:wrap;gap:24px 40px;margin:18px 0 26px;padding:22px 0;"
+                f"border-top:1px solid {t['grid']};border-bottom:1px solid {t['grid']}'>{cells}</div>",
+                unsafe_allow_html=True)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def live_latest():
+    """The newest live forecast (storm-outage-live), or None if GitHub can't be reached."""
+    import urllib.request
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        with urllib.request.urlopen(LIVE_LATEST, timeout=10) as r:
+            d = json.load(r)
+    except (OSError, ValueError):
+        return None
+    hour = datetime.fromisoformat(d["decision_hour"].replace("Z", "+00:00")).astimezone(ZoneInfo("America/Chicago"))
+    d["when"] = hour.strftime("%a %-d %b, %-I %p CT")
+    return d

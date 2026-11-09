@@ -7,14 +7,52 @@
 app:
   title: Storm Outage Risk
   pages:
+    overview: Overview
     storm_room: Storm room
     alert_level: Set the alert level
     trust: Can we trust it?
     scorecard: Plan for next season
     about: How it works
 
+overview:
+  kicker: Storm outage risk · Illinois, Indiana, Iowa, Michigan, Missouri
+  title: Which counties lose power next, two hours before the storm arrives.
+  lead: >-
+    Every hour, a model gives each of 490 Midwest counties its chance of a **new power outage** (5% or more of
+    customers out) in the six hours starting two hours later, from HRRR weather forecasts, outages so far, and what
+    each place is like. Tested on 2025, a year it never trained on, against what utilities already have: NWS warnings
+    and the SPC outlook.
+  # {lo}, {hi}: 95% range
+  stat_ratio: better than warnings + outlook at ranking where outages come next (PR-AUC; 95% range {lo}–{hi}×)
+  # {official}: share caught by warnings + outlook at the same number of alerts
+  stat_caught: of new outages caught in time, with the same number of alerts. Warnings + outlook caught {official}.
+  stat_live_value: Live
+  # {last}: the newest forecast's hour
+  stat_live: since 1 Nov 2026 on Missouri and Illinois, every hour, frozen in advance for a blind test. Newest forecast {last}.
+  stat_live_down: since 1 Nov 2026 on Missouri and Illinois, every hour, frozen in advance for a blind test.
+  method: >-
+    XGBoost · HRRR forecasts (five runs averaged) · DOE EAGLE-I outages · dbt + DuckDB warehouse ·
+    storm-day bootstrap ranges · leakage audit · 2020–2024 train, 2025 test
+  tour_title: Where to look
+  tour:
+    storm_room: Replay a 2025 storm hour by hour, then reveal what happened.
+    trust: The held-out test, county by county and storm by storm, and whether its chances come true.
+    alert_level: How many alerts to act on, and what staging crews would have been worth.
+    scorecard: Which counties keep losing power, and what those places are like.
+    about: The question, the data, and how it was tested.
+  me_kicker: Built by
+  me: >-
+    **Ugo Bruzadin Nunes**, data scientist.
+
+
+    I built every part of this: the data pipeline, the model, the tests, the live forecast and these pages.
+
+
+    [Portfolio](https://ugobruzadin.github.io/portfolio/) · [LinkedIn](https://www.linkedin.com/in/ugonunes) ·
+    [GitHub](https://github.com/UgoBruzadin) · [The story](https://ugobruzadin.github.io/storm-outage-risk/)
+
 storm_room:
-  title: ⛈️ Storm room
+  title: Storm room
   intro: >-
     Replay a 2025 storm as if it were happening now. Every hour, the model looks **two hours ahead** and gives
     every county its chance of a new outage in the following six hours, using only what was known at the time,
@@ -45,7 +83,7 @@ storm_room:
   list_more: "Showing the top {n}."
 
 alert_level:
-  title: 🎚️ Set the alert level
+  title: Set the alert level
   intro: >-
     Every alert costs something: a crew sent to wait, overtime, trucks on the road. More alerts catch more
     outages but cost more. Choose how many alerts you are willing to act on, and see what that would have done
@@ -88,7 +126,7 @@ alert_level:
     The dollar figures use the model's alerts with the probabilities as they are; they are estimates, not quotes.
 
 trust:
-  title: ✅ Can we trust it?
+  title: Can we trust it?
   intro: >-
     How the model did in 2025, a year it never trained on, compared with what utilities already
     have: NWS warnings and the SPC outlook.
@@ -123,7 +161,7 @@ trust:
   col_count: County-hours
 
 scorecard:
-  title: 📋 Plan for next season
+  title: Plan for next season
   # {start}, {end}: years
   intro: >-
     Which counties keep losing power, {start}–{end}? An **outage event** is a run of hours with at least 1% of
@@ -146,7 +184,7 @@ scorecard:
     cover adds only a little once weather and the rest of the place are known.
 
 about:
-  title: ℹ️ How it works
+  title: How it works
   body: >-
     **The question.** Every hour, for every county in Missouri and Illinois: will at least 5% of its customers lose
     power in the six hours starting two hours from now? Only new outages count; a county already out, or out in the
