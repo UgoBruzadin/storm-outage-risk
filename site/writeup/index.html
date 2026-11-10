@@ -64,10 +64,11 @@ strong { color: var(--ink); }
 }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 figure { margin: 24px 0; }
-figure img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
+img { max-width: 100%; height: auto; }
+figure img, figure video { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); box-shadow: var(--shadow); }
 figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
 figure.narrow { max-width: 560px; margin-left: auto; margin-right: auto; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid2 { display: grid; grid-template-columns: var(--cols, 1fr 1fr); gap: 20px; align-items: start; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; font-size: .95rem; font-variant-numeric: tabular-nums; }
 th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -170,12 +171,26 @@ function finish(root) {
     const m = h.innerHTML.match(/\s*\{#([\w-]+)\}\s*$/);
     if (m) { h.id = m[1]; h.innerHTML = h.innerHTML.slice(0, m.index); }
   });
-  root.querySelectorAll("p > img[title]").forEach(img => {   // image title -> figure caption
+  root.querySelectorAll("p > img").forEach(img => {          // every image -> figure; its title -> caption
     const p = img.parentElement, fig = document.createElement("figure"), cap = document.createElement("figcaption");
-    cap.innerHTML = marked.parseInline(img.title); img.removeAttribute("title"); img.loading = "lazy";
-    fig.append(img); if (cap.textContent.trim()) fig.append(cap); p.replaceWith(fig);
+    cap.innerHTML = marked.parseInline(img.title || ""); img.removeAttribute("title"); img.loading = "lazy";
+    let media = img;
+    if (/\.mp4(\?|$)/.test(img.getAttribute("src"))) {      // ![alt](clip.mp4 "Caption") -> a looping, silent video
+      media = Object.assign(document.createElement("video"), { src: img.getAttribute("src"), autoplay: true, muted: true,
+                                                              loop: true, playsInline: true, controls: true });
+      media.setAttribute("aria-label", img.alt);
+    }
+    fig.append(media); if (cap.textContent.trim()) fig.append(cap); p.replaceWith(fig);
   });
   root.querySelectorAll("p > img").forEach(img => { img.loading = "lazy"; });
+  root.querySelectorAll(".grid2").forEach(grid => {           // side-by-side figures: widths follow each image's
+    const imgs = [...grid.querySelectorAll("img")];           // shape, so both come out the same height
+    imgs.forEach(img => { img.loading = "eager"; });
+    Promise.all(imgs.map(img => img.decode().catch(() => {}))).then(() => {
+      if (imgs.every(img => img.naturalWidth))
+        grid.style.setProperty("--cols", imgs.map(img => `${img.naturalWidth / img.naturalHeight}fr`).join(" "));
+    });
+  });
   root.querySelectorAll("table").forEach(t => {               // tables scroll sideways on phones
     const w = document.createElement("div"); w.className = "table-wrap"; t.replaceWith(w); w.append(t);
   });
