@@ -45,7 +45,7 @@ with left:
     st.subheader(text("trust.map_title"))
     county = table("regions")[["region_fips", "region", "state"]].merge(table("county_hourly"), on="region_fips")
     county["share"] = county.caught_share.where(county.new_outages >= MIN_EVENTS)
-    fig = choropleth(county.dropna(subset=["share"]), "share", "caught", BLUE, (0, 1), height=500, zoom=4.7,
+    fig = choropleth(county.dropna(subset=["share"]), "share", "caught", BLUE, (0, 1), height=500, zoom=-0.7,
                      hover={"share": ":.0%", "region_fips": False}, legend="bottom")
     st.plotly_chart(gray_missing(fig, county, "share", "too few new outages to judge"), width="stretch")
     st.caption(text("trust.map_note", min=MIN_EVENTS))

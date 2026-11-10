@@ -18,7 +18,7 @@ measures = {
 default = text("scorecard.measures.hours")
 measure = st.segmented_control(text("scorecard.map"), list(measures), default=default) or default
 column, label, fmt = measures[measure]
-st.plotly_chart(choropleth(regions, column, label, BLUE, None, height=560, zoom=5.5,
+st.plotly_chart(choropleth(regions, column, label, BLUE, None, height=560, zoom=0.1,
                            hover={column: ":.2f" if column == "storm_hit_rate" else ":.1f", "region_fips": False}),
                 width="stretch")
 

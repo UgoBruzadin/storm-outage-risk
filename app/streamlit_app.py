@@ -9,6 +9,9 @@ import lib
 import streamlit as st
 
 st.set_page_config(page_title="Storm Outage Risk", page_icon="⚡", layout="wide")
+# paragraphs at a readable width, as on the story page (tables and charts keep the full width)
+st.markdown("<style>[data-testid='stMarkdownContainer'] p, [data-testid='stCaptionContainer'] {max-width: 72ch}"
+            "</style>", unsafe_allow_html=True)
 
 
 def _files_stamp():
@@ -29,10 +32,11 @@ if getattr(lib, "loaded_stamp", None) != stamp:
     lib.loaded_stamp = stamp
 
 pages = st.navigation([
-    st.Page("views/storm_room.py", title=lib.text("app.pages.storm_room"), icon="⛈️", default=True),
-    st.Page("views/alert_level.py", title=lib.text("app.pages.alert_level"), icon="🎚️"),
-    st.Page("views/trust.py", title=lib.text("app.pages.trust"), icon="✅"),
-    st.Page("views/scorecard.py", title=lib.text("app.pages.scorecard"), icon="📋"),
-    st.Page("views/about.py", title=lib.text("app.pages.about"), icon="ℹ️"),
-])
+    st.Page("views/overview.py", title=lib.text("app.pages.overview"), default=True),
+    st.Page("views/storm_room.py", title=lib.text("app.pages.storm_room")),
+    st.Page("views/trust.py", title=lib.text("app.pages.trust")),
+    st.Page("views/alert_level.py", title=lib.text("app.pages.alert_level")),
+    st.Page("views/scorecard.py", title=lib.text("app.pages.scorecard")),
+    st.Page("views/about.py", title=lib.text("app.pages.about")),
+], position="top")
 pages.run()

@@ -129,16 +129,44 @@ def geojson():
     }
 
 
-def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520, zoom=4.8,
+@st.cache_data(show_spinner=False)
+def study_area():
+    """How many counties, which states (alphabetical) and the map view that fits them, from the exported regions."""
+    import math
+
+    regions = table("regions")
+    xs, ys = [], []
+
+    def walk(c):
+        if isinstance(c[0], (int, float)):
+            xs.append(c[0])
+            ys.append(c[1])
+        else:
+            for part in c:
+                walk(part)
+
+    for g in regions.geojson:
+        walk(json.loads(g)["coordinates"])
+    span = max(max(xs) - min(xs), 1.3 * (max(ys) - min(ys)))      # degrees; latitude stretched as on the map
+    states = sorted(regions.state.unique())
+    return {"counties": len(regions), "states": states,
+            "where": states[0] if len(states) == 1 else ", ".join(states[:-1]) + " and " + states[-1],
+            "center": {"lat": (min(ys) + max(ys)) / 2, "lon": (min(xs) + max(xs)) / 2},
+            "zoom": math.log2(360 / span)}
+
+
+def choropleth(df, value, label, colors=BLUE, range_color=None, hover=None, height=520, zoom=-0.6,
                legend="right"):
-    """A county map of one magnitude, single-hue ramp. legend="bottom" frees the width for narrow columns."""
+    """A county map of one magnitude, single-hue ramp. legend="bottom" frees the width for narrow columns.
+    zoom: steps in or out from the view that just fits the study area (negative = out)."""
+    area = study_area()
     import plotly.express as px
 
     fig = px.choropleth_map(
         df, geojson=geojson(), locations="region_fips", color=value,
         color_continuous_scale=ramp(colors), range_color=range_color,
         map_style=theme()["map_style"], opacity=0.85,
-        center={"lat": 39.25, "lon": -91.65}, zoom=zoom,   # the middle of Missouri + Illinois
+        center=area["center"], zoom=area["zoom"] + zoom,
         hover_name="region", hover_data=hover or {value: ":.2f", "region_fips": False},
         labels={value: label},
     )
@@ -167,3 +195,44 @@ def gray_missing(fig, df, value, note):
             marker_line_width=0.5, marker_line_color=t["surface"], customdata=missing.region,
             hovertemplate="<b>%{customdata}</b><br>" + note + "<extra></extra>"))
     return fig
+
+
+# --- page furniture, in the story page's style --------------------------------------------------------
+LIVE_LATEST = "https://raw.githubusercontent.com/UgoBruzadin/storm-outage-live/main/latest.json"
+
+
+def kicker(words):
+    """The small uppercase line above a title, as on the story page."""
+    st.markdown(f"<p style='font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;"
+                f"color:{theme()['muted']};margin:0 0 -6px'>{words}</p>", unsafe_allow_html=True)
+
+
+def stat_row(stats):
+    """Big numbers with a line of explanation under each: [(value, explanation), ...]."""
+    t = theme()
+    cells = "".join(
+        f"<div style='flex:1 1 220px;min-width:0'>"
+        f"<div style='font-size:clamp(2.2rem,5vw,3.4rem);font-weight:800;line-height:1;color:{t['ink']};"
+        f"font-variant-numeric:tabular-nums'>{value}</div>"
+        f"<div style='margin-top:8px;font-size:.95rem;line-height:1.4;color:{t['ink2']}'>{about}</div></div>"
+        for value, about in stats)
+    st.markdown(f"<div style='display:flex;flex-wrap:wrap;gap:24px 40px;margin:18px 0 26px;padding:22px 0;"
+                f"border-top:1px solid {t['grid']};border-bottom:1px solid {t['grid']}'>{cells}</div>",
+                unsafe_allow_html=True)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def live_latest():
+    """The newest live forecast (storm-outage-live), or None if GitHub can't be reached."""
+    import urllib.request
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        with urllib.request.urlopen(LIVE_LATEST, timeout=10) as r:
+            d = json.load(r)
+    except (OSError, ValueError):
+        return None
+    hour = datetime.fromisoformat(d["decision_hour"].replace("Z", "+00:00")).astimezone(ZoneInfo("America/Chicago"))
+    d["when"] = hour.strftime("%a %-d %b, %-I %p CT")
+    return d

@@ -7,14 +7,54 @@
 app:
   title: Storm Outage Risk
   pages:
+    overview: Overview
     storm_room: Storm room
-    alert_level: Set the alert level
+    alert_level: What it's worth
     trust: Can we trust it?
     scorecard: Plan for next season
     about: How it works
 
+overview:
+  # {states}: the states covered
+  kicker: "Storm outage risk · {states}"
+  title: Which counties lose power next, two hours before the storm arrives.
+  # {counties}: how many; {where}: the states, e.g. "Illinois and Missouri"
+  lead: >-
+    Every hour, a model gives each of {counties} counties in {where} its chance of a **new power outage** (5% or more of
+    customers out) in the six hours starting two hours later, from HRRR weather forecasts, outages so far, and what
+    each place is like. Tested on 2025, a year it never trained on, against what utilities already have: NWS warnings
+    and the SPC outlook.
+  # {lo}, {hi}: 95% range
+  stat_ratio: better than warnings + outlook at ranking where outages come next (PR-AUC; 95% range {lo}–{hi}×)
+  # {official}: share caught by warnings + outlook at the same number of alerts
+  stat_caught: of new outages caught in time, with the same number of alerts. Warnings + outlook caught {official}.
+  stat_live_value: Live
+  # {last}: the newest forecast's hour
+  stat_live: since 1 Nov 2026 on Missouri and Illinois, every hour, frozen in advance for a blind test. Newest forecast {last}.
+  stat_live_down: since 1 Nov 2026 on Missouri and Illinois, every hour, frozen in advance for a blind test.
+  method: >-
+    XGBoost · HRRR forecasts (five runs averaged) · DOE EAGLE-I outages · dbt + DuckDB warehouse ·
+    storm-day bootstrap ranges · leakage audit · 2020–2024 train, 2025 test
+  tour_title: Where to look
+  tour:
+    storm_room: Replay a 2025 storm hour by hour, then reveal what happened.
+    trust: The held-out test, county by county and storm by storm, and whether its chances come true.
+    alert_level: How many alerts a utility should act on, and what staging crews would have saved.
+    scorecard: Which counties keep losing power, and what those places are like.
+    about: The question, the data, and how it was tested.
+  me_kicker: Built by
+  me: >-
+    **Ugo Bruzadin Nunes**, data scientist.
+
+
+    I built every part of this: the data pipeline, the model, the tests, the live forecast and these pages.
+
+
+    [Portfolio](https://ugobruzadin.github.io/portfolio/) · [LinkedIn](https://www.linkedin.com/in/ugonunes) ·
+    [GitHub](https://github.com/UgoBruzadin) · [The story](https://ugobruzadin.github.io/storm-outage-risk/)
+
 storm_room:
-  title: ⛈️ Storm room
+  title: Storm room
   intro: >-
     Replay a 2025 storm as if it were happening now. Every hour, the model looks **two hours ahead** and gives
     every county its chance of a new outage in the following six hours, using only what was known at the time,
@@ -45,50 +85,45 @@ storm_room:
   list_more: "Showing the top {n}."
 
 alert_level:
-  title: 🎚️ Set the alert level
+  title: How many alerts should a utility act on?
   intro: >-
-    Every alert costs something: a crew sent to wait, overtime, trucks on the road. More alerts catch more
-    outages but cost more. Choose how many alerts you are willing to act on, and see what that would have done
-    in 2025.
-  style: Forecast style
-  style_steady: Steady (average of the last 5 forecasts)
-  style_fast: Fastest (newest forecast only)
-  style_help: >-
-    The newest forecast reacts sooner to a storm that has just formed; the average of the last five changes its mind
-    less often, so fewer alerts switch on and off.
-  share: How many alerts?
-  # {share}: share of county-hours; {spells}: alert spells in 2025
-  share_label: "Alert on the riskiest {share} of county-hours"
+    Every alert costs something: a crew sent to wait, overtime, trucks on the road. More alerts catch more outages
+    but cost more, so there is a best number of alerts to act on. It depends on two things nobody knows exactly, so
+    pick what you believe; the slider opens on the level that would have saved the most in 2025.
   crew: How much does a staged crew shorten an outage?
   cost: Cost of staging a crew in a county for 6 hours
-  tile_spells: Alert spells
-  tile_spells_help: A run of consecutive alerted hours in one county, roughly one crew call-out.
-  tile_caught: Outages caught
+  share: How many alerts?
+  # {share}: share of county-hours
+  share_label: "Alert on the riskiest {share} of county-hours"
+  # {cut}: percent shorter; {cost}: e.g. "$5,000"
+  stat_money: >-
+    net savings in 2025: what shorter outages saved homes and businesses (Berkeley Lab's outage-cost models), minus
+    the cost of staging, if a crew shortens an outage by {cut}% and costs {cost} per county for 6 hours
   # {n}: caught; {of}: all new outages
-  tile_caught_detail: "New outages caught in time in 2025: {n} of {of}."
-  tile_real: Alerts real
-  tile_money: Net savings
-  tile_money_help: >-
-    What outages cost homes and businesses (Berkeley Lab's outage-cost models) that staged crews avoid, minus the
-    cost of staging. An estimate: the crew effect and staging cost are assumptions.
-  # {share}, {money}, {spells}: the alert level that would have saved the most under the chosen assumptions
-  best: >-
-    For these assumptions, the best alert level in 2025 was the riskiest **{share}** of county-hours ({spells} alert
-    spells), worth **{money}**.
-  # {caught}, {real}, {spells}: the official forecasts at their nearest alert share
+  stat_caught: of new outages caught in time ({n} of {of})
+  # {spells}: alert spells
+  stat_real: of alerts followed by a new outage ({spells} alert spells, each roughly one crew call-out)
+  is_best: This is the level that would have saved the most, for these assumptions.
+  # {share}, {money}: the level that saves the most
+  not_best: "The level that would have saved the most, for these assumptions: the riskiest **{share}**, **{money}**."
+  # {caught}, {real}, {money}: warnings + outlook at about the same number of alerts
   official: >-
-    **Official warnings + outlook** at a similar alert level: caught {caught} of new outages, {real} of alerts real,
-    {spells} alert spells.
-  chart_caught: More alerts catch more outages
+    **Warnings + outlook** with about the same number of alerts: caught {caught} of new outages, {real} of alerts
+    real, net savings {money}.
+  name_model: The model
+  name_official: Warnings + outlook
+  best_label: most saved
   chart_money: What it is worth
-  axis_spells: alert spells in 2025
+  chart_caught: More alerts catch more outages
+  axis_share: share of county-hours on alert
   axis_caught: share of new outages caught
   axis_money: net savings, $ millions
   money_note: >-
-    The dollar figures use the model's alerts with the probabilities as they are; they are estimates, not quotes.
+    Estimates, not quotes: the crew effect and the staging cost are assumptions, and the outage costs are averages.
+    The model's chances are used as they are.
 
 trust:
-  title: ✅ Can we trust it?
+  title: Can we trust it?
   intro: >-
     How the model did in 2025, a year it never trained on, compared with what utilities already
     have: NWS warnings and the SPC outlook.
@@ -123,7 +158,7 @@ trust:
   col_count: County-hours
 
 scorecard:
-  title: 📋 Plan for next season
+  title: Plan for next season
   # {start}, {end}: years
   intro: >-
     Which counties keep losing power, {start}–{end}? An **outage event** is a run of hours with at least 1% of
@@ -146,7 +181,7 @@ scorecard:
     cover adds only a little once weather and the rest of the place are known.
 
 about:
-  title: ℹ️ How it works
+  title: How it works
   body: >-
     **The question.** Every hour, for every county in Missouri and Illinois: will at least 5% of its customers lose
     power in the six hours starting two hours from now? Only new outages count; a county already out, or out in the

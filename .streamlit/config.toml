@@ -4,6 +4,26 @@ headless = true
 [browser]
 gatherUsageStats = false
 
+# The story page's look (site/index.html): warm off-white, near-black ink, the accent blue, system sans.
 [theme]
-# the site's accent blue, so progress bars, sliders and toggles match the charts (app/lib.py palette)
+font = "system-ui, -apple-system, 'Segoe UI', sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+baseRadius = "10px"
+showSidebarBorder = false
+showWidgetBorder = true
+
+[theme.light]
 primaryColor = "#2a78d6"
+backgroundColor = "#f9f9f7"
+secondaryBackgroundColor = "#efeee9"
+textColor = "#0b0b0b"
+borderColor = "#e1e0d9"
+linkColor = "#2a78d6"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#0d0d0d"
+secondaryBackgroundColor = "#1a1a19"
+textColor = "#f0efec"
+borderColor = "#2c2c2a"
+linkColor = "#3987e5"

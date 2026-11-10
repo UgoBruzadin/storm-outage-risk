@@ -48,7 +48,7 @@ reveal = st.toggle(text("storm_room.reveal"), value=False)
 geo = regions[["region_fips", "region", "state"]].merge(now[["region_fips", "p_mean", "p_low", "p_high", "worst_6h"]],
                                                          on="region_fips", how="left")
 left, right = st.columns(2) if reveal else (st.container(), None)
-zoom = 4.7 if reveal else 5.2                       # two maps side by side: zoom out so each fits its column
+zoom = -0.7 if reveal else 0.2                       # two maps side by side: zoom out so each fits its column
 with left:
     st.subheader(text("storm_room.map_risk"))
     fig = choropleth(geo.dropna(subset=["p_mean"]), "p_mean", "chance", BLUE, (0, 0.4), height=520, zoom=zoom,
