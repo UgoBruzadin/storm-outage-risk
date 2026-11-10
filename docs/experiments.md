@@ -672,6 +672,49 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **Result (Michigan, 2025, 709,834 decisions):** cross-entropy skill against the usual month: model 19% (12–24%), warnings + outlook 5% (0–9%). Calibrated: when the model said 5.1%, 5.3% of homes lost power; 15.7% → 17.7%; its top bin (151 hours) says 41%, 34% happened. Warnings + outlook's top bin says 41%, 11% happened.
 - **Meaning:** A household number is feasible and honest at the county level. Next: all five states, then how long the outage lasts.
 
+### E52. Five states, every experiment (not yet reviewed)
+- **Question:** Do the published results hold on Illinois, Indiana, Iowa, Michigan and Missouri (490 counties)?
+- **Setup:** Every step of `pixi run pipeline` on the five-state warehouse, 2025 test year, finished 2026-11-07. Results in `ml/results/` on the `five-state` branch; `ml/results/summary.md` sets each number beside the published MO + IL one. Archived copy: `data/_archive_five_states_2026-11-07/`.
+- **Result:**
+
+  | | Five states | Published MO + IL |
+  |---|---|---|
+  | Model vs warnings + outlook (PR-AUC) | 3.54× (2.92–4.61×) | 2.40× (1.97–3.29×) |
+  | No forecasts / perfect weather | 2.11× / 3.79× | 1.63× / 2.54× |
+  | Caught at equal alerts | 35% vs 19% | 30% vs 17% |
+  | Counties never trained on | 1.75× | 1.45× |
+  | Without thinly covered counties (under 5% / 8%) | 3.40× / 3.31× | – |
+  | Home chance, skill vs the usual month | 14% (11–17%); warnings + outlook 5.5% (3–8%) | – |
+
+  Home chance is calibrated across the range: predicted 1.6% → 1.7% happened, 5.1% → 5.0%, 15% → 14%, 41% → 38% (170 hours). Canopy in the model (PR-AUC change from adding it, 2024): Michigan +6.2%, Indiana +3.4%, Iowa +2.4%, Illinois −3.9%, Missouri −4.1%.
+- **Meaning:** Everything published holds and gets stronger with more states, but most of the jump comes from the new states (Michigan 4.99×, Iowa 3.49×). On MO + IL counties the five-state model scores 2.80×, of which the switch to GRIB weather alone accounts for 2.40× → 2.57× (E50); compare 2.80× (not 3.54×) with the published 2.40×. EAGLE-I covers the new states more thinly (23 barely tracked counties, against 10). To check before publishing: canopy now hurts in Missouri and Illinois, where the Trees slide says trees matter; E49 (roads and trees along them) should be rerun on five states.
+
+### E53. Seven states: Minnesota and Wisconsin (headline steps only, not yet reviewed)
+- **Question:** Does the gain from more states continue, and how far can this machine (32 GB) go?
+- **Setup:** Minnesota and Wisconsin added to `dbt/seeds/study_states.csv` (649 counties); counties, warnings, canopy, HRRR and roads fetched; warehouse rebuilt (12 GB). Only `forecast_test`, `forecast_ensemble`, `significance` and `states` were run, overnight 2026-11-07. Results: `ml/results/seven_states_2026-11-08/` (with the run logs).
+- **Result:**
+
+  | Scored on | Trained on MO + IL | Trained on all seven |
+  |---|---|---|
+  | All seven | 2.87× | 3.91× (3.11–5.00×); caught 35% vs 19% |
+  | MO + IL | 2.58× | 2.92× |
+  | IN + IA + MI + MN + WI | 3.09× | 4.71× |
+  | Wisconsin / Minnesota | 3.74× / 2.70× | 5.44× / 4.49× |
+
+- **Meaning:** More states keep helping, most of all in the states added. Swap peaked at 16 GB: seven states is about the limit for the full code on this machine. The rest of the pipeline (other years, coverage, place, home chance) has not run on seven states.
+
+### E54. Lean training: same answer, less training data
+- **Question:** Can the headline be trained on a sample to fit more states in memory?
+- **Setup:** `ml/lean_headline.py` (a draft, not part of the pipeline): every decision followed by a new outage plus 10% of the others, weighted ×10; float32; one training year in memory at a time. Compared with the full run on the same rows.
+- **Result:**
+
+  | | Lean | Full | Rank correlation | Time | Peak memory |
+  |---|---|---|---|---|---|
+  | Five states | 3.53× | 3.54× | 0.9956 | 8 min | 21 GB |
+  | Seven states | 3.88× | 3.91× | 0.9956 | 11 min | 22 GB |
+
+- **Meaning:** Sampling the negatives costs nothing in accuracy. It doesn't yet save memory: the training table shrinks to 0.65 GB, but loading each year with its neighbour features (12–17 GB) and building the 2025 windows for five run ages (21 GB) still dominate. For the whole country (about 5× seven states) the sampling has to move into the SQL query, the neighbour cache has to be built a few months at a time, and 2025 scored a state at a time.
+
 ---
 
 ## Open experiments
@@ -684,4 +727,6 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | The live model at longer leads | 2 hours may be too short to move crews; E37 tested the forecast model at 0–6 hours, not the live recipe | For example 4 hours |
 | Held-out storms | Split by storm instead of by year | |
 | Per-storm scores | Which 2025 storms were caught, which were missed and why | By storm type in E29: wind and rain without storm energy are the hard cases |
+| Roads and trees on five states | E52: canopy now lowers the score in Missouri; E49 found the link along roads in MO + IL only | Rerun E49 before rewriting the Trees slide |
+| The whole country | E53–E54: seven states is the memory limit for the full code | Weather is on disk for all 3,108 counties; needs the SQL-side sampling and chunked neighbours from E54, and about 50 GB of disk for the warehouse |
 | Restoration time | Next, after E51. Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |

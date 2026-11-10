@@ -1,0 +1,122 @@
+== A: headline steps, seven states  Sat Nov  7 22:13:52 CST 2026
+✨ Pixi task (pipeline in default): python -m ml.pipeline --only forecast_test,forecast_ensemble,significance,states: (Every experiment behind the story page, for the states in dbt/seeds/study_states.csv: pixi run pipeline [--dry-run] [--from STEP] [--list])
+> forecast_test      forced: python -m ml.forecast_test
+  forecast_test      done in 28 min
+> forecast_ensemble  forced: python -m ml.forecast_ensemble
+  forecast_ensemble  done in 20 min
+> significance       forced: python -m ml.significance
+  significance       done in 124 min
+> states             forced: python -m ml.midwest_test
+  states             done in 27 min
+# Results summary
+
+Written by `ml/summary.py`. Before = the last commit's `ml/results/`.
+
+
+## Headline, 2025
+
+| | now | before |
+|---|---|---|
+| Counties | 490 **changed** | 216 |
+| PR-AUC, model + five HRRR runs | 0.118 **changed** | 0.094 |
+| PR-AUC, warnings + outlook | 0.030 **changed** | 0.039 |
+| Ratio, model + five HRRR runs | 3.91× **changed** | 2.40× |
+| Ratio, no forecasts | 2.39× **changed** | 1.63× |
+| Ratio, perfect weather (ceiling) | 4.30× **changed** | 2.54× |
+
+## Other test years
+
+| | now | before |
+|---|---|---|
+| 2022, no forecasts | 2.67× **changed** | 1.83× |
+| 2023, no forecasts | 2.13× **changed** | 1.66× |
+| 2024, no forecasts | 2.31× **changed** | 2.06× |
+| Counties never trained on (2025) | 1.75× **changed** | 1.45× |
+
+## By state (ratio, 95% range in the file)
+
+| | now | before |
+|---|---|---|
+| MO+IL, trained on all 7 | 2.92× | – |
+| IN+IA+MI+MN+WI, trained on all 7 | 4.71× | – |
+| all 7, trained on all 7 | 3.91× | – |
+| IL, trained on all 7 | 2.58× | – |
+| IN, trained on all 7 | 2.73× | – |
+| IA, trained on all 7 | 4.08× | – |
+| MI, trained on all 7 | 4.89× | – |
+| MN, trained on all 7 | 4.49× | – |
+| MO, trained on all 7 | 3.02× | – |
+| WI, trained on all 7 | 5.44× | – |
+| IN+IA+MI+MN+WI, trained on MO+IL only (never seen) | 3.09× | – |
+
+## Coverage (scored on all counties)
+
+| | now | before |
+|---|---|---|
+| trained on all counties | 3.54× | – |
+| trained on without under 5% | 3.40× | – |
+| trained on without under 8% | 3.31× | – |
+
+## Canopy in the model (PR-AUC change, 2024)
+
+| | now | before |
+|---|---|---|
+| Illinois | -3.9% **changed** | +3.0% |
+| Indiana | +3.4% | – |
+| Iowa | +2.4% | – |
+| Michigan | +6.2% | – |
+| Missouri | -4.1% **changed** | +0.4% |
+
+## A typical home's chance (2025)
+
+| | now | before |
+|---|---|---|
+| Cross-entropy skill vs the usual month, model | +14.3% | – |
+| Cross-entropy skill vs the usual month, warnings + outlook | +5.5% | – |
+
+## Beyond the weather
+
+| | now | before |
+|---|---|---|
+| Counties the outage data barely covers | 23 **changed** | 10 |
+
+A exit 0  Sun Nov  8 01:32:38 CST 2026
+== B: lean, archived five states  Sun Nov  8 01:32:38 CST 2026
+[01:32:40 peak 0.3 GB] db data/warehouse-five-states-2026-11-07.duckdb, neighbours data/_archive_five_states_2026-11-07/cache/neighbors_1h.parquet, forecasts data/raw/_archive_five_states_2026-11-07/weather/hrrr_fcst, states all, neg_frac 0.1, seed 0
+[01:32:56 peak 11.6 GB] 2020: 4,021,065 decisions, 15,883 new outages, kept 416,054
+[01:33:11 peak 16.1 GB] 2021: 4,089,346 decisions, 17,591 new outages, kept 425,438
+[01:33:26 peak 17.0 GB] 2022: 4,193,813 decisions, 16,878 new outages, kept 434,912
+[01:33:41 peak 17.5 GB] 2023: 4,200,268 decisions, 17,611 new outages, kept 435,993
+[01:33:56 peak 17.5 GB] 2024: 4,207,232 decisions, 18,674 new outages, kept 437,941
+[01:33:56 peak 17.5 GB] training table: 2,150,338 of 20,711,724 rows, 0.50 GB
+[01:34:18 peak 17.5 GB] model fitted
+[01:35:01 peak 20.9 GB] 2025: 4,021,552 decisions with every run, 18,516 new outages
+[01:35:16 peak 21.2 GB] compare: 4,021,552 of 4,021,552 lean rows in the full run (4,021,552 rows); rank correlation 0.9956
+[01:40:28 peak 21.2 GB] {'forecast': 'lean: mean of 5 runs', 'pr_auc': 0.1266, 'pr_auc_lo': 0.0882, 'pr_auc_hi': 0.1638, 'ratio': 3.5252, 'ratio_lo': 2.9145, 'ratio_hi': 4.5905, 'alerts_real': np.float64(0.1661), 'caught': np.float64(0.349)}
+[01:40:33 peak 21.2 GB] {'forecast': 'lean: newest run', 'pr_auc': 0.1175, 'pr_auc_lo': 0.0826, 'pr_auc_hi': 0.153, 'ratio': 3.2715, 'ratio_lo': 2.7303, 'ratio_hi': 4.2873, 'alerts_real': np.float64(0.1621), 'caught': np.float64(0.3683)}
+[01:40:35 peak 21.2 GB] {'forecast': 'warnings + outlook', 'pr_auc': 0.0359, 'pr_auc_lo': 0.0217, 'pr_auc_hi': 0.0522, 'alerts_real': np.float64(0.1073), 'caught': np.float64(0.1891)}
+[01:40:39 peak 21.2 GB] {'forecast': 'full: mean of 5 runs', 'pr_auc': 0.1271, 'pr_auc_lo': 0.0889, 'pr_auc_hi': 0.1647, 'ratio': 3.5398, 'ratio_lo': 2.9162, 'ratio_hi': 4.606, 'alerts_real': np.float64(0.1661), 'caught': np.float64(0.3468)}
+[01:40:39 peak 21.2 GB] wrote /Users/ugobruzadinnunes/Documents/GitHub/storm-outage-risk/data/lean_results/lean_headline_five_states.csv
+B five exit 0  Sun Nov  8 01:40:39 CST 2026
+== B: lean, seven states  Sun Nov  8 01:40:39 CST 2026
+[01:40:42 peak 0.3 GB] db /Users/ugobruzadinnunes/Documents/GitHub/storm-outage-risk/data/warehouse.duckdb, neighbours /Users/ugobruzadinnunes/Documents/GitHub/storm-outage-risk/data/cache/neighbors_1h.parquet, forecasts /Users/ugobruzadinnunes/Documents/GitHub/storm-outage-risk/data/raw/weather/hrrr_fcst, states all, neg_frac 0.1, seed 0
+[01:40:59 peak 14.7 GB] 2020: 5,290,365 decisions, 18,873 new outages, kept 545,919
+[01:41:17 peak 17.0 GB] 2021: 5,298,196 decisions, 20,549 new outages, kept 548,845
+[01:41:35 peak 17.0 GB] 2022: 5,530,302 decisions, 20,965 new outages, kept 572,100
+[01:41:53 peak 17.0 GB] 2023: 5,559,208 decisions, 21,092 new outages, kept 575,117
+[01:42:11 peak 17.7 GB] 2024: 5,565,735 decisions, 22,601 new outages, kept 575,571
+[01:42:11 peak 17.7 GB] training table: 2,817,552 of 27,243,806 rows, 0.65 GB
+[01:42:39 peak 17.7 GB] model fitted
+[01:43:38 peak 21.4 GB] 2025: 5,371,545 decisions with every run, 22,734 new outages
+[01:44:01 peak 22.3 GB] compare: 5,371,545 of 5,371,545 lean rows in the full run (5,371,545 rows); rank correlation 0.9956
+[01:51:50 peak 22.3 GB] {'forecast': 'lean: mean of 5 runs', 'pr_auc': 0.1177, 'pr_auc_lo': 0.0849, 'pr_auc_hi': 0.1492, 'ratio': 3.8844, 'ratio_lo': 3.1169, 'ratio_hi': 4.9432, 'alerts_real': np.float64(0.1492), 'caught': np.float64(0.3412)}
+[01:51:56 peak 22.3 GB] {'forecast': 'lean: newest run', 'pr_auc': 0.1088, 'pr_auc_lo': 0.0787, 'pr_auc_hi': 0.1377, 'ratio': 3.5883, 'ratio_lo': 2.8878, 'ratio_hi': 4.5514, 'alerts_real': np.float64(0.1456), 'caught': np.float64(0.3637)}
+[01:51:59 peak 22.3 GB] {'forecast': 'warnings + outlook', 'pr_auc': 0.0303, 'pr_auc_lo': 0.0194, 'pr_auc_hi': 0.044, 'alerts_real': np.float64(0.0921), 'caught': np.float64(0.1888)}
+[01:52:05 peak 22.3 GB] {'forecast': 'full: mean of 5 runs', 'pr_auc': 0.1184, 'pr_auc_lo': 0.0861, 'pr_auc_hi': 0.1494, 'ratio': 3.907, 'ratio_lo': 3.1122, 'ratio_hi': 4.9961, 'alerts_real': np.float64(0.1492), 'caught': np.float64(0.3448)}
+[01:52:05 peak 22.3 GB] wrote /Users/ugobruzadinnunes/Documents/GitHub/storm-outage-risk/data/lean_results/lean_headline_seven_states.csv
+B seven exit 0  Sun Nov  8 01:52:05 CST 2026
+== roads for WI + MN  Sun Nov  8 01:52:05 CST 2026
+✨ Pixi task (fetch-roads in default): python -m ingest.fetch_roads: (Census TIGER 2023 public roads per region, and the share under tree canopy (needs fetch-tree-canopy) -> data/raw/place/roads.csv)
+wrote data/raw/place/roads.csv: 649 regions, median 2943 km of public road, 10% under dense canopy
+roads exit 0  Sun Nov  8 01:55:22 CST 2026
+ALL DONE Sun Nov  8 01:55:22 CST 2026

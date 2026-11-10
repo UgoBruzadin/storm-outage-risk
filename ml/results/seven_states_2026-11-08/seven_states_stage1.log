@@ -1,0 +1,257 @@
+start Sat Nov  7 21:58:28 CST 2026
+✨ Pixi task (fetch-counties in default): python ingest/fetch_counties.py: (Census county shapes for the study states (dbt/seeds/study_states.csv) -> data/raw/geo)
+650 counties -> 649 regions written to data/raw/geo
+counties ok Sat Nov  7 21:58:31 CST 2026
+✨ Pixi task (fetch-nws in default): python ingest/fetch_nws.py: (NWS warnings + SPC Day 1 outlooks for the study states, 2014-2025 (Iowa Environmental Mesonet) -> data/raw/nws)
+saved data/raw/nws/warnings_2014.csv 11054 rows
+saved data/raw/nws/spc_day1_2014.csv 1224014 rows
+saved data/raw/nws/warnings_2015.csv 9743 rows
+saved data/raw/nws/spc_day1_2015.csv 1217524 rows
+saved data/raw/nws/warnings_2016.csv 9474 rows
+saved data/raw/nws/spc_day1_2016.csv 1230504 rows
+saved data/raw/nws/warnings_2017.csv 10870 rows
+saved data/raw/nws/spc_day1_2017.csv 1218173 rows
+saved data/raw/nws/warnings_2018.csv 10093 rows
+saved data/raw/nws/spc_day1_2018.csv 1216226 rows
+saved data/raw/nws/warnings_2019.csv 13762 rows
+saved data/raw/nws/spc_day1_2019.csv 1216226 rows
+saved data/raw/nws/warnings_2020.csv 9472 rows
+saved data/raw/nws/spc_day1_2020.csv 1215577 rows
+saved data/raw/nws/warnings_2021.csv 9646 rows
+saved data/raw/nws/spc_day1_2021.csv 1224014 rows
+saved data/raw/nws/warnings_2022.csv 11447 rows
+saved data/raw/nws/spc_day1_2022.csv 1210385 rows
+saved data/raw/nws/warnings_2023.csv 12837 rows
+saved data/raw/nws/spc_day1_2023.csv 1209736 rows
+saved data/raw/nws/warnings_2024.csv 14678 rows
+saved data/raw/nws/spc_day1_2024.csv 1214928 rows
+saved data/raw/nws/warnings_2025.csv 15356 rows
+saved data/raw/nws/spc_day1_2025.csv 1207140 rows
+nws ok Sat Nov  7 21:59:57 CST 2026
+✨ Pixi task (fetch-tree-canopy in default): python ingest/fetch_tree_canopy.py: (USFS/NLCD tree canopy % per region (2021) -> data/raw/geo)
+25/649
+50/649
+75/649
+100/649
+125/649
+150/649
+175/649
+200/649
+225/649
+250/649
+275/649
+300/649
+325/649
+350/649
+375/649
+400/649
+425/649
+450/649
+475/649
+500/649
+525/649
+550/649
+575/649
+600/649
+625/649
+wrote data/raw/geo/tree_canopy_2021.csv: 649 regions, canopy mean 0.36–74.45%
+canopy ok Sat Nov  7 22:02:28 CST 2026
+649 regions, 2019-12-31T01:00 to 2026-01-01T00:00, 34,157,519 hours -> data/raw/weather/hrrr
+hourly ok Sat Nov  7 22:09:58 CST 2026
+732 days, 649 regions -> data/raw/weather/hrrr_fcst
+forecasts ok Sat Nov  7 22:11:01 CST 2026
+✨ Pixi task (build in default): dbt deps && dbt build: (Rebuild the warehouse with dbt: every model + test (~30 s))
+[0m04:11:03  Running with dbt=1.12.6
+[0m04:11:03  Installing dbt-labs/dbt_utils
+[0m04:11:03  Installed from version 1.4.1
+[0m04:11:03  Up to date!
+[0m04:11:04  Running with dbt=1.12.6
+[0m04:11:05  Registered adapter: duckdb=1.11.0
+[0m04:11:05  Found 25 models, 61 data tests, 2 seeds, 14 sources, 619 macros
+[0m04:11:05  
+[0m04:11:05  Concurrency: 4 threads (target='dev')
+[0m04:11:05  
+[0m04:11:05  4 of 88 START sql view model staging.stg_hrrr__hourly .......................... [RUN]
+[0m04:11:05  1 of 88 START sql view model staging.stg_eaglei__customers ..................... [RUN]
+[0m04:11:05  3 of 88 START sql view model staging.stg_geo__regions .......................... [RUN]
+[0m04:11:05  2 of 88 START sql view model staging.stg_eaglei__outages ....................... [RUN]
+[0m04:11:05  3 of 88 OK created sql view model staging.stg_geo__regions ..................... [[32mOK[0m in 0.12s]
+[0m04:11:05  5 of 88 START sql view model staging.stg_noaa__kstl_hourly ..................... [RUN]
+[0m04:11:05  1 of 88 OK created sql view model staging.stg_eaglei__customers ................ [[32mOK[0m in 0.14s]
+[0m04:11:05  6 of 88 START sql view model staging.stg_nws__warnings ......................... [RUN]
+[0m04:11:05  2 of 88 OK created sql view model staging.stg_eaglei__outages .................. [[32mOK[0m in 0.16s]
+[0m04:11:05  7 of 88 START sql view model staging.stg_spc__day1_outlooks .................... [RUN]
+[0m04:11:05  4 of 88 OK created sql view model staging.stg_hrrr__hourly ..................... [[32mOK[0m in 0.21s]
+[0m04:11:05  8 of 88 START seed file seeds.stl_metro_counties ............................... [RUN]
+[0m04:11:06  8 of 88 OK loaded seed file seeds.stl_metro_counties ........................... [[32mINSERT 8[0m in 0.03s]
+[0m04:11:06  9 of 88 START seed file seeds.study_states ..................................... [RUN]
+[0m04:11:06  9 of 88 OK loaded seed file seeds.study_states ................................. [[32mINSERT 7[0m in 0.01s]
+[0m04:11:06  10 of 88 START test dbt_utils_accepted_range_stg_geo__regions_canopy_mean_pct__100__0  [RUN]
+[0m04:11:06  10 of 88 PASS dbt_utils_accepted_range_stg_geo__regions_canopy_mean_pct__100__0  [[32mPASS[0m in 0.05s]
+[0m04:11:06  11 of 88 START test not_null_stg_geo__regions_canopy_mean_pct .................. [RUN]
+[0m04:11:06  6 of 88 OK created sql view model staging.stg_nws__warnings .................... [[32mOK[0m in 0.19s]
+[0m04:11:06  12 of 88 START test not_null_stg_geo__regions_region_fips ...................... [RUN]
+[0m04:11:06  5 of 88 OK created sql view model staging.stg_noaa__kstl_hourly ................ [[32mOK[0m in 0.21s]
+[0m04:11:06  11 of 88 PASS not_null_stg_geo__regions_canopy_mean_pct ........................ [[32mPASS[0m in 0.04s]
+[0m04:11:06  13 of 88 START test unique_stg_geo__regions_region_fips ........................ [RUN]
+[0m04:11:06  14 of 88 START test not_null_stg_eaglei__customers_customers ................... [RUN]
+[0m04:11:06  7 of 88 OK created sql view model staging.stg_spc__day1_outlooks ............... [[32mOK[0m in 0.19s]
+[0m04:11:06  15 of 88 START test not_null_stg_eaglei__customers_fips_code ................... [RUN]
+[0m04:11:06  12 of 88 PASS not_null_stg_geo__regions_region_fips ............................ [[32mPASS[0m in 0.03s]
+[0m04:11:06  14 of 88 PASS not_null_stg_eaglei__customers_customers ......................... [[32mPASS[0m in 0.02s]
+[0m04:11:06  16 of 88 START test unique_stg_eaglei__customers_fips_code ..................... [RUN]
+[0m04:11:06  17 of 88 START test not_null_stg_eaglei__outages_fips_code ..................... [RUN]
+[0m04:11:06  13 of 88 PASS unique_stg_geo__regions_region_fips .............................. [[32mPASS[0m in 0.04s]
+[0m04:11:06  18 of 88 START test not_null_stg_eaglei__outages_run_start_time ................ [RUN]
+[0m04:11:06  15 of 88 PASS not_null_stg_eaglei__customers_fips_code ......................... [[32mPASS[0m in 0.02s]
+[0m04:11:06  19 of 88 START test dbt_utils_unique_combination_of_columns_stg_hrrr__hourly_region_fips__hour  [RUN]
+[0m04:11:06  16 of 88 PASS unique_stg_eaglei__customers_fips_code ........................... [[32mPASS[0m in 0.03s]
+[0m04:11:06  20 of 88 START test not_null_stl_metro_counties_fips_code ...................... [RUN]
+[0m04:11:06  20 of 88 PASS not_null_stl_metro_counties_fips_code ............................ [[32mPASS[0m in 0.01s]
+[0m04:11:06  21 of 88 START test unique_stl_metro_counties_fips_code ........................ [RUN]
+[0m04:11:06  21 of 88 PASS unique_stl_metro_counties_fips_code .............................. [[32mPASS[0m in 0.02s]
+[0m04:11:06  22 of 88 START test not_null_study_states_state_fips ........................... [RUN]
+[0m04:11:06  22 of 88 PASS not_null_study_states_state_fips ................................. [[32mPASS[0m in 0.07s]
+[0m04:11:06  23 of 88 START test unique_study_states_state_fips ............................. [RUN]
+[0m04:11:06  23 of 88 PASS unique_study_states_state_fips ................................... [[32mPASS[0m in 0.02s]
+[0m04:11:06  24 of 88 START test assert_kstl_row_count ...................................... [RUN]
+[0m04:11:07  24 of 88 PASS assert_kstl_row_count ............................................ [[32mPASS[0m in 1.59s]
+[0m04:11:07  25 of 88 START test not_null_stg_noaa__kstl_hourly_hour ........................ [RUN]
+[0m04:11:09  17 of 88 PASS not_null_stg_eaglei__outages_fips_code ........................... [[32mPASS[0m in 3.29s]
+[0m04:11:09  26 of 88 START test not_null_stg_noaa__kstl_hourly_thunder ..................... [RUN]
+[0m04:11:10  25 of 88 PASS not_null_stg_noaa__kstl_hourly_hour .............................. [[32mPASS[0m in 2.39s]
+[0m04:11:10  27 of 88 START test unique_stg_noaa__kstl_hourly_hour .......................... [RUN]
+[0m04:11:11  26 of 88 PASS not_null_stg_noaa__kstl_hourly_thunder ........................... [[32mPASS[0m in 2.27s]
+[0m04:11:11  28 of 88 START sql view model staging.stg_acs__housing ......................... [RUN]
+[0m04:11:11  28 of 88 OK created sql view model staging.stg_acs__housing .................... [[32mOK[0m in 0.22s]
+[0m04:11:11  29 of 88 START sql view model staging.stg_noaa__storm_events ................... [RUN]
+[0m04:11:12  27 of 88 PASS unique_stg_noaa__kstl_hourly_hour ................................ [[32mPASS[0m in 2.29s]
+[0m04:11:12  30 of 88 START sql view model staging.stg_noaa__zone_county .................... [RUN]
+[0m04:11:12  30 of 88 OK created sql view model staging.stg_noaa__zone_county ............... [[32mOK[0m in 0.02s]
+[0m04:11:12  31 of 88 START test not_null_stg_acs__housing_fips_code ........................ [RUN]
+[0m04:11:12  18 of 88 PASS not_null_stg_eaglei__outages_run_start_time ...................... [[32mPASS[0m in 6.84s]
+[0m04:11:12  32 of 88 START test unique_stg_acs__housing_fips_code .......................... [RUN]
+[0m04:11:13  31 of 88 PASS not_null_stg_acs__housing_fips_code .............................. [[32mPASS[0m in 0.44s]
+[0m04:11:13  33 of 88 START sql table model intermediate.int_eaglei__blocks_6h .............. [RUN]
+[0m04:11:13  32 of 88 PASS unique_stg_acs__housing_fips_code ................................ [[32mPASS[0m in 0.67s]
+[0m04:11:13  34 of 88 START sql table model intermediate.int_eaglei__hours_1h ............... [RUN]
+[0m04:11:15  29 of 88 OK created sql view model staging.stg_noaa__storm_events .............. [[32mOK[0m in 3.56s]
+[0m04:11:15  35 of 88 START sql table model intermediate.int_study__outages_1h .............. [RUN]
+[0m04:11:24  19 of 88 PASS dbt_utils_unique_combination_of_columns_stg_hrrr__hourly_region_fips__hour  [[32mPASS[0m in 18.61s]
+[0m04:11:24  36 of 88 START sql table model intermediate.int_study__regions ................. [RUN]
+[0m04:11:25  36 of 88 OK created sql table model intermediate.int_study__regions ............ [[32mOK[0m in 0.88s]
+[0m04:11:25  37 of 88 START test not_null_stg_noaa__storm_events_begin_utc .................. [RUN]
+[0m04:11:26  34 of 88 OK created sql table model intermediate.int_eaglei__hours_1h .......... [[32mOK[0m in 12.67s]
+[0m04:11:26  38 of 88 START sql table model intermediate.int_study__weather_6h .............. [RUN]
+[0m04:11:29  33 of 88 OK created sql table model intermediate.int_eaglei__blocks_6h ......... [[32mOK[0m in 16.28s]
+[0m04:11:29  39 of 88 START test dbt_utils_accepted_range_int_study__regions_share_homes_pre1960__1__0  [RUN]
+[0m04:11:29  39 of 88 PASS dbt_utils_accepted_range_int_study__regions_share_homes_pre1960__1__0  [[32mPASS[0m in 0.01s]
+[0m04:11:29  40 of 88 START test not_null_int_study__regions_customers ...................... [RUN]
+[0m04:11:29  40 of 88 PASS not_null_int_study__regions_customers ............................ [[32mPASS[0m in 0.01s]
+[0m04:11:29  41 of 88 START test not_null_int_study__regions_region_fips .................... [RUN]
+[0m04:11:29  41 of 88 PASS not_null_int_study__regions_region_fips .......................... [[32mPASS[0m in 0.01s]
+[0m04:11:29  42 of 88 START test unique_int_study__regions_region_fips ...................... [RUN]
+[0m04:11:29  42 of 88 PASS unique_int_study__regions_region_fips ............................ [[32mPASS[0m in 0.01s]
+[0m04:11:29  43 of 88 START test dbt_utils_accepted_range_int_eaglei__hours_1h_n_snapshots__4__0  [RUN]
+[0m04:11:29  43 of 88 PASS dbt_utils_accepted_range_int_eaglei__hours_1h_n_snapshots__4__0 .. [[32mPASS[0m in 0.01s]
+[0m04:11:29  44 of 88 START test not_null_int_eaglei__hours_1h_hour ......................... [RUN]
+[0m04:11:29  44 of 88 PASS not_null_int_eaglei__hours_1h_hour ............................... [[32mPASS[0m in 0.01s]
+[0m04:11:29  45 of 88 START test unique_int_eaglei__hours_1h_hour ........................... [RUN]
+[0m04:11:29  45 of 88 PASS unique_int_eaglei__hours_1h_hour ................................. [[32mPASS[0m in 0.02s]
+[0m04:11:29  46 of 88 START test dbt_utils_accepted_range_int_eaglei__blocks_6h_n_snapshots__24__0  [RUN]
+[0m04:11:29  46 of 88 PASS dbt_utils_accepted_range_int_eaglei__blocks_6h_n_snapshots__24__0  [[32mPASS[0m in 0.01s]
+[0m04:11:29  47 of 88 START test not_null_int_eaglei__blocks_6h_block_start ................. [RUN]
+[0m04:11:29  47 of 88 PASS not_null_int_eaglei__blocks_6h_block_start ....................... [[32mPASS[0m in 0.01s]
+[0m04:11:29  48 of 88 START test unique_int_eaglei__blocks_6h_block_start ................... [RUN]
+[0m04:11:29  48 of 88 PASS unique_int_eaglei__blocks_6h_block_start ......................... [[32mPASS[0m in 0.01s]
+[0m04:11:29  49 of 88 START sql table model intermediate.int_study__region_neighbors ........ [RUN]
+[0m04:11:29  49 of 88 OK created sql table model intermediate.int_study__region_neighbors ... [[32mOK[0m in 0.16s]
+[0m04:11:29  50 of 88 START sql table model intermediate.int_study__nws_1h .................. [RUN]
+[0m04:11:34  37 of 88 PASS not_null_stg_noaa__storm_events_begin_utc ........................ [[32mPASS[0m in 8.70s]
+[0m04:11:34  51 of 88 START sql table model intermediate.int_study__nws_6h .................. [RUN]
+[0m04:11:44  35 of 88 OK created sql table model intermediate.int_study__outages_1h ......... [[32mOK[0m in 28.65s]
+[0m04:11:44  52 of 88 START sql table model intermediate.int_study__outages_6h .............. [RUN]
+[0m04:11:49  51 of 88 OK created sql table model intermediate.int_study__nws_6h ............. [[32mOK[0m in 14.94s]
+[0m04:11:49  53 of 88 START test dbt_utils_accepted_range_int_study__region_neighbors_bearing_deg__360__0  [RUN]
+[0m04:11:49  53 of 88 PASS dbt_utils_accepted_range_int_study__region_neighbors_bearing_deg__360__0  [[32mPASS[0m in 0.02s]
+[0m04:11:49  54 of 88 START test dbt_utils_unique_combination_of_columns_int_study__region_neighbors_region_fips__neighbor_fips  [RUN]
+[0m04:11:49  54 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__region_neighbors_region_fips__neighbor_fips  [[32mPASS[0m in 0.01s]
+[0m04:11:49  55 of 88 START sql table model intermediate.int_study__storm_events_6h ......... [RUN]
+[0m04:11:54  38 of 88 OK created sql table model intermediate.int_study__weather_6h ......... [[32mOK[0m in 28.36s]
+[0m04:11:54  56 of 88 START test dbt_utils_unique_combination_of_columns_int_study__outages_1h_region_fips__hour  [RUN]
+[0m04:11:55  56 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__outages_1h_region_fips__hour  [[32mPASS[0m in 0.98s]
+[0m04:11:55  57 of 88 START test accepted_values_int_study__nws_6h_spc_cat__0__1__2__3__4__5__6  [RUN]
+[0m04:11:55  57 of 88 PASS accepted_values_int_study__nws_6h_spc_cat__0__1__2__3__4__5__6 ... [[32mPASS[0m in 0.01s]
+[0m04:11:55  58 of 88 START test dbt_utils_accepted_range_int_study__nws_6h_spc_lead_hours__False__0  [RUN]
+[0m04:11:55  58 of 88 PASS dbt_utils_accepted_range_int_study__nws_6h_spc_lead_hours__False__0  [[32mPASS[0m in 0.03s]
+[0m04:11:55  59 of 88 START test dbt_utils_unique_combination_of_columns_int_study__nws_6h_region_fips__block_start  [RUN]
+[0m04:11:56  59 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__nws_6h_region_fips__block_start  [[32mPASS[0m in 0.65s]
+[0m04:11:56  60 of 88 START test dbt_utils_accepted_range_int_study__weather_6h_n_weather_hours__6__1  [RUN]
+[0m04:11:56  60 of 88 PASS dbt_utils_accepted_range_int_study__weather_6h_n_weather_hours__6__1  [[32mPASS[0m in 0.03s]
+[0m04:11:56  61 of 88 START test dbt_utils_accepted_range_int_study__weather_6h_precip_prev_72h_mm__0  [RUN]
+[0m04:11:56  61 of 88 PASS dbt_utils_accepted_range_int_study__weather_6h_precip_prev_72h_mm__0  [[32mPASS[0m in 0.01s]
+[0m04:11:56  62 of 88 START test dbt_utils_accepted_range_int_study__weather_6h_precip_prev_7d_mm__0  [RUN]
+[0m04:11:56  62 of 88 PASS dbt_utils_accepted_range_int_study__weather_6h_precip_prev_7d_mm__0  [[32mPASS[0m in 0.01s]
+[0m04:11:56  63 of 88 START test dbt_utils_unique_combination_of_columns_int_study__weather_6h_region_fips__block_start  [RUN]
+[0m04:11:56  63 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__weather_6h_region_fips__block_start  [[32mPASS[0m in 0.43s]
+[0m04:11:59  50 of 88 OK created sql table model intermediate.int_study__nws_1h ............. [[32mOK[0m in 29.56s]
+[0m04:11:59  64 of 88 START test dbt_utils_unique_combination_of_columns_int_study__nws_1h_region_fips__hour  [RUN]
+[0m04:12:00  52 of 88 OK created sql table model intermediate.int_study__outages_6h ......... [[32mOK[0m in 16.59s]
+[0m04:12:00  65 of 88 START test dbt_utils_unique_combination_of_columns_int_study__outages_6h_region_fips__block_start  [RUN]
+[0m04:12:00  65 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__outages_6h_region_fips__block_start  [[32mPASS[0m in 0.19s]
+[0m04:12:00  64 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__nws_1h_region_fips__hour  [[32mPASS[0m in 1.76s]
+[0m04:12:00  66 of 88 START sql table model marts.mart_study__region_1h ..................... [RUN]
+[0m04:12:01  55 of 88 OK created sql table model intermediate.int_study__storm_events_6h .... [[32mOK[0m in 11.86s]
+[0m04:12:01  67 of 88 START test dbt_utils_unique_combination_of_columns_int_study__storm_events_6h_region_fips__block_start  [RUN]
+[0m04:12:01  67 of 88 PASS dbt_utils_unique_combination_of_columns_int_study__storm_events_6h_region_fips__block_start  [[32mPASS[0m in 0.05s]
+[0m04:12:01  68 of 88 START sql table model marts.mart_study__region_6h ..................... [RUN]
+[0m04:12:13  68 of 88 OK created sql table model marts.mart_study__region_6h ................ [[32mOK[0m in 11.87s]
+[0m04:12:13  69 of 88 START test assert_pct_null_when_peak_null ............................. [RUN]
+[0m04:12:13  70 of 88 START test dbt_utils_accepted_range_mart_study__region_6h_peak_pct_out__100__0  [RUN]
+[0m04:12:13  71 of 88 START test dbt_utils_unique_combination_of_columns_mart_study__region_6h_region_fips__block_start  [RUN]
+[0m04:12:13  70 of 88 PASS dbt_utils_accepted_range_mart_study__region_6h_peak_pct_out__100__0  [[32mPASS[0m in 0.06s]
+[0m04:12:13  72 of 88 START test not_null_mart_study__region_6h_has_weather ................. [RUN]
+[0m04:12:13  72 of 88 PASS not_null_mart_study__region_6h_has_weather ....................... [[32mPASS[0m in 0.01s]
+[0m04:12:13  69 of 88 PASS assert_pct_null_when_peak_null ................................... [[32mPASS[0m in 0.10s]
+[0m04:12:13  71 of 88 PASS dbt_utils_unique_combination_of_columns_mart_study__region_6h_region_fips__block_start  [[32mPASS[0m in 0.67s]
+[0m04:12:13  74 of 88 START sql table model marts.mart_study__region_resilience ............. [RUN]
+[0m04:12:13  73 of 88 START sql table model marts.mart_study__region_history_asof ........... [RUN]
+[0m04:12:17  74 of 88 OK created sql table model marts.mart_study__region_resilience ........ [[32mOK[0m in 3.39s]
+[0m04:12:17  75 of 88 START test dbt_utils_accepted_range_mart_study__region_resilience_repeat_7d_share__1__0  [RUN]
+[0m04:12:17  76 of 88 START test dbt_utils_accepted_range_mart_study__region_resilience_storm_hit_rate__1__0  [RUN]
+[0m04:12:17  75 of 88 PASS dbt_utils_accepted_range_mart_study__region_resilience_repeat_7d_share__1__0  [[32mPASS[0m in 0.04s]
+[0m04:12:17  77 of 88 START test not_null_mart_study__region_resilience_region_fips ......... [RUN]
+[0m04:12:17  76 of 88 PASS dbt_utils_accepted_range_mart_study__region_resilience_storm_hit_rate__1__0  [[32mPASS[0m in 0.04s]
+[0m04:12:17  78 of 88 START test unique_mart_study__region_resilience_region_fips ........... [RUN]
+[0m04:12:17  77 of 88 PASS not_null_mart_study__region_resilience_region_fips ............... [[32mPASS[0m in 0.03s]
+[0m04:12:17  78 of 88 PASS unique_mart_study__region_resilience_region_fips ................. [[32mPASS[0m in 0.02s]
+[0m04:12:34  73 of 88 OK created sql table model marts.mart_study__region_history_asof ...... [[32mOK[0m in 20.21s]
+[0m04:12:34  79 of 88 START test dbt_utils_expression_is_true_mart_study__region_history_asof_history_end_make_date_as_of_year_1_1_  [RUN]
+[0m04:12:34  80 of 88 START test dbt_utils_unique_combination_of_columns_mart_study__region_history_asof_as_of_year__region_fips  [RUN]
+[0m04:12:34  79 of 88 PASS dbt_utils_expression_is_true_mart_study__region_history_asof_history_end_make_date_as_of_year_1_1_  [[32mPASS[0m in 0.05s]
+[0m04:12:34  80 of 88 PASS dbt_utils_unique_combination_of_columns_mart_study__region_history_asof_as_of_year__region_fips  [[32mPASS[0m in 0.04s]
+[0m04:12:57  66 of 88 OK created sql table model marts.mart_study__region_1h ................ [[32mOK[0m in 56.96s]
+[0m04:12:57  81 of 88 START test dbt_utils_accepted_range_mart_study__region_1h_fut_max_pct_0__100__0  [RUN]
+[0m04:12:57  82 of 88 START test dbt_utils_accepted_range_mart_study__region_1h_hours_since_outage__720__1  [RUN]
+[0m04:12:57  83 of 88 START test dbt_utils_accepted_range_mart_study__region_1h_pct_out__100__0  [RUN]
+[0m04:12:57  84 of 88 START test dbt_utils_unique_combination_of_columns_mart_study__region_1h_region_fips__hour  [RUN]
+[0m04:12:57  81 of 88 PASS dbt_utils_accepted_range_mart_study__region_1h_fut_max_pct_0__100__0  [[32mPASS[0m in 0.02s]
+[0m04:12:57  85 of 88 START test not_null_mart_study__region_1h_has_weather ................. [RUN]
+[0m04:12:57  85 of 88 PASS not_null_mart_study__region_1h_has_weather ....................... [[32mPASS[0m in 0.01s]
+[0m04:12:57  83 of 88 PASS dbt_utils_accepted_range_mart_study__region_1h_pct_out__100__0 ... [[32mPASS[0m in 0.03s]
+[0m04:12:57  82 of 88 PASS dbt_utils_accepted_range_mart_study__region_1h_hours_since_outage__720__1  [[32mPASS[0m in 0.05s]
+[0m04:12:58  84 of 88 PASS dbt_utils_unique_combination_of_columns_mart_study__region_1h_region_fips__hour  [[32mPASS[0m in 0.43s]
+[0m04:12:58  86 of 88 START sql table model marts.mart_study__region_coverage ............... [RUN]
+[0m04:12:58  86 of 88 OK created sql table model marts.mart_study__region_coverage .......... [[32mOK[0m in 0.11s]
+[0m04:12:58  88 of 88 START test not_null_mart_study__region_coverage_tracked ............... [RUN]
+[0m04:12:58  87 of 88 START test dbt_utils_unique_combination_of_columns_mart_study__region_coverage_region_fips__year  [RUN]
+[0m04:12:58  88 of 88 PASS not_null_mart_study__region_coverage_tracked ..................... [[32mPASS[0m in 0.01s]
+[0m04:12:58  87 of 88 PASS dbt_utils_unique_combination_of_columns_mart_study__region_coverage_region_fips__year  [[32mPASS[0m in 0.01s]
+[0m04:12:58  
+[0m04:12:58  Finished running 2 seeds, 15 table models, 61 data tests, 10 view models in 0 hours 1 minutes and 52.91 seconds (112.91s).
+[0m04:12:58  
+[0m04:12:58  [32mCompleted successfully[0m
+[0m04:12:58  
+[0m04:12:58  Done. PASS=88 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=88
+build ok Sat Nov  7 22:13:00 CST 2026
+STAGE1 DONE Sat Nov  7 22:13:00 CST 2026
