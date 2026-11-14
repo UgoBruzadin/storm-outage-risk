@@ -1,0 +1,94 @@
+stage,arm,setup,onset_pr_auc
+baselines,reference,seed0,0.09364214065299681
+baselines,reference,seed1,0.09370756219158759
+baselines,reference,seed2,0.09373620670760353
+baselines,reference,seed mean,0.09457251465732855
+baselines,gust bins per county,seed0,0.05391241623223449
+baselines,gust bins per county,seed mean,0.05391241623223449
+baselines,"gust bins, national",seed0,0.021115300665134683
+baselines,"gust bins, national",seed mean,0.021115300665134683
+baselines,weather only (XGBoost),seed0,0.06622620215074758
+baselines,weather only (XGBoost),seed1,0.06652316439954561
+baselines,weather only (XGBoost),seed2,0.06584462675812583
+baselines,weather only (XGBoost),seed mean,0.06678917073191279
+baselines,warnings + outlook,seed0,0.018310087940057843
+baselines,warnings + outlook,seed mean,0.018310087940057843
+size,"current (depth 4, min child 20, 800 trees)",seed0,0.09364214065299681
+size,"current (depth 4, min child 20, 800 trees)",seed1,0.09370756219158759
+size,"current (depth 4, min child 20, 800 trees)",seed2,0.09373620670760353
+size,"current (depth 4, min child 20, 800 trees)",seed mean,0.09457251465732855
+size,depth 6,seed0,0.10081571166552496
+size,depth 6,seed1,0.10076770582931935
+size,depth 6,seed2,0.10124372314613513
+size,depth 6,seed mean,0.10217690974476848
+size,depth 8,seed0,0.10456518535916973
+size,depth 8,seed1,0.10477431952466178
+size,depth 8,seed2,0.10494308697787082
+size,depth 8,seed mean,0.10639946546304815
+size,"depth 6, min child 100",seed0,0.10225344566404035
+size,"depth 6, min child 100",seed1,0.10211645085116322
+size,"depth 6, min child 100",seed2,0.1026669681655057
+size,"depth 6, min child 100",seed mean,0.10312616042608841
+size,"depth 6, 1600 trees",seed0,0.10449731243691025
+size,"depth 6, 1600 trees",seed1,0.1045719927615674
+size,"depth 6, 1600 trees",seed2,0.10517801910813958
+size,"depth 6, 1600 trees",seed mean,0.10594299730097563
+size,"depth 8, min child 100, 1600 trees",seed0,0.10775211413475283
+size,"depth 8, min child 100, 1600 trees",seed1,0.10766831927922807
+size,"depth 8, min child 100, 1600 trees",seed2,0.10793007982194211
+size,"depth 8, min child 100, 1600 trees",seed mean,0.10885599130897576
+inputs,reference,seed0,0.10775211413475283
+inputs,reference,seed1,0.10766831927922807
+inputs,reference,seed2,0.10793007982194211
+inputs,reference,seed mean,0.10885599130897576
+inputs,reference,held-out counties,0.09118705768373964
+inputs,duration / spread,seed0,0.11009983939330074
+inputs,duration / spread,seed1,0.11017013726149223
+inputs,duration / spread,seed2,0.10999725588803447
+inputs,duration / spread,seed mean,0.11118314609585955
+inputs,duration / spread,held-out counties,0.09353981736533264
+inputs,roads + street canopy,seed0,0.10904959543315475
+inputs,roads + street canopy,seed1,0.10922061897876402
+inputs,roads + street canopy,seed2,0.10894163747918849
+inputs,roads + street canopy,seed mean,0.1102340897585097
+inputs,roads + street canopy,held-out counties,0.09515648419647589
+inputs,history,seed0,0.10968778785263307
+inputs,history,seed1,0.11018265069082446
+inputs,history,seed2,0.11038930987682578
+inputs,history,seed mean,0.11137053853239617
+inputs,history,held-out counties,0.1061824026334393
+inputs,location,seed0,0.11024954707718748
+inputs,location,seed1,0.11042128478286052
+inputs,location,seed2,0.11040387380205682
+inputs,location,seed mean,0.11152446078880432
+inputs,location,held-out counties,0.09710106397954088
+inputs,E47 place groups,seed0,0.1110564247885382
+inputs,E47 place groups,seed1,0.1116041360869875
+inputs,E47 place groups,seed2,0.11066082978458346
+inputs,E47 place groups,seed mean,0.11236431636177317
+inputs,E47 place groups,held-out counties,0.09852527982581402
+inputs,monotone gust,seed0,0.10767287830314162
+inputs,monotone gust,seed1,0.10738285940322091
+inputs,monotone gust,seed2,0.10704015127541523
+inputs,monotone gust,seed mean,0.10842842557312499
+inputs,monotone gust,held-out counties,0.09079817172862693
+combine,reference,seed0,0.10775211413475283
+combine,reference,seed1,0.10766831927922807
+combine,reference,seed2,0.10793007982194211
+combine,reference,seed mean,0.10885599130897576
+combine,reference,held-out counties,0.09118705768373964
+combine,kept together,seed0,0.11405414663392076
+combine,kept together,seed1,0.11383160463710086
+combine,kept together,seed2,0.11421743039193345
+combine,kept together,seed mean,0.1154374209285699
+combine,kept together,held-out counties,0.11032956132305102
+combine,"kept together, depth + 2",seed0,0.11289610975727908
+combine,"kept together, depth + 2",seed1,0.11282475621040786
+combine,"kept together, depth + 2",seed2,0.11297478290674502
+combine,"kept together, depth + 2",seed mean,0.11450831835189851
+combine,"kept together, depth + 2",held-out counties,0.109517393504773
+combine,"kept together, 2x trees",seed0,0.11297213719882575
+combine,"kept together, 2x trees",seed1,0.11278784302435206
+combine,"kept together, 2x trees",seed2,0.11306804091247856
+combine,"kept together, 2x trees",seed mean,0.11440544630626263
+combine,"kept together, 2x trees",held-out counties,0.10945080308045632

@@ -715,6 +715,72 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 
 - **Meaning:** Sampling the negatives costs nothing in accuracy. It doesn't yet save memory: the training table shrinks to 0.65 GB, but loading each year with its neighbour features (12–17 GB) and building the 2025 windows for five run ages (21 GB) still dominate. For the whole country (about 5× seven states) the sampling has to move into the SQL query, the neighbour cache has to be built a few months at a time, and 2025 scored a state at a time.
 
+### E55. The best USA model: settings and inputs re-asked on 48 states (plan, fixed before any result)
+- **Question:** Most setting and input decisions (E6, E15, E16, E47) were made on Missouri + Illinois, about 1/15 of the USA's new outages. With the whole country, which of them change, and what is the best model?
+- **Why these tests:** each is either a rejection that may flip with 15× the data, or new evidence that hasn't been tested as a model input:
+  - Model size (E16, overfit on MO + IL); duration / spread of wind (+6% on MO + IL, `ml/wind_inputs.py`); roads + street canopy (E49: 1.8× the outages where most road is under trees, never a model input); history (E6 dropped it; the USA 6-hour benchmark ranks it first); location (the West scores lowest); the E47 place groups together (+7.9% on held-out counties, one seed); a monotone gust (warnings beat the model at gusts ≥ 35 m/s).
+  - Left for later: county-wide wind, radar and lightning, and training on forecasts (E40, E41), which need the USA area archive for 2020–2023; time since the last outage, 72-hour rain and 2018–2019 (rejected on MO + IL, low prior).
+- **Setup:** `ml/usa_ablation.py`. Trained on 2020–2023 (actual weather, sampled as E54), scored on every 2024 decision with the newest HRRR run's window weather (it needs forecast hours 4–9, which every 2024 run has, so all of 2024 counts). Three seeds per arm; held-out counties from 5 folds (seed 0). 2025 is not scored.
+  0. **Baselines: is it more than weather with thresholds?** The current model against the strongest such rules on the same decisions: each county's own new-outage rate at each forecast gust level (< 10, 10–15, … ≥ 35 m/s), shrunk toward the national rate at that level by 200 decisions so thinly sampled counties aren't noise; the same with one national table; XGBoost on the weather inputs alone (no place, history, outages, warnings or outlook); and warnings + outlook. Reported as each baseline's score against the model's, with storm-day ranges; not a keep/drop decision.
+  1. **Size**, on the current inputs: depth 6, depth 8, depth 6 with minimum child weight 100, depth 6 with 1,600 trees, depth 8 with minimum child weight 100 and 1,600 trees, each against the current settings.
+  2. **Inputs**, with step 1's settings: each group added on its own against the reference.
+  3. **Combine:** every kept group together against the reference, and, since more inputs may need a bigger model, the combined model with depth + 2 and with twice the trees.
+- **The rule:** a change is kept if its gain on 2024 (mean of the three seeds' chances) has a 95% storm-day range above zero and at least 2 of 3 seeds are better. Held-out counties are reported, not a gate. Step 1 keeps the highest-scoring setting that passes, else the current one.
+- **After E55:** the final model is scored once on 2025 with the five-run mean against the current headline and warnings + outlook (significance as E23). The clean test is the 2026 blind live test.
+- **Result** (2024, PR-AUC; ranges are 95% storm-day ranges; results in `ml/results/usa_ablation_2024.csv` and `usa_ablation_verdicts.csv`):
+
+  | Step | Arm | PR-AUC | Gain (range) | Held-out counties | Kept |
+  |---|---|---|---|---|---|
+  | 0. Baselines | Current model | 0.0946 | | | |
+  | | Gust bins per county | 0.0539 | model 1.75× (1.57–1.94×) | | |
+  | | Weather only (XGBoost) | 0.0668 | model 1.42× | | |
+  | | Gust bins, national | 0.0211 | model 4.5× | | |
+  | | Warnings + outlook | 0.0183 | model 5.2× | | |
+  | 1. Size | Depth 6 / depth 8 | 0.1022 / 0.1064 | +8.0% / +12.5% | | yes |
+  | | Depth 6, min child 100 / 1,600 trees | 0.1031 / 0.1059 | +9.0% / +12.0% | | yes |
+  | | **Depth 8, min child 100, 1,600 trees** | **0.1089** | **+15.1% (11.6–19.7%)** | | **chosen** |
+  | 2. Inputs | E47 place groups | 0.1124 | +3.2% (1.7–5.3%) | +8.1% | yes |
+  | | Location | 0.1115 | +2.5% (1.5–3.8%) | +6.5% | yes |
+  | | History | 0.1114 | +2.3% (1.3–3.4%) | +16.4% | yes |
+  | | Duration / spread | 0.1112 | +2.1% (0.9–3.9%) | +2.6% | yes |
+  | | Roads + street canopy | 0.1102 | +1.3% (0.7–2.0%) | +4.4% | yes |
+  | | Monotone gust | 0.1084 | −0.4% (−1.0 to +0.4%) | −0.4% | no |
+  | 3. Combine | **All kept groups** | **0.1154** | **+6.0% (4.0–8.7%)** | **+21.0%** | **yes** |
+  | | … depth 10 | 0.1145 | −0.8% (−1.2 to −0.4%) | −0.7% | no |
+  | | … 3,200 trees | 0.1144 | −0.9% (−1.2 to −0.5%) | −0.8% | no |
+
+  Every kept arm was better on all 3 seeds; every rejected arm on none.
+
+  **2025, scored once** (`ml/usa_final_test.py`, `ml/results/usa_final_2025.csv`; 25.3 M decisions, 150 K new outages, five-run mean):
+
+  | Model | PR-AUC (range) | vs warnings + outlook | Precision / recall at 0.75% alerted | Best F1 |
+  |---|---|---|---|---|
+  | Warnings + outlook | 0.0216 (0.017–0.026) | 1× | 7.2% / 9.1% | 0.085 |
+  | Current headline | 0.0868 (0.072–0.102) | 4.01× | 15.1% / 19.1% | 0.170 |
+  | **E55 model (seed 0)** | **0.1021 (0.085–0.120)** | **4.72× (4.20–5.31×)** | **16.6% / 20.9%** | **0.186** |
+  | E55 model, 3 seeds averaged | 0.1033 | 4.78× | 16.6% / 21.0% | 0.187 |
+
+  The E55 model scores 1.18× the current headline (1.14–1.22×) and is better in every resample.
+
+  **Live version** (`ml/train_live_usa.py`, `ml/results/live_usa_2025.csv`): the E55 recipe without the 4 inputs a live job can't get (the share out now and over the past 24 hours, and in neighbouring and upwind counties; 106 inputs), trained on 2020–2024 and scored on 2025 the same way. The shipping model (2020–2025) is in `live/model_usa/`.
+
+  | Model | PR-AUC (range) | vs warnings + outlook | Live model vs this | Precision / recall at 0.75% |
+  |---|---|---|---|---|
+  | E55 model (with outage data) | 0.1021 | 4.72× | 0.96× (0.94–0.97×) | 16.6% / 20.9% |
+  | **Live USA model** | **0.0975 (0.081–0.114)** | **4.51× (4.02–5.06×)** | | **16.2% / 20.4%** |
+  | Current headline (with outage data) | 0.0868 | 4.01× | 1.12× (1.08–1.17×) | 15.1% / 19.1% |
+
+  Alert level (top 0.75% of 2025 chances): 0.101.
+
+- **Meaning:**
+  - **It is not weather with thresholds.** The best rule built on forecast gust alone (each county's own outage rate at each gust level) reaches 57% of the model's score; XGBoost on the weather alone, 71%. The rest comes from place, history and recent outages.
+  - **The whole country flips most of the Missouri + Illinois rejections.** A bigger model (rejected in E16) is the largest single gain, +15%. History (dropped in E6) and the E47 place groups now pass, and so do location, roads + street canopy and duration / spread. With 15× the outages, the model can use what was noise on two states.
+  - **The new inputs help most where the model has seen least.** On held-out counties the combined gain is +21% against +6% overall, and history alone gives +16%. They describe a county the model hasn't trained on. That matters for a national map.
+  - **The size settled.** With every kept input added, a deeper model or twice the trees is slightly but consistently worse. Depth 8, minimum child weight 100 and 1,600 trees is the USA setting.
+  - **The monotone gust doesn't help.** Forcing chances to rise with gust does not recover the warnings' edge at gusts ≥ 35 m/s, so that gap needs another fix (training on forecasts or radar, E40–E42).
+  - **The gains hold on 2025.** Every choice was made on 2024. On the untouched 2025 the new model beats the current headline by 18% and warnings + outlook by 4.7×. One caveat: duration / spread was first picked on Missouri + Illinois 2025 (`ml/wind_inputs.py`), so 2025 is not fully clean for that one input. The clean test is the 2026 blind live test.
+  - **The live model loses little without outage data.** It keeps 96% of the score (4.51× vs 4.72× warnings + outlook) and still beats the current headline that uses outage data. On Missouri + Illinois the loss was about 8% (2.2× vs 2.4×, E43). With the whole country, place and history carry more of what recent outages used to tell the model.
+
 ---
 
 ## Open experiments
@@ -730,3 +796,13 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | Roads and trees on five states | E52: canopy now lowers the score in Missouri; E49 found the link along roads in MO + IL only | Rerun E49 before rewriting the Trees slide |
 | The whole country | E53–E54: seven states is the memory limit for the full code | Weather is on disk for all 3,108 counties; needs the SQL-side sampling and chunked neighbours from E54, and about 50 GB of disk for the warehouse |
 | Restoration time | Next, after E51. Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
+| **E57a. A neural network on the same inputs** (after the 2025 test) | E1 compared tree libraries, never a neural network; trees usually win on tables, but a network makes different mistakes, so averaging the two may gain | PyTorch on the GPU. E55's 110 inputs, rank-transformed to a normal shape (CAPE and rain are heavy-tailed), missing values as 0 plus a flag; month, hour, SPC category, state and county as learned embeddings (county: 16 numbers; dropped for 10% of training rows so it works for unseen counties). MLP 512-256-128, SiLU, LayerNorm, dropout 0.2; weighted cross-entropy with the sampling weights (no focal loss, to keep chances calibrated); AdamW, batch 8,192, cosine schedule, epochs chosen on 2024. Arms: the network alone, and the network averaged with XGBoost, each against E55's model, by E55's rule |
+| **E57b. A graph network over neighbouring counties** (exploratory) | The neighbour and upwind inputs are hand-made; a graph network could learn how storms and outages spread between counties | Each hour is a graph: 3,108 counties, edges to counties within 100 km with distance, bearing and the wind's angle to that bearing. Node inputs = E57a's without the hand-made neighbour inputs. 2–3 rounds of attention message passing (GATv2 with edge features), then a per-county chance; only onset-eligible counties count in the loss. Training hours: every hour with an outage somewhere plus 10% of quiet hours, weighted. Compared with E57a's MLP without neighbour inputs (does learned spreading beat none?) and with them (does it beat hand-made?). Needs PyTorch Geometric in the gpu environment and ~25 GB of hourly tensors on disk |
+| **E56. Public reports as a live outage signal** (after E55) | A live forecast has no current outage data, worth about 7% of the score (E43), and a "Now" view needs it. People's reports are also the only route below county level | First: how often each source's reports match EAGLE-I's 2025 outages (county, hour), how early they come, and which counties they miss (cities vs rural). Then, only for a source that carries signal, as a live input. Reports are self-selected: a signal and a check, never the label |
+| ↳ NWS Local Storm Reports | Public domain, already read from IEM for floods (E46): "power lines down", "trees on lines", with place and time | Cheapest; start here |
+| ↳ mPING (NOAA NSSL / University of Oklahoma) | Crowdsourced weather reports, wind damage included | Research API; needs a key the user requests |
+| ↳ ODIN (Oak Ridge National Laboratory) | Utilities' live outage feeds, shared on purpose: the proper live source | Needs registration by the user; coverage is the utilities that joined |
+| ↳ Google Trends, "power outage" | Searches by metro area spike within minutes of an outage; aggregate and anonymous | Metro areas, not counties; access at scale is limited |
+| ↳ City 311 open data | Power and streetlight complaints in some cities (e.g. New York) | Patchy coverage |
+| ↳ Bluesky (and Mastodon) public posts | Open firehose by design: "power's out in …" posts | Store only county-hour counts, never posts or names; place names are ambiguous. Not Reddit, Facebook, Nextdoor or X: their terms forbid it or the API is prohibitively paid |
+| ↳ The site's own "out / back" buttons | Opt-in, we choose what's stored, and "back" gives outage length | Needs the site's backend (a decision pending) |
