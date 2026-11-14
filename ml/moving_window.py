@@ -29,18 +29,26 @@ from ml.metrics import score, weighted_quantile
 
 THRESHOLD_PCT = 5
 TRAIN_YEARS, VAL_YEAR, TEST_YEAR = [2020, 2021, 2022, 2023, 2024], 2024, 2025
-PARAMS = {"n_estimators": 800, "learning_rate": 0.03, "max_depth": 4, "min_child_weight": 20,
-          "subsample": 0.8, "colsample_bytree": 0.8}      # the 6-hour final model's settings
-# the final features, chosen on the 2024 validation year over seeds (hourly_ablation.py): neighbours
+PARAMS_V1 = {"n_estimators": 800, "learning_rate": 0.03, "max_depth": 4, "min_child_weight": 20,
+             "subsample": 0.8, "colsample_bytree": 0.8}      # the 6-hour final model's settings
+# the Missouri + Illinois features, chosen on the 2024 validation year over seeds (hourly_ablation.py): neighbours
 # in (+2.8% at 2 h, +5.7% at 6 h, every seed); canopy kept; time since the last outage (mixed) and
-# rain in the past 72 h (worse with every seed) left out; training from 2020 (adding 2018–2019: +0.5%)
-FEATURES = "weather+place+recent_now+warnings+outlook+neighbors"
-RUNS = [  # (label, model, feature spec)
-    ("Warnings + outlook (rate table)", "official", None),
-    ("Model: weather + place + recent", "xgboost", "weather+place+recent_now"),
-    ("+ warnings + outlook", "xgboost", "weather+place+recent_now+warnings+outlook"),
-    ("+ neighbours (final)", "xgboost", FEATURES),
+# rain in the past 72 h (worse with every seed) left out; training from 2020 (adding 2018–2019: +0.5%).
+# Kept for the frozen MO + IL live model (live/model, tag live-v1.1) and the experiments run with it (E47, E55).
+FEATURES_V1 = "weather+place+recent_now+warnings+outlook+neighbors"
+# The headline since E55 (docs/experiments.md), re-asked on the whole country with 2024 only: a bigger model
+# (depth 8, minimum child weight 100, 1,600 trees: +15%) and history, location, roads + street canopy and the E47
+# place groups (+6% together; duration / spread of the window's wind is in forecast_test.WINDOW)
+PARAMS = PARAMS_V1 | {"n_estimators": 1600, "max_depth": 8, "min_child_weight": 100}
+FEATURES = FEATURES_V1 + "+history+location+roads+place_extra"
+RUNS = [  # (label, model, feature spec, settings)
+    ("Warnings + outlook (rate table)", "official", None, None),
+    ("Model: weather + place + recent", "xgboost", "weather+place+recent_now", PARAMS_V1),
+    ("+ warnings + outlook", "xgboost", "weather+place+recent_now+warnings+outlook", PARAMS_V1),
+    ("+ neighbours", "xgboost", FEATURES_V1, PARAMS_V1),
+    ("+ history, place, roads, location; bigger model (final)", "xgboost", FEATURES, PARAMS),
 ]
+FINAL_RUN = RUNS[-1][0]
 
 
 def onset_hours(year, db=data.DB):
@@ -77,9 +85,9 @@ def fit_runs(runs, lead, train_years=TRAIN_YEARS, val_year=VAL_YEAR, levels=True
     val_train, val = train[train.year < val_year], train[train.year == val_year]
     early_years = [y for y in train_years if y < val_year]
     out = {}
-    for label, model, spec in runs:
+    for label, model, spec, *settings in runs:
         cols = models.NEEDS_COLUMNS.get(model) if spec is None else data.resolve_features(spec)
-        params = None if spec is None else PARAMS
+        params = None if spec is None else (settings[0] if settings else PARAMS)
         if spec is None:          # a rate table: exact counts over the full table, not the sample
             c = data.hourly_counts(threshold, train_years, lead, cols)
             fitted = models.build(model, params).fit(c[cols], c.y, sample_weight=c.weight)
@@ -144,7 +152,7 @@ def main():
     for lead in leads:
         fitted = fit_runs(RUNS, lead)
         test = predict_states(fitted, TEST_YEAR, lead)
-        for label, _, _ in RUNS:
+        for label, *_ in RUNS:
             p, level = test[label].to_numpy(), fitted[label][2]
             flagged = pd.Series(p > level, index=test.index)
             s = score(test["y"].to_numpy(), p)

@@ -24,7 +24,9 @@ Writes ml/results/forecast_test_2025.csv and the predictions to data/cache/. Nee
 ingest/fetch_hrrr_forecast.py for 2024-12-31 .. 2025-12-31.
 """
 import argparse
+import hashlib
 import json
+import sys
 
 import duckdb
 import numpy as np
@@ -45,11 +47,14 @@ FCST_DIR = data.ROOT / "data" / "raw" / "weather" / "hrrr_fcst"
 FCST_BY_STATE = data.ROOT / "data" / "cache" / "hrrr_fcst_by_state"
 PREDICTIONS = data.ROOT / "data" / "cache" / "forecast_test_2025_predictions.parquet"
 HOURLY = ["gust_ms", "wind10_ms", "wind850_ms", "shear_ms", "cape_jkg", "precip_mm", "temp_c",
-          "freezing_level_m", "icing", "hail"]
-WINDOW = ["win_gust_max_ms", "win_wind10_max_ms", "win_wind850_max_ms", "win_shear_0_6km_max_ms",
+          "freezing_level_m", "icing", "hail", "g15", "g20", "gustiness"]
+WINDOW_V1 = ["win_gust_max_ms", "win_wind10_max_ms", "win_wind850_max_ms", "win_shear_0_6km_max_ms",
           "win_cape_max_jkg", "win_precip_sum_mm", "win_precip_max_1h_mm", "win_temp_min_c", "win_temp_mean_c",
           "win_freezing_level_min_m", "win_icing_hours", "win_hail_hours",
           "win_wind_x_precip", "win_wind_squared", "win_shear_x_cape"]
+# E55: how long and how evenly the wind blows over the window (+2.1% on the USA 2024, ml/usa_ablation.py)
+DURATION = ["win_gust_hours15", "win_gust_hours20", "win_gust_mean", "win_gust_median", "win_gustiness_max"]
+WINDOW = WINDOW_V1 + DURATION            # every window input: swapped for each forecast run's when scoring
 
 
 def prepare(hw):
@@ -60,6 +65,9 @@ def prepare(hw):
     hw["icing"] = ((hw.temp_c <= 0) & (hw.precip_mm > 0)).astype(float)
     hw["hail"] = ((hw.cape_jkg >= 500) & (hw.precip_mm >= 2) & (hw.freezing_level_m <= 3500)).astype(float)
     hw.loc[hw.gust_ms.isna(), ["icing", "hail"]] = np.nan
+    hw["g15"] = (hw.gust_ms >= 15).astype(float).where(hw.gust_ms.notna())         # duration / spread (E55)
+    hw["g20"] = (hw.gust_ms >= 20).astype(float).where(hw.gust_ms.notna())
+    hw["gustiness"] = hw.gust_ms - hw.wind10_ms
     return hw
 
 
@@ -72,12 +80,14 @@ def summarize(g):
         "win_precip_max_1h_mm": g["precip_mm"].max(), "win_temp_min_c": g["temp_c"].min(),
         "win_temp_mean_c": g["temp_c"].mean(), "win_freezing_level_min_m": g["freezing_level_m"].min(),
         "win_icing_hours": g["icing"].sum(), "win_hail_hours": g["hail"].sum(),
+        "win_gust_hours15": g["g15"].sum(), "win_gust_hours20": g["g20"].sum(), "win_gust_mean": g["gust_ms"].mean(),
+        "win_gust_median": g["gust_ms"].median(), "win_gustiness_max": g["gustiness"].max(),
     })
     out.loc[g["gust_ms"].count() < 6] = np.nan                           # all 6 hours or unknown
     out["win_wind_x_precip"] = out.win_gust_max_ms * out.win_precip_sum_mm
     out["win_wind_squared"] = out.win_gust_max_ms ** 2
     out["win_shear_x_cape"] = out.win_shear_0_6km_max_ms * out.win_cape_max_jkg
-    return out
+    return out[WINDOW]
 
 
 def window_from_hourly(hw):
@@ -186,7 +196,7 @@ def actual_window(year, states=None):
 def add_actual_window(df, year):
     """One year's decisions + the window weather that actually happened (data.sampled_years' `add`)."""
     df["region_fips"] = df.region_fips.astype(str)
-    return df.merge(actual_window(year), on=["region_fips", "block_start"], how="left")
+    return df.merge(actual_window(year), on=["region_fips", "block_start"], how="left", validate="m:1")
 
 
 def train_rows(years=TRAIN_YEARS, onsets_only=True):
@@ -203,12 +213,10 @@ def states_2025(make_versions, onsets=True, every=False, year=TEST_YEAR, require
     every=True). Each version's window weather is in `<feature>|<version>`. Never sampled.
     make_versions: forecasts -> {name: window table} (window_from_hourly / window_from_forecast)."""
     for s in data.warehouse_states():
-        f = forecasts(f"{year - 1}-12-31", f"{year}-12-31", states=[s])
-        if f.empty:
+        versions = window_versions(make_versions, year, s)
+        if versions is None:
             print(f"{data.STATE_ABBR.get(s, s)}: no HRRR forecasts, skipped", flush=True)
             continue
-        versions = make_versions(f)
-        del f
         actual = actual_window(year, states=[s])
         scored = shown = None
         if onsets:
@@ -224,14 +232,40 @@ def states_2025(make_versions, onsets=True, every=False, year=TEST_YEAR, require
         yield s, scored, shown
 
 
+def window_versions(make_versions, year, state):
+    """make_versions(forecasts) for one state's year of HRRR runs, built once and cached (data.cached): reading the
+    runs and summarizing five of them is the slowest part of scoring a year, and every step that scores 2025 needs
+    the same tables. The key covers the forecast files (a new download rebuilds it) and the code that makes them.
+    Returns {version: window table}, or None when the state has no forecasts."""
+    days = pd.date_range(f"{year - 1}-12-31", f"{year}-12-31", freq="D")
+    marker = _forecasts_by_state(days) / "_built_from.json"
+    fn = f"{make_versions.__module__}.{make_versions.__qualname__}"
+
+    def build():
+        f = forecasts(days[0], days[-1], states=[state])
+        if f.empty:
+            return pd.DataFrame({"version": pd.Series(dtype=str)})
+        v = make_versions(f)
+        del f
+        return data.shrink(pd.concat([w.assign(version=n) for n, w in v.items()], ignore_index=True))
+
+    code = (data.__file__, __file__, sys.modules[make_versions.__module__].__file__)
+    t = data.cached("window_versions", {"year": year, "state": state, "versions": fn,
+                                        "forecasts": hashlib.sha1(marker.read_bytes()).hexdigest()},
+                    build, code_files=code)
+    if t.empty:
+        return None
+    return {n: g.drop(columns="version").reset_index(drop=True) for n, g in t.groupby("version", sort=False)}
+
+
 def with_windows(rows, actual, versions, require_actual):
     """Decisions + the actual window weather + each version's as `<feature>|<version>`, keeping the decisions
     that have every version (and the actual weather, if require_actual)."""
     rows["region_fips"] = rows.region_fips.astype(str)
-    rows = rows.merge(actual, on=["region_fips", "block_start"], how="left")
+    rows = rows.merge(actual, on=["region_fips", "block_start"], how="left", validate="m:1")
     for name, w in versions.items():
         rows = rows.merge(w.rename(columns={c: f"{c}|{name}" for c in WINDOW}),
-                          on=["region_fips", "block_start"], how="left")
+                          on=["region_fips", "block_start"], how="left", validate="m:1")
     need = [f"win_gust_max_ms|{n}" for n in versions] + (["win_gust_max_ms"] if require_actual else [])
     return rows[rows[need].notna().all(axis=1)].reset_index(drop=True)
 
@@ -257,7 +291,8 @@ def with_version(test, features, version):
     """The 2025 feature matrix with the window weather swapped for one version's."""
     x = test[features].copy()
     if version not in ("-", "actual"):
-        x[WINDOW] = test[[f"{c}|{version}" for c in WINDOW]].to_numpy()
+        cols = [c for c in WINDOW if c in features]           # a model on fewer window inputs (WINDOW_V1)
+        x[cols] = test[[f"{c}|{version}" for c in cols]].to_numpy()
     return x
 
 
@@ -275,9 +310,11 @@ def five_run_mean(model, rows, features):
     return np.mean([model.predict_proba(with_version(rows, features, n))[:, 1] for n in RUN_NAMES], axis=0)
 
 
-def fit_versions(specs, train, counts, seeds=(0,)):
+def fit_versions(specs, train, counts, seeds=(0,), params=None):
     """specs: {label: (model, features)} -> {label: (fitted, features)}. XGBoost on the sampled training rows with
-    their weights; a rate table ("official") on hourly_counts. More seeds add "<label>|seed<s>" entries."""
+    their weights (params: the headline's settings unless given); a rate table ("official") on hourly_counts. More
+    seeds add "<label>|seed<s>" entries."""
+    params = PARAMS if params is None else params
     out = {}
     for label, (model, features) in specs.items():
         if model == "official":
@@ -285,7 +322,7 @@ def fit_versions(specs, train, counts, seeds=(0,)):
                           features)
             continue
         for s in seeds:
-            fitted = models.build(model, PARAMS | {"random_state": s}).fit(train[features], train.y,
+            fitted = models.build(model, params | {"random_state": s}).fit(train[features], train.y,
                                                                             sample_weight=train.weight)
             out[label if s == seeds[0] else f"{label}|seed{s}"] = (fitted, features)
         print(f"fitted {label}", flush=True)

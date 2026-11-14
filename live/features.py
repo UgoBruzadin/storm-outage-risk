@@ -184,6 +184,6 @@ def model_rows(hw, warning_rows, outlook_table_, hours, forecast_runs=None, run_
 
 def live_features():
     """The live model's inputs (forecast_test.WINDOW last), in training order."""
-    from ml.forecast_test import WINDOW
-    from ml.moving_window import FEATURES
-    return [c for c in data.resolve_features(FEATURES) if c not in OUTAGE_INPUTS] + WINDOW
+    from ml.forecast_test import WINDOW_V1
+    from ml.moving_window import FEATURES_V1  # the frozen MO + IL model (live/model, live-v1.1)
+    return [c for c in data.resolve_features(FEATURES_V1) if c not in OUTAGE_INPUTS] + WINDOW_V1

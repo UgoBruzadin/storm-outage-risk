@@ -18,21 +18,24 @@ from ml.forecast_test import (
     EQUAL_SHARE,
     LEAD,
     TEST_YEAR,
-    WINDOW,
+    WINDOW_V1,
     fit_versions,
     official_counts,
     predict_five_runs,
     train_rows,
 )
 from ml.metrics import score
-from ml.moving_window import FEATURES, caught_flags, episodes, onset_hours
+
+# a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1, caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
 OUTAGE_INPUTS = ["pct_out_now", "max_pct_out_prev_24h", "near_pct_out_max", "up_pct_out_max"]
 
 
 def main():
-    full = data.resolve_features(FEATURES) + WINDOW
+    full = data.resolve_features(FEATURES) + WINDOW_V1
     versions = {
         "warnings + outlook": ("official", models.NEEDS_COLUMNS["official"]),
         "headline (all inputs)": ("xgboost", full),
@@ -40,7 +43,7 @@ def main():
     }
     # sampled training, exact rate table, 2025 a state at a time; models with window weather get the five-run mean
     train = train_rows()
-    fitted = fit_versions(versions, train, official_counts()[0])
+    fitted = fit_versions(versions, train, official_counts()[0], params=PARAMS_V1)
     del train
     pred = predict_five_runs(fitted)
 

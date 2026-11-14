@@ -46,12 +46,17 @@ from sklearn.metrics import average_precision_score as ap
 
 from ml import data, models, place_extra
 from ml import forecast_test as ft
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import THRESHOLD_PCT
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 
 TRAIN_YEARS, VAL_YEAR, LEAD, AGE = [2020, 2021, 2022, 2023], 2024, ft.LEAD, 2
 SEEDS, FOLDS = range(3), 5
-BASE = data.resolve_features(FEATURES) + ft.WINDOW
+# E55 started from the Missouri + Illinois recipe (moving_window.FEATURES_V1, PARAMS_V1, forecast_test.WINDOW_V1);
+# the pipeline's headline has since become its result, so this file pins its own starting point
+WINDOW = ft.WINDOW_V1
+BASE = data.resolve_features(FEATURES) + WINDOW
 SIZES = {                                      # name: changes to PARAMS
     "current (depth 4, min child 20, 800 trees)": {},
     "depth 6": {"max_depth": 6},
@@ -75,7 +80,7 @@ PRIOR = 200                                    # decisions: how strongly a count
 BASELINES = {                                  # name: (model kind, features)
     "gust bins per county": ("county_gust", ["region_fips", "gust_bin"]),
     "gust bins, national": ("rate", ["gust_bin"]),
-    "weather only (XGBoost)": ("xgboost", data.resolve_features("weather") + ft.WINDOW),
+    "weather only (XGBoost)": ("xgboost", data.resolve_features("weather") + WINDOW),
     "warnings + outlook": ("rate", list(models.NEEDS_COLUMNS["official"])),
 }
 REFERENCE = "reference"
@@ -181,6 +186,7 @@ def static_inputs():
 def add_inputs(df):
     """Every candidate input that doesn't depend on the weather source, joined onto modeling rows."""
     county, hist = static_inputs()
+    df = df.drop(columns=[c for c in data.static_columns() if c in df])   # data.add_static's: joined again here
     df["region_fips"] = df.region_fips.astype(str)
     df = df.merge(county, on="region_fips", how="left")
     df["log_road_per_customer"] = np.log10(df.pop("road_km")) - df.log_customers
@@ -194,7 +200,7 @@ def add_inputs(df):
 
 def add_train(df, year):
     """One training year: the actual window weather, its duration / spread, and the other inputs."""
-    df = ft.add_actual_window(df, year)
+    df = ft.add_actual_window(df, year).drop(columns=DURATION)      # forecast_test's: computed again here
     df = df.merge(duration_actual(year), on=["region_fips", "block_start"], how="left")
     return add_inputs(df)
 
@@ -213,7 +219,8 @@ def val_states():
         f = ft.forecasts(f"{VAL_YEAR - 1}-12-31", f"{VAL_YEAR}-12-31", states=[s])
         if f.empty:
             continue
-        w = ft.window_from_forecast(f, AGE).merge(duration_forecast(f, AGE), on=["region_fips", "block_start"])
+        w = ft.window_from_forecast(f, AGE).drop(columns=DURATION)      # forecast_test's: computed again here
+        w = w.merge(duration_forecast(f, AGE), on=["region_fips", "block_start"])
         del f
         rows = data.load_hourly(THRESHOLD_PCT, [VAL_YEAR], LEAD, states=[s], float32=True)
         rows["region_fips"] = rows.region_fips.astype(str)

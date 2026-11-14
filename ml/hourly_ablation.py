@@ -14,7 +14,10 @@ import pandas as pd
 
 from ml import data, models
 from ml.metrics import score
-from ml.moving_window import PARAMS, THRESHOLD_PCT, predict_states
+
+# a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import THRESHOLD_PCT, predict_states
 
 TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
 BASE = "weather+place+recent_now+warnings+outlook"

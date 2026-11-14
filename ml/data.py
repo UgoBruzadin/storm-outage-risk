@@ -17,7 +17,11 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent
+# STORM_ROOT points every path (inputs, caches, results) at another tree: `pixi run pipeline --smoke` runs the whole
+# pipeline on a two-state copy in data/smoke/root (ml/smoke.py). STORM_SMOKE caps every model at a few trees.
+ROOT = Path(os.environ.get("STORM_ROOT", REPO))
+SMOKE = bool(os.environ.get("STORM_SMOKE"))
 # STORM_WAREHOUSE points every script at another warehouse, e.g. an archived seven-state build for a check
 DB = Path(os.environ.get("STORM_WAREHOUSE", ROOT / "data" / "warehouse.duckdb"))
 _SEED = pd.read_csv(ROOT / "dbt" / "seeds" / "study_states.csv", dtype=str)
@@ -70,6 +74,20 @@ FEATURE_GROUPS = {
     "neighbors": ["near_gust_max_ms", "near_cape_max_jkg", "near_precip_max_mm", "near_pct_out_max",
                   "near_warn_share", "up_gust_max_ms", "up_cape_max_jkg", "up_precip_max_mm", "up_pct_out_max",
                   "up_warn_share"],
+    # E55, the whole country (add_static joins them onto the moving-window table): where the region is (its
+    # weather point), its public roads per customer and the canopy over them, and the E47 place files
+    "location": ["lat", "lon"],
+    "roads": ["log_road_per_customer", "road_treed_share", "road_canopy_mean_pct"],
+    "place_extra": [
+        "tm_share_oak_hickory", "tm_share_elm_ash_cottonwood", "tm_share_softwood", "tm_share_oak_pine",
+        "tm_share_maple_beech", "tm_share_oak_gum_cypress", "tm_height_ft", "tm_diameter_in", "tm_live_per_acre",
+        "tm_basal_area", "tm_dead_per_acre", "tm_dead_volume", "tm_ash_stem_share", "stand_age_mean",
+        "stand_age_old", "soil_poor_drain_share", "soil_group_d_share", "soil_flood_share", "soil_water_table_cm",
+        "soil_bedrock_cm", "precip_prev_72h_mm", "wind_x_wet_soil", "poor_drain_x_rain", "poor_drain_x_wind_rain",
+        "water_share", "river_near_share", "stream_km_per_km2", "flood_zone_share", "util_count", "util_share_iou",
+        "util_share_coop", "util_share_public", "util_saidi", "util_saifi", "util_saidi_med",
+        "transmission_km_per_km2", "transmission_hv_km_per_km2",
+    ],
 }
 
 
@@ -235,7 +253,7 @@ def load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, db
     key = {"threshold": threshold_pct, "years": sorted(int(y) for y in years), "lead": lead,
            "onsets_only": onsets_only, "neighbors": neighbors, "states": sorted(states) if states else None,
            "neg_frac": neg_frac, "sample_years": sorted(sample_years) if sample_years is not None else None,
-           "float32": float32}
+           "float32": float32, "static": static_stamp()}
     return cached("hourly", key, lambda: _load_hourly(threshold_pct, years, lead, onsets_only, neighbors, db, states,
                                                       neg_frac, sample_years, float32), db=db)
 
@@ -264,9 +282,9 @@ def _load_hourly(threshold_pct, years, lead, onsets_only=True, neighbors=True, d
     con.close()
     if neighbors:
         nb = neighbor_features(db=db, years=years, states=states).rename(columns={"hour": "block_start"})
-        df = df.merge(nb, on=["region_fips", "block_start"], how="left")
+        df = df.merge(nb, on=["region_fips", "block_start"], how="left", validate="m:1")
         del nb
-    df = add_derived(df, copy=False)
+    df = add_static(add_derived(df, copy=False), db=db)
     df["y"] = (df["fut_max_pct"] >= threshold_pct).astype(int)
     df["is_onset"] = df["start_pct"].notna() & (df["start_pct"] < threshold_pct)
     return shrink(df) if float32 else df
@@ -463,6 +481,83 @@ def add_derived(df, copy=True):
     add_warning_ints(df)
     df["wind_x_wet_soil"] = df["gust_max_ms"] * df["precip_prev_72h_mm"]
     return df.reset_index(drop=True)
+
+
+PLACE_DIR = ROOT / "data" / "raw" / "place"
+PLACE_FILES = ["treemap", "forest_age", "soil", "water", "flood_zones", "utilities", "transmission"]
+GEO_FILE = ROOT / "data" / "raw" / "geo" / "regions_study.csv"
+_STATIC = {}
+
+
+def _static_files():
+    return [PLACE_DIR / "roads.csv", GEO_FILE] + [PLACE_DIR / f"{n}.csv" for n in PLACE_FILES]
+
+
+def static_stamp():
+    """The static input files' sizes and times, part of load_hourly's cache key: a refetched file rebuilds it."""
+    return {p.name: [p.stat().st_size, p.stat().st_mtime] if p.exists() else None for p in _static_files()}
+
+
+def _static_tables(db=DB):
+    """Per region: roads, the weather point and the E47 place files (ingest/fetch_<source>.py); per region and
+    year: the history as of Jan 1 (marts.mart_study__region_history_asof). Read once per process. A file or table
+    that doesn't exist (a test warehouse, CI without the raw data) is left out, and so are its columns."""
+    if db not in _STATIC:
+        parts = []
+        if (PLACE_DIR / "roads.csv").exists():
+            parts.append(pd.read_csv(PLACE_DIR / "roads.csv", dtype={"region_fips": str})[
+                ["region_fips", "road_km", "road_treed_share", "road_canopy_mean_pct"]])
+        if GEO_FILE.exists():
+            parts.append(pd.read_csv(GEO_FILE, dtype={"region_fips": str})[["region_fips", "lat", "lon"]])
+        parts += [pd.read_csv(PLACE_DIR / f"{n}.csv", dtype={"region_fips": str}) for n in PLACE_FILES
+                  if (PLACE_DIR / f"{n}.csv").exists()]
+        county = None
+        for part in parts:
+            county = part if county is None else county.merge(part, on="region_fips", how="outer")
+        con = duckdb.connect(str(db), read_only=True)
+        try:
+            hist = con.sql("""SELECT region_fips, as_of_year, hours_out_per_customer AS hist_hours_out_per_customer,
+                                     events_per_year AS hist_events_per_year, storm_hit_rate AS hist_storm_hit_rate,
+                                     quiet_event_rate AS hist_quiet_event_rate,
+                                     repeat_7d_share AS hist_repeat_7d_share
+                              FROM marts.mart_study__region_history_asof""").df()
+            hist["region_fips"] = hist.region_fips.astype(str)
+        except duckdb.CatalogException:
+            hist = None
+        con.close()
+        _STATIC[db] = county, hist
+    return _STATIC[db]
+
+
+def static_columns(db=DB):
+    """Every column add_static adds (inputs and the files' other columns)."""
+    county, hist = _static_tables(db)
+    cols = [] if county is None else [c for c in county if c not in ("region_fips", "road_km")]
+    cols += ["log_road_per_customer"] if county is not None and "road_km" in county else []
+    cols += [] if hist is None else [c for c in hist if c not in ("region_fips", "as_of_year")]
+    if county is not None and "soil_poor_drain_share" in county:
+        cols += ["poor_drain_x_rain", "poor_drain_x_wind_rain"]
+    return cols
+
+
+def add_static(df, db=DB):
+    """The E55 inputs that don't change with the weather, joined onto moving-window rows (as usa_ablation.add_inputs
+    and place_extra.add_place did): location, roads per customer and the canopy over them, history as of Jan 1 of
+    the row's year (never its own year or later), the E47 place files, and soil x recent rain. A region missing
+    from a file gets NaN, which XGBoost treats as its own case."""
+    county, hist = _static_tables(db)
+    df["region_fips"] = df.region_fips.astype(str)
+    if county is not None:
+        df = df.merge(county, on="region_fips", how="left", validate="m:1")     # a duplicated county would double rows
+        if "road_km" in df:
+            df["log_road_per_customer"] = np.log10(df.pop("road_km")) - df.log_customers
+        if "soil_poor_drain_share" in df:
+            df["poor_drain_x_rain"] = df.soil_poor_drain_share * df.precip_prev_72h_mm
+            df["poor_drain_x_wind_rain"] = df.soil_poor_drain_share * df.wind_x_wet_soil
+    if hist is not None:
+        df["as_of_year"] = df.block_start.dt.year
+        df = df.merge(hist, on=["region_fips", "as_of_year"], how="left", validate="m:1").drop(columns="as_of_year")
+    return df
 
 
 def add_warning_ints(df):

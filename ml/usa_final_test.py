@@ -57,7 +57,8 @@ def scored_states(states):
         rows["region_fips"] = rows.region_fips.astype(str)
         runs = []
         for age in AGES:
-            w = ft.window_from_forecast(f, age).merge(ua.duration_forecast(f, age), on=["region_fips", "block_start"])
+            w = ft.window_from_forecast(f, age).drop(columns=ua.DURATION)
+            w = w.merge(ua.duration_forecast(f, age), on=["region_fips", "block_start"])
             runs.append(rows[["region_fips", "block_start"]].merge(w, on=["region_fips", "block_start"], how="left"))
         del f
         have = np.logical_and.reduce([r.win_gust_max_ms.notna().to_numpy() for r in runs])
@@ -106,7 +107,7 @@ def main():
     if "train" in locals():
         del train
 
-    window = [c for c in features if c in ft.WINDOW + ua.DURATION]
+    window = [c for c in features if c in ua.WINDOW + ua.DURATION]
     states = data.warehouse_states()[:2] if args.smoke else data.warehouse_states()
     parts = []
     for rows, runs in scored_states(states):

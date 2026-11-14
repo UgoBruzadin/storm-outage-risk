@@ -15,7 +15,7 @@ import pandas as pd
 
 from live import features as lf
 from ml import data
-from ml.forecast_test import WINDOW
+from ml.forecast_test import WINDOW_V1 as WINDOW
 
 RAW = data.ROOT / "data" / "raw"
 TOL = 1e-6

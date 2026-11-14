@@ -36,7 +36,11 @@ from sklearn.metrics import average_precision_score as ap
 
 from ml import data, models
 from ml import forecast_test as ft
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+
+# a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import THRESHOLD_PCT
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 
 STATES = ["17", "29"]                        # Illinois, Missouri
@@ -49,7 +53,7 @@ AREA_WIND = ["win_area_gust_max", "win_area_gust_share20", "win_area_wind1h_max"
 DURATION = ["win_gust_hours15", "win_gust_hours20", "win_gust_mean", "win_gust_median", "win_gustiness_max"]
 RADAR = ["win_area_refc_max", "win_area_refc_share45", "win_area_vil_max", "win_area_ltng_max", "win_area_ltng_share"]
 NEW = AREA_WIND + DURATION + RADAR
-WINDOW = ft.WINDOW + NEW                     # every window input, swapped per run when scoring
+WINDOW = ft.WINDOW_V1 + NEW                     # every window input, swapped per run when scoring
 ARMS = {"headline": [], "+ county-wide wind": AREA_WIND, "+ duration / spread": DURATION,
         "+ radar + lightning": RADAR, "+ all of the above": NEW}
 GUST_BINS = [0, 15, 25, 35, np.inf]
@@ -91,7 +95,7 @@ def actual_windows(years):
     """For each decision hour: the headline's window inputs (Open-Meteo) and the new ones, from the weather that
     actually happened over hours h + LEAD ... h + LEAD + 5."""
     hw = ft.actual_hourly(years, states=STATES, until=f"{max(years) + 1}-01-02")
-    head = ft.window_from_hourly(hw)
+    head = ft.window_from_hourly(hw)[["block_start", "region_fips", *ft.WINDOW_V1]]   # its own duration below
     hw = hourly_inputs(hw).merge(area_f01(years), on=["region_fips", "hour"], how="left")
     parts = []
     for fips, r in hw.groupby("region_fips"):
@@ -108,7 +112,7 @@ def run_windows(f, age):
     """For each decision hour h: every window input from the run issued `age` hours before h."""
     first = age + LEAD
     g = f[f.fhour.between(first, first + 5)]
-    head = ft.window_from_forecast(g, age)
+    head = ft.window_from_forecast(g, age)[["region_fips", "block_start", *ft.WINDOW_V1]]
     new = summarize_new(hourly_inputs(g)[["region_fips", "run", *NEW_HOURLY]].groupby(["region_fips", "run"]))
     new = new.reset_index()
     new["block_start"] = new.pop("run") + pd.Timedelta(hours=age)
@@ -136,7 +140,7 @@ def main():
     parser.add_argument("--jobs", type=int, default=8, help="CPU threads per fit")
     args = parser.parse_args()
     t0 = time.time()
-    base = [c for c in data.resolve_features(FEATURES) if c not in ft.WINDOW]
+    base = [c for c in data.resolve_features(FEATURES) if c not in ft.WINDOW_V1]
     official = models.NEEDS_COLUMNS["official"]
 
     train = rows(TRAIN_YEARS).merge(actual_windows(TRAIN_YEARS), on=["region_fips", "block_start"], how="inner")
@@ -147,7 +151,7 @@ def main():
     fitted = {}
     MODELS.mkdir(parents=True, exist_ok=True)
     for i, (arm, extra) in enumerate(ARMS.items()):
-        features = base + ft.WINDOW + extra
+        features = base + ft.WINDOW_V1 + extra
         for s in range(args.seeds):
             path = MODELS / f"arm{i}_seed{s}.json"           # saved, so a crash later never costs a refit
             m = models.build("xgboost", PARAMS | {"random_state": s, "n_jobs": args.jobs})

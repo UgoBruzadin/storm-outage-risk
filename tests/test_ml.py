@@ -333,3 +333,93 @@ def test_bootstrap_pr_auc_matches_sklearn_with_day_weights():
     for c, got in zip(counts, pr_auc_resamples(y, p, codes, counts), strict=True):
         assert np.isclose(got, average_precision_score(y, p, sample_weight=c[codes]))
     assert (days.dt.hour == 0).all() and (hours - days >= pd.Timedelta(hours=12)).all()
+
+
+def test_frozen_live_model_inputs_are_unchanged():
+    """The MO + IL live model (live/model, tag live-v1.1) keeps the inputs it was trained on, whatever the headline."""
+    import json
+
+    from live.features import live_features
+    meta = json.loads((data.REPO / "live" / "model" / "meta.json").read_text())
+    assert live_features() == meta["features"]
+
+
+def test_headline_recipe_is_e55():
+    """The headline is E55's choice: the MO + IL recipe plus five groups, with the bigger model."""
+    from ml import forecast_test as ft
+    from ml import moving_window as mw
+    from ml import place_extra
+    assert data.FEATURE_GROUPS["place_extra"] == place_extra.all_groups()
+    features = data.resolve_features(mw.FEATURES) + ft.WINDOW
+    assert len(features) == 110 and len(set(features)) == 110
+    assert set(data.resolve_features(mw.FEATURES_V1) + ft.WINDOW_V1) < set(features)
+    assert (mw.PARAMS["max_depth"], mw.PARAMS["min_child_weight"], mw.PARAMS["n_estimators"]) == (8, 100, 1600)
+    assert mw.RUNS[-1][2:] == (mw.FEATURES, mw.PARAMS)
+
+
+def test_window_duration_matches_e55():
+    """forecast_test.summarize's duration / spread inputs equal the ones E55 chose with (usa_ablation.duration)."""
+    from ml import forecast_test as ft
+    from ml import usa_ablation as ua
+    rng = np.random.default_rng(0)
+    n = 40
+    f = pd.DataFrame({"region_fips": "29001", "run": pd.Timestamp("2025-06-01") + pd.to_timedelta(np.arange(n), "h"),
+                      "fhour": 0, "gust_ms": rng.uniform(5, 30, n), "wind10_ms": rng.uniform(2, 12, n),
+                      "wind850_ms": 1.0, "cape_jkg": 100.0, "precip_mm": 1.0, "temp_c": 20.0,
+                      "freezing_level_m": 4000.0, "u10": 1.0, "v10": 1.0, "u500": 2.0, "v500": 2.0})
+    f = pd.concat([f.assign(fhour=h) for h in range(4, 10)], ignore_index=True)       # every run, hours 4-9
+    ours = ft.window_from_forecast(f, 2).sort_values(["region_fips", "block_start"]).reset_index(drop=True)
+    e55 = ua.duration_forecast(f, 2).sort_values(["region_fips", "block_start"]).reset_index(drop=True)
+    for c in ft.DURATION:
+        np.testing.assert_allclose(ours[c].to_numpy(), e55[c].to_numpy(), rtol=1e-6)
+
+
+def test_with_version_swaps_only_the_models_window_inputs():
+    from ml import forecast_test as ft
+    test = pd.DataFrame({c: [1.0] for c in ["gust_max_ms", *ft.WINDOW]}
+                        | {f"{c}|run": [2.0] for c in ft.WINDOW})
+    x = ft.with_version(test, ["gust_max_ms", *ft.WINDOW_V1], "run")
+    assert list(x.columns) == ["gust_max_ms", *ft.WINDOW_V1] and (x[ft.WINDOW_V1] == 2.0).all().all()
+
+
+def _static_fixture(tmp_path, monkeypatch, duplicate=False):
+    """A warehouse with a history table and place files for two counties, wired into data.add_static."""
+    place = tmp_path / "place"
+    place.mkdir()
+    roads = pd.DataFrame({"region_fips": ["29001", "29003"], "road_km": [100.0, 1000.0],
+                          "road_treed_share": [0.1, 0.2], "road_canopy_mean_pct": [10.0, 20.0]})
+    (roads if not duplicate else pd.concat([roads, roads.head(1)])).to_csv(place / "roads.csv", index=False)
+    geo = tmp_path / "regions_study.csv"
+    pd.DataFrame({"region_fips": ["29001", "29003"], "lat": [40.0, 39.0],
+                  "lon": [-92.0, -95.0]}).to_csv(geo, index=False)
+    db = tmp_path / "w.duckdb"
+    con = duckdb.connect(str(db))
+    con.sql("CREATE SCHEMA marts")
+    con.sql("""CREATE TABLE marts.mart_study__region_history_asof AS SELECT * FROM (VALUES
+        ('29001', 2025, 1.0, 10.0, 0.5, 0.01, 0.2), ('29001', 2026, 9.0, 90.0, 0.9, 0.09, 0.9),
+        ('29003', 2025, 2.0, 20.0, 0.6, 0.02, 0.3)) t(region_fips, as_of_year, hours_out_per_customer,
+        events_per_year, storm_hit_rate, quiet_event_rate, repeat_7d_share)""")
+    con.close()
+    monkeypatch.setattr(data, "PLACE_DIR", place)
+    monkeypatch.setattr(data, "GEO_FILE", geo)
+    monkeypatch.setattr(data, "_STATIC", {})
+    rows = pd.DataFrame({"region_fips": ["29001", "29003", "29001"], "log_customers": [3.0, 4.0, 3.0],
+                         "block_start": pd.to_datetime(["2025-06-01 10:00", "2025-06-01 10:00", "2025-12-31 23:00"]),
+                         "precip_prev_72h_mm": 1.0, "wind_x_wet_soil": 1.0})
+    return rows, db
+
+
+def test_static_inputs_join_the_rows_own_county_and_years_history(tmp_path, monkeypatch):
+    rows, db = _static_fixture(tmp_path, monkeypatch)
+    out = data.add_static(rows.copy(), db=db)
+    assert len(out) == len(rows) and list(out.region_fips) == list(rows.region_fips)       # no rows added or moved
+    assert list(out.lat) == [40.0, 39.0, 40.0]
+    np.testing.assert_allclose(out.log_road_per_customer, [2 - 3, 3 - 4, 2 - 3])
+    # 2025 rows get the history as of Jan 1 2025 (2022-2024), never 2026's (which includes 2025's own outages)
+    assert list(out.hist_events_per_year) == [10.0, 20.0, 10.0]
+
+
+def test_static_inputs_refuse_a_duplicated_county(tmp_path, monkeypatch):
+    rows, db = _static_fixture(tmp_path, monkeypatch, duplicate=True)
+    with pytest.raises(pd.errors.MergeError):
+        data.add_static(rows.copy(), db=db)

@@ -12,7 +12,11 @@ import pandas as pd
 
 from ml import data, models
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, predict_states
+
+# a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import THRESHOLD_PCT, predict_states
 
 TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
 GRID = {"max_depth": [4, 6], "min_child_weight": [20, 100], "n_estimators": [800, 1500]}

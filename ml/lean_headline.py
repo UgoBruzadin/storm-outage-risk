@@ -43,9 +43,15 @@ import pyarrow.dataset as ds
 
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
-from ml.forecast_test import LEAD, TEST_YEAR, TRAIN_YEARS, WINDOW, window_from_forecast, window_from_hourly
+from ml.forecast_test import LEAD, TEST_YEAR, TRAIN_YEARS, window_from_forecast, window_from_hourly
+from ml.forecast_test import WINDOW as ALL_WINDOW
+from ml.forecast_test import WINDOW_V1 as WINDOW
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags
+
+# a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import THRESHOLD_PCT, caught_flags
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 
 NEG_FRAC = 0.1
@@ -181,7 +187,7 @@ def main():
     names = [f"run {k} h before" for k in RUN_AGES]
     for n, k in zip(names, RUN_AGES, strict=True):
         wf = window_from_forecast(f, k)
-        test = test.merge(wf.rename(columns={c: f"{c}|{n}" for c in WINDOW}), on=["region_fips", "block_start"],
+        test = test.merge(wf.rename(columns={c: f"{c}|{n}" for c in ALL_WINDOW}), on=["region_fips", "block_start"],
                           how="left")
     del f
     keep = test[[f"win_gust_max_ms|{n}" for n in names] + ["win_gust_max_ms"]].notna().all(axis=1)

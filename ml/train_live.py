@@ -29,7 +29,8 @@ from ml.forecast_test import (
     window_from_hourly,
     with_version,
 )
-from ml.moving_window import PARAMS, THRESHOLD_PCT
+from ml.moving_window import PARAMS_V1 as PARAMS  # the frozen MO + IL live model (live-v1.1)
+from ml.moving_window import THRESHOLD_PCT
 
 YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
 OUT = data.ROOT / "live" / "model"

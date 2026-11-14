@@ -50,7 +50,7 @@ def train_rows(years, states=None):
 
 def score(fitted, features, smoke):
     """Every 2025 decision with all five runs, a state at a time: each model's mean over the runs."""
-    window = [c for c in features if c in ft.WINDOW + ua.DURATION]
+    window = [c for c in features if c in ua.WINDOW + ua.DURATION]
     states = data.warehouse_states()[:2] if smoke else data.warehouse_states()
     parts = []
     for rows, runs in uf.scored_states(states):

@@ -25,7 +25,7 @@ from ml.forecast_test import (
     EQUAL_SHARE,
     LEAD,
     RUN_NAMES,
-    WINDOW,
+    WINDOW_V1,
     fit_versions,
     five_run_mean,
     five_runs,
@@ -38,7 +38,9 @@ from ml.forecast_test import (
     TRAIN_YEARS as TEST_TRAIN_YEARS,
 )
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, caught_flags, episodes, onset_hours
+from ml.moving_window import FEATURES_V1 as FEATURES
+from ml.moving_window import PARAMS_V1 as PARAMS
+from ml.moving_window import caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
 PLACE_DIR = data.ROOT / "data" / "raw" / "place"
@@ -77,7 +79,9 @@ def add_place(df):
     (ingest/fetch_<source>.py); counties outside them get NaN."""
     df["region_fips"] = df.region_fips.astype(str)
     for name in FILES:
-        df = df.merge(pd.read_csv(PLACE_DIR / f"{name}.csv", dtype={"region_fips": str}), on="region_fips", how="left")
+        place = pd.read_csv(PLACE_DIR / f"{name}.csv", dtype={"region_fips": str})
+        df = df.drop(columns=[c for c in place if c != "region_fips" and c in df])   # data.add_static joined them
+        df = df.merge(place, on="region_fips", how="left")
     df["poor_drain_x_rain"] = df.soil_poor_drain_share * df.precip_prev_72h_mm
     df["poor_drain_x_wind_rain"] = df.soil_poor_drain_share * df.wind_x_wet_soil
     return df
@@ -96,7 +100,7 @@ def select():
     """Group by group (it resumes): the seed models and the held-out-county models are fitted on the sampled
     2020-2023 rows, then 2024 (every decision with all five runs) is scored in one pass over the states."""
     train = add_place(train_rows(TRAIN_YEARS))
-    base = data.resolve_features(FEATURES) + WINDOW
+    base = data.resolve_features(FEATURES) + WINDOW_V1   # E47 ran on the MO + IL recipe
     rows = pd.read_csv(SELECT_OUT).to_dict("records") if SELECT_OUT.exists() else []
     done = {(r["group"], r["setup"], r["seed"]) for r in rows}
 
@@ -164,7 +168,7 @@ def test():
     kept = [g for g in GROUPS if v.loc[g, "kept"]]
     print("kept:", kept, flush=True)
     kept_inputs = list(dict.fromkeys(c for g in kept for c in GROUPS[g]))
-    base = data.resolve_features(FEATURES) + WINDOW
+    base = data.resolve_features(FEATURES) + WINDOW_V1   # E47 ran on the MO + IL recipe
     official = "warnings + outlook"
     versions = {official: models.NEEDS_COLUMNS["official"], BASE: base}
     if kept:
@@ -172,7 +176,7 @@ def test():
     versions[ALL] = features_for(base, ALL)
     train = add_place(train_rows(TEST_TRAIN_YEARS))
     fitted = fit_versions({k: ("official" if k == official else "xgboost", f) for k, f in versions.items()},
-                          train, official_counts()[0], seeds=(0, 1, 2, 3, 4))
+                          train, official_counts()[0], seeds=(0, 1, 2, 3, 4), params=PARAMS)
     del train
     pred = predict_five_runs(fitted, add=add_place)
     seed_scores = {label: [score(pred.y, pred[f"{label}|seed{s}"])["pr_auc"] for s in range(1, 5)]

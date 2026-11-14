@@ -32,7 +32,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
-ROOT = Path(__file__).resolve().parent.parent
+from ml.data import DB, ROOT  # noqa: E402  (STORM_ROOT: the smoke tree)
+from ml.moving_window import FINAL_RUN  # noqa: E402
+
 OUT = ROOT / "site" / "assets"
 APP = ROOT / "data" / "app"
 RESULTS = ROOT / "ml" / "results"
@@ -64,7 +66,7 @@ def cmap(colors):
 
 
 def load():
-    con = duckdb.connect(str(ROOT / "data" / "warehouse.duckdb"), read_only=True)
+    con = duckdb.connect(str(DB), read_only=True)
     scores = con.sql("""
         SELECT region_fips, region, state, canopy_mean_pct, storm_hit_rate, hours_out_per_customer,
                share_homes_pre1960, housing_per_km2, customers
@@ -193,7 +195,7 @@ def results():
     a.tick_params(axis="y", length=0)
     runs = [("Warnings + outlook (rate table)", "Warnings + outlook alone", HATCH),
             ("Model: weather + place + recent", "Model, weather only (no warnings)", ORANGE[3]),
-            ("+ neighbours (final)", "Model + warnings + outlook", BLUE[4])]
+            (FINAL_RUN, "Model + warnings + outlook", BLUE[4])]
     for run, label, color in runs:
         d = lead[lead.run == run].sort_values("lead_hours")
         b.plot(d.lead_hours, d.onset_pr_auc, marker="o", color=color, linewidth=2.2, markersize=5,
@@ -424,7 +426,7 @@ def story_data(gdf):
     meta = json.loads((APP / "meta_hourly.json").read_text())
     lead = meta["lead_hours"]
 
-    con = duckdb.connect(str(ROOT / "data" / "warehouse.duckdb"), read_only=True)
+    con = duckdb.connect(str(DB), read_only=True)
     heartbeat = con.sql("""
         SELECT block_start, n_snapshots FROM intermediate.int_eaglei__blocks_6h
         WHERE block_start BETWEEN '2024-05-21' AND '2024-05-27' ORDER BY 1
@@ -476,7 +478,7 @@ def story_data(gdf):
     # each line's key in text.yaml (lead.labels), and a fallback label
     runs = {"Warnings + outlook (rate table)": ("official", "Warnings + outlook alone"),
             "Model: weather + place + recent": ("weather", "Model, weather only (no warnings)"),
-            "+ neighbours (final)": ("model", "Model + warnings + outlook")}
+            FINAL_RUN: ("model", "Model + warnings + outlook")}
     at = meta["at_headline_share"]
     calib = pd.read_parquet(APP / "calibration.parquet")
     acc = pd.read_parquet(APP / "county_hourly.parquet").set_index("region_fips").reindex(order)
