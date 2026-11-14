@@ -3,6 +3,10 @@
 Every table, every model feature, and the SQL techniques that build them. Row counts are
 from the last `pixi run build` (HRRR counts grow as more weather years download).
 
+The current model is the USA hourly model: [Model inputs — the USA hourly model](#model-inputs--the-usa-hourly-model-e55)
+lists its 110 inputs. The 6-hour tables and features further down are the Missouri + Illinois model the published
+results come from.
+
 ```
 raw files ──► staging (views)          ──► intermediate (tables)            ──► marts (tables)              ──► ml/
 EAGLE-I       stg_eaglei__outages          int_eaglei__blocks_6h (heartbeat)    mart_study__region_6h           features + label
@@ -32,13 +36,15 @@ except EAGLE-I is downloaded by a script (`pixi run fetch-<name>`, code in `inge
 | **Tree canopy** | USDA Forest Service, distributed by MRLC (NLCD Tree Canopy Cover) | % tree canopy per 30 m pixel; we request 90 m | 2021 (v2021-4) | MRLC map service `https://www.mrlc.gov/geoserver/ows`, coverage `mrlc_download__nlcd_tcc_conus_2021_v2021-4` | `fetch-tree-canopy` (one cut-out per region, summarized) | `data/raw/geo/tree_canopy_2021.csv` |
 | **Housing** | U.S. Census Bureau, American Community Survey | tables B25034 (year built), B25035 (median year built), B01003 (population), B25001 (housing units) | 2020–2024 5-year estimates | `https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/5YRData/` (the Census API now needs a key; these files don't) | `fetch-acs` | `data/raw/acs/` |
 | HRRR forecasts as issued | NOAA HRRR, University of Utah hrrrzarr archive on AWS | each hourly run's forecast at each region's weather point; five-run mean from June 2024 only (E47) | December 2019 → 2025 | `https://hrrrzarr.s3.amazonaws.com/sfc` | `fetch-hrrr-forecast` | `data/raw/weather/hrrr_fcst/` |
-| Tree type and size (tested, not in the model) | USFS TreeMap | forest type, tree size and dead trees per 30 m forest pixel | 2022 (RDS-2025-0032) | Forest Service Research Data Archive | `fetch-treemap` | `data/raw/place/treemap.csv` |
-| Stand age (tested, not in the model) | USFS Forest Inventory (FIA DataMart) | stand age on field plots | surveys 2014–2019 | FIA DataMart `MO_COND.csv`, `IL_COND.csv` | `fetch-forest-age` | `data/raw/place/forest_age.csv` |
-| Soil (tested, not in the model) | USDA NRCS SSURGO, Soil Data Access | drainage, flooding, water table and bedrock depth | current version | Soil Data Access | `fetch-soil` | `data/raw/place/soil.csv` |
-| Rivers and streams (tested, not in the model) | USGS National Hydrography Dataset | rivers mapped as areas, stream lines | current version | The National Map NHD service | `fetch-water` | `data/raw/place/water.csv` |
-| Flood zones (tested, not in the model) | FEMA National Flood Hazard Layer | 1% annual chance flood zones | current version | NFHL map service | `fetch-flood-zones` | `data/raw/place/flood_zones.csv` |
-| Transmission lines (tested, not in the model) | HIFLD | high-voltage lines | about 2023 | HIFLD Electric Power Transmission Lines | `fetch-transmission` | `data/raw/place/transmission.csv` |
-| Utilities (tested, not in the model) | U.S. EIA Form 861 | utilities per county, ownership, reliability | 2015–2019 | EIA-861 archive | `fetch-utilities` | `data/raw/place/utilities.csv` |
+| HRRR, whole country | NOAA HRRR GRIB2 archive on AWS | the 11 storm ingredients for every county in the lower 48, read by byte range from each forecast file's index; replaces Open-Meteo and hrrrzarr beyond two states | 2020 → 2025 | `https://noaa-hrrr-bdp-pds.s3.amazonaws.com` | `fetch-hrrr-grib`, then `grib_to_study.py` | `data/raw/weather/hrrr_grib/`, then `hrrr/` and `hrrr_fcst/` |
+| Public roads (USA model) | U.S. Census Bureau TIGER/Line | primary, secondary and local roads; drawn onto the canopy tiles for canopy over roads | 2023 (2022 or 2024 where 2023 fails) | `https://www2.census.gov/geo/tiger/TIGER2023/ROADS/` | `fetch_roads.py` | `data/raw/place/roads.csv` |
+| Tree type and size (USA model) | USFS TreeMap | forest type, tree size and dead trees per 30 m forest pixel | 2022 (RDS-2025-0032) | Forest Service Research Data Archive | `fetch-treemap` | `data/raw/place/treemap.csv` |
+| Stand age (USA model) | USFS Forest Inventory (FIA DataMart) | stand age on field plots | surveys 2014–2019 | FIA DataMart `MO_COND.csv`, `IL_COND.csv` | `fetch-forest-age` | `data/raw/place/forest_age.csv` |
+| Soil (USA model) | USDA NRCS SSURGO, Soil Data Access | drainage, flooding, water table and bedrock depth | current version | Soil Data Access | `fetch-soil` | `data/raw/place/soil.csv` |
+| Rivers and streams (USA model) | USGS National Hydrography Dataset | rivers mapped as areas, stream lines | current version | The National Map NHD service | `fetch-water` | `data/raw/place/water.csv` |
+| Flood zones (USA model) | FEMA National Flood Hazard Layer | 1% annual chance flood zones | current version | NFHL map service | `fetch-flood-zones` | `data/raw/place/flood_zones.csv` |
+| Transmission lines (USA model) | HIFLD | high-voltage lines | about 2023 | HIFLD Electric Power Transmission Lines | `fetch-transmission` | `data/raw/place/transmission.csv` |
+| Utilities (USA model) | U.S. EIA Form 861 | utilities per county, ownership, reliability | 2015–2019 | EIA-861 archive | `fetch-utilities` | `data/raw/place/utilities.csv` |
 | Airport weather (legacy) | NOAA NCEI Global Hourly (ISD), AWS Open Data mirror | observations at St. Louis Lambert (KSTL, station 72434013994) | 2014–2025-08 | `https://noaa-global-hourly-pds.s3.amazonaws.com/<year>/72434013994.csv` | `fetch-noaa` | `data/raw/noaa/` |
 
 Each source's quirks, and what we did about them, are in [data-notes.md](data-notes.md).
@@ -48,6 +54,156 @@ Two ideas run through everything:
   `29189+29510` because EAGLE-I files the County's outages under the City in 2020–2024.
   216 regions. Macro: `{{ region_fips('col') }}`.
 - **Block** = 6 hours starting 00/06/12/18 UTC. Macro: `{{ block_6h('col') }}`.
+
+---
+
+## Model inputs — the USA hourly model (E55)
+
+The model chosen in E55 ([experiments.md](experiments.md)) has 110 inputs. The live model drops the 4 marked ⛔,
+which need outage data a live job can't get (`live.features.OUTAGE_INPUTS`), leaving 106. The exact list is in
+`live/model_usa/meta.json`.
+
+```
+ingest/fetch_*.py ─► data/raw/ ─► dbt ─► mart_study__region_1h ─┐
+                                                                 ├─► ml/data.py load_hourly() + add_derived()
+             data/cache/neighbors_1h (ml/data.py) ───────────────┘                │
+                                                     ml/usa_ablation.py add_train() / add_inputs()
+                                                     ml/place_extra.py add_place()  ─► model rows
+```
+
+**A row** is one region at one decision hour `h`. Inputs use only what is known at `h`. The label asks whether a new
+outage starts in the window h + 2 … h + 7 (see [Label and rows](#label-and-rows)).
+
+### Past weather: the 6 hours before `h` (15 inputs + 2 calendar)
+
+From `mart_study__region_1h`, over the hourly HRRR weather in `stg_hrrr__hourly`. Each hour is forecast hour 1 of the
+run issued the hour before (Open-Meteo, or `fetch_hrrr_grib.py` + `grib_to_study.py hourly` beyond two states). These
+hours have already happened, so training, scoring and the live job use the same kind of data. A summary is NULL unless
+all 6 hours exist.
+
+| Inputs | Operation |
+|---|---|
+| `gust_max_ms`, `wind10_max_ms`, `wind850_max_ms`, `cape_max_jkg` | max over the 6 hours |
+| `shear_0_6km_max_ms` | per hour √((u500 − u10)² + (v500 − v10)²), then the max |
+| `precip_sum_mm`, `precip_max_1h_mm` | sum and max; an hour over 100 mm counts as unknown (an archive artifact) |
+| `temp_min_c`, `temp_mean_c`, `freezing_level_min_m` | min, mean, min |
+| `icing_hours` | hours with temperature ≤ 0 °C and rain > 0 |
+| `hail_hours` | hours with CAPE ≥ 500 J/kg, rain ≥ 2 mm and freezing level ≤ 3,500 m |
+| `wind_x_precip`, `wind_squared`, `shear_x_cape` | gust × rain sum, gust², shear × CAPE (`ml/data.py add_derived`) |
+| `month`, `block_hour_utc` | calendar month and UTC hour of `h` |
+
+### Window weather: the hours being predicted (15 + 5 inputs)
+
+The same summaries over h + 2 … h + 7, prefixed `win_`, plus five duration / spread inputs. The source depends on use:
+
+- **Training** uses the weather that happened (`ml/forecast_test.py actual_window`, `usa_ablation.duration_actual`).
+- **Scoring and the live job** use HRRR forecasts as issued (`ft.window_from_forecast`, `usa_ablation.duration_forecast`):
+  the run issued `age` hours before `h`, forecast hours age + 2 … age + 7. The 2025 test and the live job feed each of
+  the five runs issued 2–6 hours before `h` through the model and average the chances.
+
+| Inputs | Operation |
+|---|---|
+| `win_gust_max_ms` … `win_shear_x_cape` (15) | as the past-weather table, over the window |
+| `win_gust_hours15`, `win_gust_hours20` | hours with gust ≥ 15 / ≥ 20 m/s |
+| `win_gust_mean`, `win_gust_median` | mean and median gust |
+| `win_gustiness_max` | max of gust − 10 m wind |
+
+### The place (6 inputs)
+
+From `int_study__regions`.
+
+| Input | Source → script | Operation |
+|---|---|---|
+| `log_customers` | EAGLE-I modeled customers (`MCC.csv`, manual download) | log10 of customers |
+| `housing_per_km2` | ACS B25001 (`fetch_acs.py`), Census land area (`fetch_counties.py`) | housing units ÷ land km² |
+| `share_homes_pre1960` | ACS B25034 | homes built before 1960 ÷ all homes |
+| `median_year_built` | ACS B25035 | county median; St. Louis City + County housing-weighted |
+| `canopy_mean_pct`, `canopy_dense_share` | NLCD Tree Canopy 2021 (`fetch_tree_canopy.py`), ~90 m pixels | mean % canopy; share of pixels ≥ 50% |
+
+### Official forecasts (8 inputs)
+
+From `fetch_nws.py` (Iowa Environmental Mesonet) through `int_study__nws_1h`.
+
+| Inputs | Operation |
+|---|---|
+| `warn_svr`, `warn_tor`, `warn_wind`, `warn_winter` | 0/1: a warning of that type (SV / TO / HW / IS, WS, BZ) in force at `h`; zone warnings spread to their counties with the NWS zone–county file |
+| `spc_cat`, `spc_wind_prob`, `spc_tor_prob`, `spc_hail_prob` | the latest SPC Day 1 outlook issued before `h` and valid at `h` |
+
+### Recent outages (2 inputs, both ⛔)
+
+From EAGLE-I's 15-minute snapshots: `int_study__outages_1h` keeps each hour's worst snapshot, and the mart turns it into
+`pct_out`, the share of customers out. `pct_out` is unknown when EAGLE-I was down, or when the count exceeds 1.5× the
+customers.
+
+| Input | Operation |
+|---|---|
+| ⛔ `pct_out_now` | `pct_out` in the hour before `h` |
+| ⛔ `max_pct_out_prev_24h` | worst hour in the 24 hours before `h` |
+
+### Neighbours (8 inputs + 2 ⛔)
+
+Built in `ml/data.py _build_neighbor_cache` from the pairs in `int_study__region_neighbors`, a year at a time.
+`near_*` are the regions within 100 km. `up_*` are the regions within 200 km at a bearing of 200–290°, the direction
+most storms arrive from. Each value is taken across those neighbours at `h`.
+
+| Inputs | Operation |
+|---|---|
+| `near_gust_max_ms`, `up_gust_max_ms`, `near_cape_max_jkg`, `up_cape_max_jkg` | max over neighbours of their past-6-hour value |
+| `near_precip_max_mm`, `up_precip_max_mm` | max over neighbours of their past-6-hour rain sum |
+| `near_warn_share`, `up_warn_share` | share of neighbours under a severe thunderstorm or tornado warning |
+| ⛔ `near_pct_out_max`, ⛔ `up_pct_out_max` | max over neighbours of `pct_out_now` |
+
+### History (5 inputs)
+
+From `mart_study__region_history_asof`, the 3 years before January 1 of the row's year (a 2024 row sees 2021–2023), so
+no row sees its own year. An event is a run of 6-hour blocks with ≥ 1% of customers out.
+
+| Input | Meaning |
+|---|---|
+| `hist_hours_out_per_customer` | customer-hours lost per customer per year |
+| `hist_events_per_year` | events per year observed |
+| `hist_storm_hit_rate` | share of blocks with a NOAA storm report (`fetch_storm_events.py`) that became an event |
+| `hist_quiet_event_rate` | share of blocks without a storm report that became an event |
+| `hist_repeat_7d_share` | share of events followed by another within 7 days |
+
+### Roads and location (5 inputs)
+
+Joined in `ml/usa_ablation.py add_inputs`.
+
+| Input | Source → script | Operation |
+|---|---|---|
+| `log_road_per_customer` | TIGER 2023 public roads (`fetch_roads.py`) | log10(road km) − log10(customers) |
+| `road_treed_share`, `road_canopy_mean_pct` | the roads drawn onto the canopy tiles | share of road pixels with ≥ 50% canopy; mean canopy under the roads |
+| `lat`, `lon` | `fetch_counties.py` | the region's representative point (always inside it; also its weather point) |
+
+### E47 place groups (37 inputs)
+
+One CSV per source in `data/raw/place/`, joined in `ml/place_extra.py add_place`. A region missing from a file gets
+NaN, which XGBoost handles as its own case.
+
+| Group | Inputs | Source → script |
+|---|---|---|
+| Tree type | `tm_share_oak_hickory`, `tm_share_elm_ash_cottonwood`, `tm_share_softwood`, `tm_share_oak_pine`, `tm_share_maple_beech`, `tm_share_oak_gum_cypress`: share of forest pixels | USFS TreeMap 2022 (`fetch_treemap.py`) |
+| Tree size | `tm_height_ft`, `tm_diameter_in`, `tm_live_per_acre`, `tm_basal_area`: mean over forest pixels | TreeMap |
+| Dead trees and ash | `tm_dead_per_acre`, `tm_dead_volume`, `tm_ash_stem_share` | TreeMap and its tree table |
+| Tree age | `stand_age_mean`, `stand_age_old` (share of forest ≥ 80 years); blank under 5 plots | FIA plots, surveys 2014–2019 (`fetch_forest_age.py`) |
+| Soil | `soil_poor_drain_share`, `soil_group_d_share`, `soil_flood_share`, `soil_water_table_cm`, `soil_bedrock_cm`: acre-weighted; no water table or bedrock within ~2 m = 201 cm | NRCS SSURGO (`fetch_soil.py`) |
+| Recent rain | `precip_prev_72h_mm`: rain in the 72 hours before `h` (mart; NULL unless all 72 hours exist); `wind_x_wet_soil` = `gust_max_ms` × that | HRRR, as past weather |
+| Wet soil | `poor_drain_x_rain` = poor-drain share × 72-hour rain; `poor_drain_x_wind_rain` = poor-drain share × `wind_x_wet_soil` | computed in `add_place` |
+| Rivers and streams | `water_share` (Census water area), `river_near_share` (within 1 km of a river mapped as an area), `stream_km_per_km2` | USGS NHD (`fetch_water.py`) |
+| Flood zones | `flood_zone_share`; blank rather than 0 where no digital map exists | FEMA NFHL (`fetch_flood_zones.py`) |
+| Utilities | `util_count`; `util_share_iou`, `util_share_coop`, `util_share_public` (a utility's customers split evenly over its counties); `util_saidi`, `util_saifi`, `util_saidi_med` (means 2015–2019) | EIA-861 (`fetch_utilities.py`) |
+| Transmission lines | `transmission_km_per_km2`, `transmission_hv_km_per_km2` (≥ 230 kV) | HIFLD (`fetch_transmission.py`) |
+
+### Label and rows
+
+Added in `ml/data.py _hourly_query`, not inputs.
+
+| Column | Meaning |
+|---|---|
+| `y` | 1 if the worst hour in h + 2 … h + 7 has ≥ 5% of customers out; the window needs ≥ 3 of its 6 hours known |
+| rows kept | new outages only: the region was below 5% when the window began and in the hours before it; only region-years EAGLE-I tracked (`mart_study__region_coverage`) |
+| `weight` | 10 on the training rows sampled from those not followed by an outage (10% kept, by a hash of region and hour); 1 elsewhere. Scored years are never sampled |
 
 ---
 
@@ -108,7 +264,10 @@ features for 2024–2025 without leaking. An **event** = consecutive blocks with
 
 ---
 
-## Features — what the model sees (groups in `ml/data.py`)
+## Features — the Missouri + Illinois 6-hour model (groups in `ml/data.py`)
+
+These are the 6-hour block features behind the published Missouri + Illinois results. The USA model's inputs are in
+[Model inputs — the USA hourly model](#model-inputs--the-usa-hourly-model-e55).
 
 Rule for every feature: **would I know this at the start of the block?**
 
@@ -154,8 +313,9 @@ row's own year** (a 2024 row sees 2021–2023), joined on region and year. No ro
 contains its own year or later, so history features work on any training years;
 `data.check_history` enforces it per row. EAGLE-I recorded fewer events before 2020
 (~10/year per region vs ~24 after), so early history values run low. On the 2024
-validation year, history did not improve the model (`tune.yaml`), and the final model
-leaves it out.
+validation year, history did not improve the Missouri + Illinois model (`tune.yaml`), and
+that model leaves it out. On the whole country it helps (+2.3%, +16% on held-out counties), and the USA model keeps it
+(E55).
 
 ### `recent` — outages already known at the block's start
 
