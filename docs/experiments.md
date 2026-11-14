@@ -751,7 +751,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 
   Every kept arm was better on all 3 seeds; every rejected arm on none.
 
-  **2025, scored once** (`ml/usa_final_test.py`, `ml/results/usa_final_2025.csv`; 25.3 M decisions, 150 K new outages, five-run mean):
+  **2025, scored once** (`ml/usa_final_test.py`, `ml/results/usa_final_2025.csv`; 25.3 M decisions, 150 K of them followed by a new outage (25,362 new outages, each seen by up to 6 decision hours), five-run mean):
 
   | Model | PR-AUC (range) | vs warnings + outlook | Precision / recall at 0.75% alerted | Best F1 |
   |---|---|---|---|---|
