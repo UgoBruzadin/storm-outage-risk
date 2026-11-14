@@ -4,31 +4,31 @@
   "threshold_pct": 5,
   "headline_model": "With HRRR forecasts (mean of 5 runs)",
   "headline_share": 0.0075,
-  "alert_level": 0.06804128736257553,
-  "n_decisions": 4021552,
-  "n_new_outages": 3120,
-  "event_rate": 0.004604192610216155,
+  "alert_level": 0.08374866843223572,
+  "n_decisions": 25261021,
+  "n_new_outages": 25362,
+  "event_rate": 0.005942831843574335,
   "ladder": {
     "Warnings + outlook": {
-      "onset_pr_auc": 0.035904700351061726,
-      "lo": 0.021663291146358905,
-      "hi": 0.052242815858866844,
+      "onset_pr_auc": 0.021632430578083575,
+      "lo": 0.017201380188198355,
+      "hi": 0.0264750543811891,
       "ratio_vs_official": 1.0,
       "ratio_vs_official_lo": 1.0,
       "ratio_vs_official_hi": 1.0,
       "better_vs_official": 0.0,
-      "ratio_vs_no_forecasts": 0.47333519282503067,
-      "ratio_vs_no_forecasts_lo": 0.3869691795790396,
-      "ratio_vs_no_forecasts_hi": 0.5473594654470351,
+      "ratio_vs_no_forecasts": 0.3740730483599226,
+      "ratio_vs_no_forecasts_lo": 0.33843080829488836,
+      "ratio_vs_no_forecasts_hi": 0.4104093941334077,
       "better_vs_no_forecasts": 0.0
     },
     "No forecasts": {
-      "onset_pr_auc": 0.07585470274620795,
-      "lo": 0.05073579034169718,
-      "hi": 0.10163716876898711,
-      "ratio_vs_official": 2.11266775671517,
-      "ratio_vs_official_lo": 1.8269530747079215,
-      "ratio_vs_official_hi": 2.5841852184428022,
+      "onset_pr_auc": 0.05782942843096639,
+      "lo": 0.04864459458406657,
+      "hi": 0.06715429897973672,
+      "ratio_vs_official": 2.67327465687351,
+      "ratio_vs_official_lo": 2.436591420310313,
+      "ratio_vs_official_hi": 2.9548138563888164,
       "better_vs_official": 1.0,
       "ratio_vs_no_forecasts": 1.0,
       "ratio_vs_no_forecasts_lo": 1.0,
@@ -36,76 +36,76 @@
       "better_vs_no_forecasts": 0.0
     },
     "With HRRR forecasts (newest run)": {
-      "onset_pr_auc": 0.11765462274459755,
-      "lo": 0.0827970834584322,
-      "hi": 0.1536242311630242,
-      "ratio_vs_official": 3.276858505828428,
-      "ratio_vs_official_lo": 2.7270580237781172,
-      "ratio_vs_official_hi": 4.275393984443774,
+      "onset_pr_auc": 0.0801797589808721,
+      "lo": 0.06597867996607594,
+      "hi": 0.09515473319927496,
+      "ratio_vs_official": 3.706460940274759,
+      "ratio_vs_official_lo": 3.3282713848223655,
+      "ratio_vs_official_hi": 4.13194570621458,
       "better_vs_official": 1.0,
-      "ratio_vs_no_forecasts": 1.5510524527166407,
-      "ratio_vs_no_forecasts_lo": 1.3904675682379637,
-      "ratio_vs_no_forecasts_hi": 1.8103975422074676,
+      "ratio_vs_no_forecasts": 1.3864871425555643,
+      "ratio_vs_no_forecasts_lo": 1.2971004394140726,
+      "ratio_vs_no_forecasts_hi": 1.4793720555705727,
       "better_vs_no_forecasts": 1.0
     },
     "With HRRR forecasts (mean of 5 runs)": {
-      "onset_pr_auc": 0.12709545896706329,
-      "lo": 0.08888752878562783,
-      "hi": 0.16466045473609717,
-      "ratio_vs_official": 3.5398000185038443,
-      "ratio_vs_official_lo": 2.916244561196144,
-      "ratio_vs_official_hi": 4.606042932319279,
+      "onset_pr_auc": 0.08683519457517187,
+      "lo": 0.0717173291365608,
+      "hi": 0.10237742628867708,
+      "ratio_vs_official": 4.014121032850883,
+      "ratio_vs_official_lo": 3.6290114209114686,
+      "ratio_vs_official_hi": 4.464427035732877,
       "better_vs_official": 1.0,
-      "ratio_vs_no_forecasts": 1.6755119243205643,
-      "ratio_vs_no_forecasts_lo": 1.5048139404267113,
-      "ratio_vs_no_forecasts_hi": 1.942394058903141,
+      "ratio_vs_no_forecasts": 1.501574491244211,
+      "ratio_vs_no_forecasts_lo": 1.411058049942704,
+      "ratio_vs_no_forecasts_hi": 1.59407677906163,
       "better_vs_no_forecasts": 1.0
     },
     "Perfect weather (ceiling)": {
-      "onset_pr_auc": 0.13607125818772134,
-      "lo": 0.09851168638192227,
-      "hi": 0.17243258002855483,
-      "ratio_vs_official": 3.78978955003861,
-      "ratio_vs_official_lo": 3.0799862751252207,
-      "ratio_vs_official_hi": 5.0938341888207646,
+      "onset_pr_auc": 0.09612261312668048,
+      "lo": 0.08084257975990786,
+      "hi": 0.11241950751713362,
+      "ratio_vs_official": 4.443449513438633,
+      "ratio_vs_official_lo": 3.994095073041064,
+      "ratio_vs_official_hi": 4.942332456276563,
       "better_vs_official": 1.0,
-      "ratio_vs_no_forecasts": 1.7938407674338117,
-      "ratio_vs_no_forecasts_lo": 1.5770810988879216,
-      "ratio_vs_no_forecasts_hi": 2.1397095750573882,
+      "ratio_vs_no_forecasts": 1.6621747047254047,
+      "ratio_vs_no_forecasts_lo": 1.5720858624765162,
+      "ratio_vs_no_forecasts_hi": 1.7613217155763956,
       "better_vs_no_forecasts": 1.0
     }
   },
   "at_headline_share": {
     "Warnings + outlook": {
-      "caught": 0.1891025641025641,
-      "precision": 0.1073083898703567,
-      "episodes": 2854
+      "caught": 0.10724706253450043,
+      "precision": 0.0800800982473971,
+      "episodes": 20090
     },
     "No forecasts": {
-      "caught": 0.2875,
-      "precision": 0.1253564087262118,
-      "episodes": 6196
+      "caught": 0.21366611465972715,
+      "precision": 0.11470616178783688,
+      "episodes": 38836
     },
     "With HRRR forecasts (newest run)": {
-      "caught": 0.37275641025641026,
-      "precision": 0.162654996353027,
-      "episodes": 10479
+      "caught": 0.2915385221985648,
+      "precision": 0.14438556302716168,
+      "episodes": 70581
     },
     "With HRRR forecasts (mean of 5 runs)": {
-      "caught": 0.3467948717948718,
-      "precision": 0.16613619786486308,
-      "episodes": 6802
+      "caught": 0.26634334831637885,
+      "precision": 0.15142670143250747,
+      "episodes": 43457
     },
     "Perfect weather (ceiling)": {
-      "caught": 0.35993589743589743,
-      "precision": 0.17150719448312446,
-      "episodes": 7217
+      "caught": 0.2785663591199432,
+      "precision": 0.16146058757086004,
+      "episodes": 44093
     }
   },
   "value_no_forecasts": {
-    "low": 3960464.044982847,
-    "high": 111020357.28217104,
-    "official_low": -4707660.677507,
-    "official_high": 31586460.52627361
+    "low": 133472184.231354,
+    "high": 1227077603.361467,
+    "official_low": -301204431.8873333,
+    "official_high": 505394466.8150177
   }
 }
