@@ -39,14 +39,20 @@ def check(rows, name, a, b, tol=1e-6):
     """Record how often two versions of the same value agree (NaN = NaN counts as agreeing)."""
     a, b = pd.Series(a, dtype=float).reset_index(drop=True), pd.Series(b, dtype=float).reset_index(drop=True)
     both_nan = a.isna() & b.isna()
-    agree = both_nan | ((a - b).abs() <= tol)
+    # the model's rows are 32-bit floats (data.shrink): allow their rounding (~1e-7 relative) on top of tol. A real
+    # timing or join error moves a value by whole units, far beyond this
+    agree = both_nan | ((a - b).abs() <= tol + 1e-6 * b.abs())
     rows.append({"check": name, "n": len(a), "agree": float(agree.mean()),
                  "max_abs_diff": float((a - b).abs().max()) if (~both_nan).any() else 0.0})
     print(rows[-1], flush=True)
 
 
 TIMING_COLS = ["region_fips", "block_start", "gust_max_ms", "precip_sum_mm", "pct_out_now", "max_pct_out_prev_24h",
-               "fut_max_pct", "start_pct", "near_pct_out_max", "warn_svr", "warn_tor", "spc_cat"]
+               "fut_max_pct", "start_pct", "near_pct_out_max", "warn_svr", "warn_tor", "spc_cat",
+               # E55's inputs (data.add_static), checked against their sources
+               "precip_prev_72h_mm", "hist_events_per_year", "hist_storm_hit_rate", "lat", "lon",
+               "log_customers", "log_road_per_customer", "road_treed_share", "tm_height_ft", "soil_poor_drain_share",
+               "util_saidi", "flood_zone_share", "poor_drain_x_rain"]
 
 
 def sample_decisions(n, seed=0):
@@ -59,6 +65,30 @@ def sample_decisions(n, seed=0):
         parts.append(rows[TIMING_COLS].sample(k, random_state=seed + i))
         del rows
     return pd.concat(parts, ignore_index=True)
+
+
+def static_from_files(rows, s):
+    """Each place input on the decision equals its county's value in the source file (a join on the wrong key, or one
+    that reorders rows, would put another county's value on the row)."""
+    place = data.ROOT / "data" / "raw" / "place"
+    src = (pd.read_csv(place / "roads.csv", dtype={"region_fips": str})
+           .merge(pd.read_csv(data.GEO_FILE, dtype={"region_fips": str}), on="region_fips")
+           .merge(pd.read_csv(place / "treemap.csv", dtype={"region_fips": str}), on="region_fips")
+           .merge(pd.read_csv(place / "soil.csv", dtype={"region_fips": str}), on="region_fips")
+           .merge(pd.read_csv(place / "utilities.csv", dtype={"region_fips": str}), on="region_fips")
+           .merge(pd.read_csv(place / "flood_zones.csv", dtype={"region_fips": str}), on="region_fips", how="left"))
+    m = s[["region_fips", "log_customers", "precip_prev_72h_mm"]].merge(src, on="region_fips", how="left")
+    check(rows, "place: latitude from regions_study.csv", s.lat, m.lat, tol=1e-4)
+    check(rows, "place: longitude from regions_study.csv", s.lon, m.lon, tol=1e-4)
+    check(rows, "place: road per customer from roads.csv", s.log_road_per_customer,
+          np.log10(m.road_km) - m.log_customers, tol=1e-4)
+    check(rows, "place: road under canopy from roads.csv", s.road_treed_share, m.road_treed_share, tol=1e-5)
+    check(rows, "place: tree height from treemap.csv", s.tm_height_ft, m.tm_height_ft, tol=1e-3)
+    check(rows, "place: poorly drained soil from soil.csv", s.soil_poor_drain_share, m.soil_poor_drain_share, tol=1e-5)
+    check(rows, "place: utility SAIDI from utilities.csv", s.util_saidi, m.util_saidi, tol=1e-2)
+    check(rows, "place: flood zone share from flood_zones.csv", s.flood_zone_share, m.flood_zone_share, tol=1e-5)
+    check(rows, "place: poorly drained soil x 72 h rain", s.poor_drain_x_rain,
+          m.soil_poor_drain_share * m.precip_prev_72h_mm, tol=1e-2)
 
 
 def timing():
@@ -85,7 +115,18 @@ def timing():
                (SELECT max(m.pct_out) FROM intermediate.int_study__region_neighbors n
                   JOIN marts.mart_study__region_1h m ON m.region_fips = n.neighbor_fips
                   WHERE n.region_fips = s.region_fips AND n.is_near
-                  AND m.hour = s.block_start - INTERVAL 1 HOUR)                                      AS near_now
+                  AND m.hour = s.block_start - INTERVAL 1 HOUR)                                      AS near_now,
+               (SELECT CASE WHEN count(CASE WHEN precip_mm <= 100 THEN precip_mm END) = 72
+                            THEN sum(CASE WHEN precip_mm <= 100 THEN precip_mm END) END
+                  FROM staging.stg_hrrr__hourly w WHERE w.region_fips = s.region_fips
+                  AND w.hour >= s.block_start - INTERVAL 72 HOUR AND w.hour < s.block_start)         AS rain72,
+               (SELECT events_per_year FROM marts.mart_study__region_history_asof h
+                  WHERE h.region_fips = s.region_fips AND h.as_of_year = year(s.block_start))        AS hist_events,
+               (SELECT storm_hit_rate FROM marts.mart_study__region_history_asof h
+                  WHERE h.region_fips = s.region_fips AND h.as_of_year = year(s.block_start))        AS hist_hit,
+               (SELECT max(history_end) <= date_trunc('year', s.block_start)
+                  FROM marts.mart_study__region_history_asof h
+                  WHERE h.region_fips = s.region_fips AND h.as_of_year = year(s.block_start))        AS hist_before
         FROM s ORDER BY s.region_fips, s.block_start
     """).df()
     s = s.sort_values(["region_fips", "block_start"])
@@ -96,6 +137,14 @@ def timing():
     check(rows, "neighbours: worst outage within 100 km, the hour before", s.near_pct_out_max, r.near_now)
     check(rows, "label: worst hour of h+2 ... h+7", s.fut_max_pct, r.fut)
     check(rows, "label: the hour before the window (h+1), selection only", s.start_pct, r.start)
+    check(rows, "weather: total rain, the 72 h before the decision", s.precip_prev_72h_mm, r.rain72, tol=1e-2)
+    check(rows, "history: events per year, as of Jan 1 of the row's year", s.hist_events_per_year, r.hist_events,
+          tol=1e-4)
+    check(rows, "history: storm hit rate, as of Jan 1 of the row's year", s.hist_storm_hit_rate, r.hist_hit, tol=1e-4)
+    rows.append({"check": "history: ends on or before Jan 1 of the row's year", "n": len(r),
+                 "agree": float(r.hist_before.fillna(True).mean()), "max_abs_diff": float("nan")})
+    print(rows[-1], flush=True)
+    static_from_files(rows, s)
 
     # warnings: every severe/tornado flag in 2025 must have a warning (county or zone) for one of the
     # region's counties, issued before the hour and not yet expired
@@ -137,6 +186,7 @@ def timing():
                            "GROUP BY 1").fetchall())
     c.close()
     picked, recomputed, runs_before = [], [], []
+    dur_picked, dur_recomputed = [], []
     for i, st in enumerate(states):
         f = forecasts(f"{YEAR - 1}-12-31", f"{YEAR}-12-31", states=[st])
         if f.empty:
@@ -148,14 +198,28 @@ def timing():
             g = fi.loc[(fips, h - pd.Timedelta(hours=2))]
             g = g[(g.hour >= h + pd.Timedelta(hours=2)) & (g.hour < h + pd.Timedelta(hours=8))]
             recomputed.append(g.gust_ms.max() if len(g) == 6 else np.nan)
+            full = len(g) == 6
+            dur_recomputed.append({"win_gust_hours15": (g.gust_ms >= 15).sum() if full else np.nan,
+                                   "win_gust_hours20": (g.gust_ms >= 20).sum() if full else np.nan,
+                                   "win_gust_mean": g.gust_ms.mean() if full else np.nan,
+                                   "win_gust_median": g.gust_ms.median() if full else np.nan,
+                                   "win_gustiness_max": (g.gust_ms - g.wind10_ms).max() if full else np.nan})
             runs_before.append(h - pd.Timedelta(hours=2) < h)
         picked.append(pick.win_gust_max_ms)
+        dur_picked.append(pick[list(dur_recomputed[0])])
         del f, win, fi
     check(rows, "forecast: max gust from the run issued at h-2, valid h+2 ... h+7", pd.concat(picked),
           recomputed, tol=1e-4)
     rows.append({"check": "forecast: run issued before the decision", "n": len(runs_before),
                  "agree": float(np.mean(runs_before)), "max_abs_diff": float("nan")})
-    pd.DataFrame(rows).to_csv(RESULTS / "audit_timing.csv", index=False)
+    got, want = pd.concat(dur_picked), pd.DataFrame(dur_recomputed)
+    for c in want:
+        check(rows, f"forecast: {c} from the run issued at h-2, valid h+2 ... h+7", got[c], want[c], tol=1e-4)
+    out = pd.DataFrame(rows)
+    out.to_csv(RESULTS / "audit_timing.csv", index=False)
+    bad = out[out.agree < 1]
+    if len(bad):
+        raise SystemExit(f"timing audit: {len(bad)} checks disagree:\n{bad.to_string(index=False)}")
 
 
 def shift():
