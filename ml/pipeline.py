@@ -7,18 +7,21 @@ ml/results/summary.md: the headline numbers next to the ones last committed.
 
 Usage:
   pixi run pipeline [--dry-run] [--from STEP] [--only STEP,STEP] [--force]
+  pixi run pipeline --smoke   every step on Missouri + Illinois with 5 trees, in data/smoke/root (ml/smoke.py):
+                              minutes, never the real results; run it before a long run
   pixi run pipeline --list
 The data itself (downloads and dbt) is `pixi run data`; this starts from the warehouse.
 """
 import argparse
+import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-LOGS = ROOT / "data" / "pipeline_logs"
+REPO = Path(__file__).resolve().parent.parent
+ROOT = REPO                    # the tree whose outputs are checked and written (--smoke: data/smoke/root)
 WAREHOUSE = "data/warehouse.duckdb"
 
 
@@ -33,6 +36,9 @@ class Step:
 
 PY = "python -m"
 STEPS = [
+    # first: every input is what it claims (recomputed from the raw tables for 20,000 decisions); fails on any mismatch
+    Step("audit", f"{PY} ml.audit --checks timing", ["ml/results/audit_timing.csv"],
+         about="every input and the label recomputed from the raw tables, with explicit time filters"),
     # the headline and the results ladder
     Step("moving_window", f"{PY} ml.moving_window", ["ml/results/moving_window_2025.csv"],
          about="the model by lead time, observed weather only"),
@@ -76,7 +82,7 @@ STEPS = [
          needs=["export_app", "moving_window", "forecast_test", "forecast_ensemble", "value_hourly"]),
     Step("site", "python scripts/make_site_figures.py --no-clip",
          ["data/site_preview/data/story.json"],
-         needs=["export_hourly", "display_model", "calibrate", "significance", "extra", "canopy_by_state",
+         needs=["audit", "export_hourly", "display_model", "calibrate", "significance", "extra", "canopy_by_state",
                 "place_fragility", "states"],
          about="figures and story.json in data/site_preview/, never over site/ (no storm video)"),
 ]
@@ -110,7 +116,16 @@ def main():
     ap.add_argument("--only", help="comma-separated steps to run, whether stale or not")
     ap.add_argument("--force", action="store_true", help="run every step")
     ap.add_argument("--list", action="store_true", help="list the steps")
+    ap.add_argument("--smoke", action="store_true", help="every step on two states with 5 trees (data/smoke/root)")
     a = ap.parse_args()
+    global ROOT
+    if a.smoke:
+        from ml import smoke
+        ROOT = smoke.prepare()
+        smoke.reset()
+        os.environ["STORM_ROOT"], os.environ["STORM_SMOKE"] = str(ROOT), "1"     # read by every step (ml/data.py)
+        a.force = True
+    logs = ROOT / "data" / "pipeline_logs"
     if a.list:
         for s in STEPS:
             print(f"{s.name:18s} {s.about or s.cmd}")
@@ -120,7 +135,7 @@ def main():
         if n not in BY_NAME:
             sys.exit(f"unknown step {n}; steps: {', '.join(names)}")
     forced = set(names[names.index(a.start):]) if a.start else set(a.only.split(",")) if a.only else set()
-    LOGS.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
     ran, failed = set(), []
     for s in STEPS:
         if a.only and s.name not in forced:
@@ -138,11 +153,11 @@ def main():
             ran.add(s.name)
             continue
         t = time.time()
-        with open(LOGS / f"{s.name}.log", "w") as log:
-            code = subprocess.run(s.cmd, shell=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
+        with open(logs / f"{s.name}.log", "w") as log:
+            code = subprocess.run(s.cmd, shell=True, cwd=REPO, stdout=log, stderr=subprocess.STDOUT).returncode
         mins = (time.time() - t) / 60
         if code:
-            print(f"  {s.name:18s} FAILED after {mins:.0f} min, see {LOGS.relative_to(ROOT)}/{s.name}.log", flush=True)
+            print(f"  {s.name:18s} FAILED after {mins:.0f} min, see {logs}/{s.name}.log", flush=True)
             failed.append(s.name)
         else:
             print(f"  {s.name:18s} done in {mins:.0f} min", flush=True)

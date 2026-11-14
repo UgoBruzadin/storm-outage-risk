@@ -135,6 +135,8 @@ def build(name, params=None):
     if name not in REGISTRY:
         raise ValueError(f"unknown model {name!r}; choose from {sorted(REGISTRY)}")
     params = dict(params or {})
+    if os.environ.get("STORM_SMOKE") and "n_estimators" in params:     # pipeline --smoke: run every line, fast
+        params["n_estimators"] = min(params["n_estimators"], 5)
     balanced = params.pop("class_weight", None) == "balanced"
     model = REGISTRY[name](**params)
     return Balanced(model) if balanced else model

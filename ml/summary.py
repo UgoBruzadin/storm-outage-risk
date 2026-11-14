@@ -20,7 +20,7 @@ def read(name, committed):
     if not committed:
         path = RESULTS / name
         return pd.read_csv(path) if path.exists() else None
-    git = subprocess.run(["git", "show", f"HEAD:ml/results/{name}"], cwd=data.ROOT, capture_output=True, text=True)
+    git = subprocess.run(["git", "show", f"HEAD:ml/results/{name}"], cwd=data.REPO, capture_output=True, text=True)
     return pd.read_csv(io.StringIO(git.stdout)) if git.returncode == 0 else None
 
 

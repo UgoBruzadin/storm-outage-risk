@@ -33,7 +33,7 @@ from sklearn.inspection import permutation_importance
 
 from ml import data, models
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = data.ROOT                                # STORM_ROOT: the smoke tree
 OUT = ROOT / "data" / "app"
 RESULTS = ROOT / "ml" / "results"
 REGIONS_GEO = ROOT / "data" / "raw" / "geo" / "regions_study.parquet"

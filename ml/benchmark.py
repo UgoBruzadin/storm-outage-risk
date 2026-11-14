@@ -39,7 +39,7 @@ import yaml
 from ml import data, models, splits
 from ml.metrics import score
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = data.ROOT                                # STORM_ROOT: the smoke tree
 RESULTS = ROOT / "ml" / "results"
 TRACKING_URI = f"sqlite:///{ROOT / 'data' / 'mlflow.db'}"
 ARTIFACTS = (ROOT / "data" / "mlruns").as_uri()
@@ -132,7 +132,7 @@ def split_label(split):
 
 def git_commit():
     try:
-        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
+        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=data.REPO, capture_output=True,
                               text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
