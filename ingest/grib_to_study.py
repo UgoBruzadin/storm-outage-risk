@@ -43,9 +43,24 @@ def direction(u, v):
 
 
 def hourly(grib_dirs):
+    """One calendar year at a time, so the whole country (3,108 regions) fits in memory: a day file holds the
+    runs issued that day, whose forecast hour 1 runs to 00 UTC of the next day, so a year's hours come from the
+    files of Dec 31 of the year before through Dec 31 of the year itself."""
     fips = study_fips()
     days = sorted({p for d in grib_dirs for p in Path(d).glob("*.parquet")}, key=lambda p: p.name)
-    df = pd.concat([read_day(p, fips, [1]) for p in days], ignore_index=True)
+    by_name = {}
+    for p in days:                                   # a day in two folders (an overlap) is read from both
+        by_name.setdefault(p.stem, []).append(p)
+    years = sorted({int(s[:4]) for s in by_name})
+    for y in years:
+        files = [p for s, ps in by_name.items() if f"{y - 1}1231" <= s <= f"{y}1231" for p in ps]
+        df = pd.concat([read_day(p, fips, [1]) for p in files], ignore_index=True)
+        df = df[df.hour.dt.year == y]
+        if len(df):
+            write_hourly(df)
+
+
+def write_hourly(df):
     df = df.drop_duplicates(["region_fips", "hour"]).sort_values(["region_fips", "hour"])
     out = pd.DataFrame({
         "region_fips": df.region_fips,

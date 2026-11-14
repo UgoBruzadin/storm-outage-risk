@@ -23,6 +23,8 @@ import pandas as pd
 import rasterio
 import requests
 from rasterio.features import geometry_mask
+from rasterio.io import MemoryFile
+from rasterio.merge import merge
 
 WCS = "https://www.mrlc.gov/geoserver/ows"
 COVERAGE = "mrlc_download__nlcd_tcc_conus_2021_v2021-4"
@@ -31,10 +33,8 @@ CACHE = Path("data/raw/geo/tcc_2021_tiles")
 OUT = Path("data/raw/geo/tree_canopy_2021.csv")
 
 
-def fetch_tile(region_fips, bounds):
-    path = CACHE / f"{region_fips}.tif"
-    if path.exists():                        # idempotent
-        return path
+def request(label, bounds, tries):
+    """One WCS GetCoverage for a lon/lat rectangle: the GeoTIFF's bytes, or None after `tries` failures."""
     minx, miny, maxx, maxy = bounds
     params = {
         "service": "WCS", "version": "2.0.1", "request": "GetCoverage",
@@ -44,13 +44,57 @@ def fetch_tile(region_fips, bounds):
     }
     # requests can't repeat a key in a dict, so the two subsets go in a list
     query = list(params.items()) + [("subset", f"Long({minx},{maxx})"), ("subset", f"Lat({miny},{maxy})")]
-    for attempt in range(3):
-        r = requests.get(WCS, params=query, timeout=300)
-        if r.ok and r.content[:2] in (b"II", b"MM"):   # a real TIFF, not an XML error
-            path.write_bytes(r.content)
-            return path
-        time.sleep(10 * (attempt + 1))
-    raise RuntimeError(f"{region_fips}: WCS failed: {r.status_code} {r.text[:200]}")
+    for attempt in range(tries):
+        try:                                 # the server sometimes stalls on big western counties: retry
+            r = requests.get(WCS, params=query, timeout=300)
+        except requests.RequestException as e:
+            problem = repr(e)
+        else:
+            if r.ok and r.content[:2] in (b"II", b"MM"):   # a real TIFF, not an XML error
+                return r.content
+            problem = f"{r.status_code} {r.text[:200]}"
+        print(f"{label}: attempt {attempt + 1} failed ({problem[:120]})", flush=True)
+        time.sleep(30 * (attempt + 1))
+    return None
+
+
+def fetch_pieces(label, bounds, depth):
+    """The rectangle as GeoTIFF bytes, split into 2 x 2 pieces (and those again, up to depth 3) when the server
+    can't produce it whole: the biggest western counties (Nye County, NV: 47,000 km2) time out or fail in one go."""
+    whole = request(label, bounds, tries=2 if depth < 3 else 4)
+    if whole is not None:
+        return [whole]
+    if depth >= 3:
+        raise RuntimeError(f"{label}: WCS failed even in pieces")
+    minx, miny, maxx, maxy = bounds
+    midx, midy = (minx + maxx) / 2, (miny + maxy) / 2
+    print(f"{label}: splitting into 4 pieces", flush=True)
+    return [p for i, b in enumerate([(minx, miny, midx, midy), (midx, miny, maxx, midy),
+                                     (minx, midy, midx, maxy), (midx, midy, maxx, maxy)])
+            for p in fetch_pieces(f"{label}.{i}", b, depth + 1)]
+
+
+def fetch_tile(region_fips, bounds):
+    path = CACHE / f"{region_fips}.tif"
+    if path.exists():                        # idempotent
+        return path
+    pieces = fetch_pieces(region_fips, bounds, depth=0)
+    if len(pieces) == 1:
+        path.write_bytes(pieces[0])
+        return path
+    # stitch the pieces on their common grid; gaps and overlaps get 255 ("no data", dropped in summarize), never the
+    # file's own nodata tag of 0, which is a real "no trees" value
+    files = [MemoryFile(p) for p in pieces]
+    sources = [f.open() for f in files]
+    mosaic, transform = merge(sources, nodata=255)
+    profile = sources[0].profile | {"height": mosaic.shape[1], "width": mosaic.shape[2], "transform": transform}
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(mosaic)
+    for s, f in zip(sources, files, strict=True):
+        s.close()
+        f.close()
+    print(f"{region_fips}: stitched from {len(pieces)} pieces", flush=True)
+    return path
 
 
 def summarize(path, geometry):

@@ -55,7 +55,7 @@ def fetch(name):
             print(e, flush=True)
             continue
         (CACHE / alt).write_bytes(content)
-        time.sleep(0.5)                      # the Census server rejects fast runs of requests
+        time.sleep(2)                        # the Census server rejects fast runs of requests (429s at 0.5 s)
         if year != "2023":
             print(f"{name}: used the {year} release", flush=True)
         return CACHE / alt
@@ -63,13 +63,32 @@ def fetch(name):
 
 
 def get_zip(url, tries=5):
-    """The Census server sometimes answers 200 with a "Request Rejected" HTML page: retry until it's a zip."""
-    for attempt in range(tries):
-        r = requests.get(url, timeout=300)
+    """The Census server sometimes answers 200 with a "Request Rejected" HTML page, or 429 Too Many Requests when
+    asked too fast (a whole country's ~3,100 files): wait (as long as it asks, if it says) and retry until it's a zip.
+    429s and network errors don't use up a try; other HTTP errors are raised."""
+    attempt = waits = 0
+    while attempt < tries:
+        try:
+            r = requests.get(url, timeout=300)
+        except requests.RequestException as e:
+            waits += 1
+            if waits > 20:
+                raise RuntimeError(f"{url}: {e!r}") from e
+            time.sleep(60)
+            continue
+        if r.status_code == 429:
+            waits += 1
+            if waits > 20:
+                raise RuntimeError(f"{url}: still 429 after {waits} waits")
+            pause = int(r.headers.get("Retry-After", "0") or 0) or 60 * min(waits, 10)
+            print(f"{url.rsplit('/', 1)[-1]}: 429, waiting {pause}s", flush=True)
+            time.sleep(pause)
+            continue
         r.raise_for_status()
         if r.content[:4] == b"PK\x03\x04":
             return r.content
-        time.sleep(30 * (attempt + 1))
+        attempt += 1
+        time.sleep(30 * attempt)
     raise RuntimeError(f"{url}: no zip after {tries} tries")
 
 

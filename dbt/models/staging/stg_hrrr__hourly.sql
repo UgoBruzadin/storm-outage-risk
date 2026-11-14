@@ -3,6 +3,11 @@
 -- Wind direction is where the wind blows FROM, in degrees; we turn speed +
 -- direction into east (u) and north (v) components so winds at two heights
 -- can be subtracted: |wind aloft − wind at surface| = vertical wind shear.
+--
+-- A table, unlike the other staging models: for the whole country it is ~3,100 regions x 8 years of
+-- gzipped CSV, and the ML scripts read it a state at a time (ml/forecast_test.actual_hourly); as a view
+-- every one of those reads would parse every file again.
+{{ config(materialized='table') }}
 
 WITH typed AS (
     SELECT

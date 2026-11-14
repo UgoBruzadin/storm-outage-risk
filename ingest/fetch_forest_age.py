@@ -38,6 +38,9 @@ def main():
         path = DIR / f"{state}_COND.csv"
         if not path.exists():
             r = requests.get(URL.format(state=state), timeout=600)
+            if r.status_code == 404:              # no inventory file (DC: no forest plots); its counties stay blank
+                print(f"{state}: no FIA condition file, skipped", flush=True)
+                continue
             r.raise_for_status()
             path.write_bytes(r.content)
         d = pd.read_csv(path, usecols=COLUMNS)

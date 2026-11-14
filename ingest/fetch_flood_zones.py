@@ -27,12 +27,13 @@ PAGE = 500
 MIN_SHARE = 0.001
 
 
-def page(bounds, offset):
+def page(bounds, offset, tries=5):
+    """One page of flood zones, or None after `tries` failures."""
     params = {"where": "SFHA_TF='T'", "geometry": ",".join(map(str, bounds)), "geometryType": "esriGeometryEnvelope",
               "inSR": 4326, "outSR": 4326, "spatialRel": "esriSpatialRelIntersects", "outFields": "FLD_ZONE",
               "returnGeometry": "true", "maxAllowableOffset": 0.0005, "resultOffset": offset,
-              "resultRecordCount": PAGE, "f": "geojson"}
-    for attempt in range(5):
+              "resultRecordCount": PAGE, "orderByFields": "OBJECTID", "f": "geojson"}
+    for attempt in range(tries):
         try:
             r = requests.get(URL, params=params, timeout=300)
             if r.ok and r.text.lstrip().startswith("{") and "features" in r.json():
@@ -40,19 +41,35 @@ def page(bounds, offset):
         except (requests.RequestException, ValueError):
             pass
         time.sleep(20 * (attempt + 1))
-    raise RuntimeError(f"FEMA query failed for {bounds} at offset {offset}")
+    return None
+
+
+def box_features(bounds, depth=0):
+    """Every flood zone touching a box. A box the server can't page through (the deep pages of a big western
+    county, e.g. Maricopa, AZ, fail at ~7,500 zones) is split into four and each fetched alike, up to depth 4.
+    Zones crossing a split come back twice; the union in main() counts their area once."""
+    features, offset = [], 0
+    while True:
+        got = page(bounds, offset, tries=3 if depth < 4 else 5)
+        if got is None:
+            if depth >= 4:
+                raise RuntimeError(f"FEMA query failed for {bounds} at offset {offset}, even in pieces")
+            minx, miny, maxx, maxy = bounds
+            midx, midy = (minx + maxx) / 2, (miny + maxy) / 2
+            print(f"  splitting {tuple(round(b, 3) for b in bounds)} (failed at offset {offset})", flush=True)
+            return [f for b in [(minx, miny, midx, midy), (midx, miny, maxx, midy),
+                                (minx, midy, midx, maxy), (midx, midy, maxx, maxy)]
+                    for f in box_features(b, depth + 1)]
+        features += got["features"]
+        if len(got["features"]) < PAGE:
+            return features
+        offset += PAGE
 
 
 def zones(fips, bounds):
     path = CACHE / f"{fips}.geojson"
     if not path.exists():
-        features, offset = [], 0
-        while True:
-            got = page(bounds, offset)["features"]
-            features += got
-            if len(got) < PAGE:
-                break
-            offset += PAGE
+        features = box_features(bounds)
         path.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
     if not json.loads(path.read_text())["features"]:
         return None
