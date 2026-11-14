@@ -1,2 +1,2 @@
 test,pr_auc_model,pr_auc_official,ratio,positive_windows
-"2025, counties never seen in training",0.06880347660167735,0.03924032035778109,1.7533872296237276,18516
+"2025, counties never seen in training",0.05159133417509595,0.024175630766816558,2.1340222587246886,150133
