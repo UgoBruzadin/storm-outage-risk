@@ -10,43 +10,33 @@ Usage: pixi run python -m ml.display_model
 Writes data/cache/display_2025.parquet: region, decision hour, the mean and range of the five runs' chances.
 """
 import numpy as np
+import pandas as pd
 
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
-from ml.forecast_test import (
-    LEAD,
-    TEST_YEAR,
-    TRAIN_YEARS,
-    WINDOW,
-    actual_hourly,
-    forecasts,
-    window_from_forecast,
-    window_from_hourly,
-    with_version,
-)
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+from ml.forecast_test import WINDOW, states_2025, train_rows, window_from_forecast, with_version
+from ml.moving_window import FEATURES, PARAMS
 
 
 def main():
-    actual = window_from_hourly(actual_hourly(TRAIN_YEARS + [TEST_YEAR]))
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [TEST_YEAR], LEAD, onsets_only=False)
-    df["region_fips"] = df.region_fips.astype(str)
-    df = df.merge(actual, on=["region_fips", "block_start"], how="left")
-    train, test = df[df.year.isin(TRAIN_YEARS)], df[df.year == TEST_YEAR].copy()
+    # every county-hour (ongoing outages included), sampled for training like the scored model
+    train = train_rows(onsets_only=False)
     features = data.resolve_features(FEATURES) + WINDOW
-    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
-    print(f"trained on {len(train):,} county-hours, all of them (ongoing outages included)", flush=True)
+    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"], sample_weight=train["weight"])
+    print(f"trained on {len(train):,} county-hours standing for {train.weight.sum():,.0f} (ongoing outages "
+          f"included)", flush=True)
+    del train
 
-    f = forecasts(f"{TEST_YEAR - 1}-12-31", f"{TEST_YEAR}-12-31")
     names = [f"run {k} h before" for k in RUN_AGES]
-    for n, k in zip(names, RUN_AGES, strict=True):
-        w = window_from_forecast(f, k)
-        test = test.merge(w.rename(columns={c: f"{c}|{n}" for c in WINDOW}), on=["region_fips", "block_start"],
-                          how="left")
-    test = test.dropna(subset=[f"win_gust_max_ms|{n}" for n in names])
-    probs = np.column_stack([fitted.predict_proba(with_version(test, features, n))[:, 1] for n in names])
-    out = test[["region_fips", "block_start"]].copy()
-    out["p_mean"], out["p_low"], out["p_high"] = probs.mean(axis=1), probs.min(axis=1), probs.max(axis=1)
+    parts = []
+    for _, _, test in states_2025(lambda f: {n: window_from_forecast(f, k) for n, k in
+                                             zip(names, RUN_AGES, strict=True)}, onsets=False, every=True):
+        probs = np.column_stack([fitted.predict_proba(with_version(test, features, n))[:, 1] for n in names])
+        out = test[["region_fips", "block_start"]].copy()
+        out["p_mean"], out["p_low"], out["p_high"] = probs.mean(axis=1), probs.min(axis=1), probs.max(axis=1)
+        parts.append(out)
+        del test
+    out = pd.concat(parts, ignore_index=True)
     out.to_parquet(data.ROOT / "data" / "cache" / "display_2025.parquet", index=False)
     print(f"wrote {len(out):,} county-hours of 2025", flush=True)
 

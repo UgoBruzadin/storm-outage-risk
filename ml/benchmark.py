@@ -29,6 +29,7 @@ import argparse
 import itertools
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -86,12 +87,13 @@ def evaluate(df, run):
     proba = np.full(len(df), np.nan)
     start = time.time()
     onset = df["is_onset"].to_numpy()
+    X, target = df[feature_cols], df["y"]          # the feature columns once, not every column per fold
     for _, train_idx, test_idx in splits.make_splits(df, kind, **options):
         if run.get("train_on", "all") == "onsets":
             train_idx = train_idx[onset[train_idx]]
         model = models.build(run["model"], run["params"])
-        model.fit(df.iloc[train_idx][feature_cols], df.iloc[train_idx]["y"])
-        proba[test_idx] = model.predict_proba(df.iloc[test_idx][feature_cols])[:, 1]
+        model.fit(X.iloc[train_idx], target.iloc[train_idx])
+        proba[test_idx] = model.predict_proba(X.iloc[test_idx])[:, 1]
     y, tested = df["y"].to_numpy(), ~np.isnan(proba)
     all_blocks = score(y[tested], proba[tested])
     onsets = score(y[tested & onset], proba[tested & onset])
@@ -104,9 +106,14 @@ def run_key(threshold_pct, train_on, split, model, features, params):
             tuple(sorted((str(k), str(v)) for k, v in params.items())))
 
 
-def finished_runs(mlflow, experiment, years):
-    """Finished MLflow runs of this experiment (same years), as {run_key: row of scores}."""
-    found = mlflow.search_runs(experiment_names=[experiment], filter_string="attributes.status = 'FINISHED'")
+def finished_runs(mlflow, experiment, years, since=None):
+    """Finished MLflow runs of this experiment (same years), as {run_key: row of scores}; with `since` (a local
+    time, e.g. '2026-11-12 11:00'), only runs started then or later: runs from before a change of study area have
+    the same settings and years but other scores."""
+    where = "attributes.status = 'FINISHED'"
+    if since:
+        where += f" and attributes.start_time >= {int(datetime.fromisoformat(since).timestamp() * 1000)}"
+    found = mlflow.search_runs(experiment_names=[experiment], filter_string=where)
     done = {}
     for _, r in found.iterrows():
         if r.get("params.years") != str(years):
@@ -155,6 +162,8 @@ def main():
     parser.add_argument("--models", help="comma-separated subset of model names to run")
     parser.add_argument("--resume", action="store_true",
                         help="reuse finished runs from MLflow (same settings and years); run only the rest")
+    parser.add_argument("--since", help="with --resume: reuse only runs started at or after this local time "
+                                        "(e.g. '2026-11-12 11:00'), never an older study area's")
     args = parser.parse_args()
 
     config = yaml.safe_load(args.config.read_text())
@@ -173,12 +182,15 @@ def main():
     import mlflow  # here, not at the top: tests and CI import this module without MLflow installed
 
     base = data.load(None, config["data"]["years"])
-    labeled = {}
+    # each threshold's label columns only, swapped into `base` before its runs: one copy of the table instead of
+    # one per threshold (the whole country's 6-hour table is ~17 GB; three labeled copies didn't fit in memory)
+    labels = {}
     for threshold in as_list(config["data"]["threshold_pct"]):
-        labeled[threshold] = data.label(base, threshold)
-        d = labeled[threshold]
+        d = data.label(base[["peak_pct_out", "prev_block_pct_out"]], threshold)
+        labels[threshold] = (d.y, d.is_onset)
         print(f">= {threshold}%: {len(d):,} region-blocks, {d.y.sum():,} events ({d.y.mean():.2%}); "
               f"{d.is_onset.sum():,} onset blocks with {d.y[d.is_onset].sum():,} new events")
+        del d
 
     mlflow.set_tracking_uri(TRACKING_URI)
     experiment = f"benchmark/{name}"
@@ -189,7 +201,7 @@ def main():
 
     rows, todo = [], runs
     if args.resume:
-        done = finished_runs(mlflow, experiment, config["data"]["years"])
+        done = finished_runs(mlflow, experiment, config["data"]["years"], since=args.since)
         todo = []
         for run in runs:
             key = run_key(run["threshold_pct"], run["train_on"], split_label(run["split"]), run["model"],
@@ -206,7 +218,8 @@ def main():
         label = split_label(run["split"])
         with mlflow.start_run(run_name=f">={run['threshold_pct']}%/{run['train_on']}/{label}/{run['model']}"
                                        f"/{run['features']}"):
-            scores = evaluate(labeled[run["threshold_pct"]], run)
+            base["y"], base["is_onset"] = labels[run["threshold_pct"]]
+            scores = evaluate(base, run)
             mlflow.set_tags({"config": str(args.config.relative_to(ROOT) if args.config.is_absolute()
                                           else args.config), "git_commit": commit})
             mlflow.log_params({"split": label, "model": run["model"], "features": run["features"],

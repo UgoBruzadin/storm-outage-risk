@@ -25,16 +25,8 @@ from sklearn.metrics import average_precision_score
 from ml import data, models
 from ml.export_hourly import HEADLINE_SHARE
 from ml.forecast_ensemble import BINS, RUN_AGES
-from ml.forecast_test import (
-    LEAD,
-    WINDOW,
-    actual_hourly,
-    forecasts,
-    window_from_forecast,
-    window_from_hourly,
-    with_version,
-)
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
+from ml.forecast_test import LEAD, WINDOW, states_2025, train_rows, window_from_forecast, with_version
+from ml.moving_window import FEATURES, PARAMS, caught_flags, episodes, onset_hours
 from ml.value import MIXES, RESTORATION_CUT, STAGING_COST
 from ml.value_hourly import avoidable, net_savings, outages
 
@@ -45,22 +37,22 @@ RESULTS = data.ROOT / "ml" / "results"
 
 def validation_probabilities():
     """The headline model trained on 2020-2023, fed 2024's five HRRR runs: its 2024 probabilities."""
-    df = data.load_hourly(THRESHOLD_PCT, VAL_TRAIN + [VAL_YEAR], LEAD)
-    df["region_fips"] = df.region_fips.astype(str)
-    df = df.merge(window_from_hourly(actual_hourly(VAL_TRAIN + [VAL_YEAR])), on=["region_fips", "block_start"],
-                  how="left")
-    train, val = df[df.year.isin(VAL_TRAIN)], df[df.year == VAL_YEAR].copy()
-    f = forecasts(f"{VAL_YEAR - 1}-12-31", f"{VAL_YEAR}-12-31")
-    for n, k in zip(NAMES, RUN_AGES, strict=True):
-        w = window_from_forecast(f, k)
-        val = val.merge(w.rename(columns={c: f"{c}|{n}" for c in WINDOW}), on=["region_fips", "block_start"],
-                        how="left")
-    val = val.dropna(subset=[f"win_gust_max_ms|{n}" for n in NAMES])
+    train = train_rows(VAL_TRAIN)                         # sampled, as the headline model's training
     features = data.resolve_features(FEATURES) + WINDOW
-    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
-    p = np.column_stack([fitted.predict_proba(with_version(val, features, n))[:, 1] for n in NAMES]).mean(axis=1)
-    print(f"2024: {len(val):,} decisions, {int(val.y.sum()):,} positive windows", flush=True)
-    return val.y.to_numpy(), p
+    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"], sample_weight=train["weight"])
+    del train
+    ys, ps = [], []                                       # 2024, every decision (never sampled), a state at a time
+    def five_runs(f):
+        return {n: window_from_forecast(f, k) for n, k in zip(NAMES, RUN_AGES, strict=True)}
+
+    for _, val, _ in states_2025(five_runs, year=VAL_YEAR, require_actual=False):
+        ps.append(np.column_stack([fitted.predict_proba(with_version(val, features, n))[:, 1] for n in NAMES])
+                  .mean(axis=1))
+        ys.append(val.y.to_numpy())
+        del val
+    y, p = np.concatenate(ys), np.concatenate(ps)
+    print(f"2024: {len(y):,} decisions, {int(y.sum()):,} positive windows", flush=True)
+    return y, p
 
 
 def bins(y, p):

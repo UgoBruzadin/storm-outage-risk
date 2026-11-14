@@ -19,54 +19,76 @@ import pandas as pd
 
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
-from ml.forecast_test import EQUAL_SHARE, LEAD, WINDOW, forecasts, tables, window_from_forecast
+from ml.forecast_test import EQUAL_SHARE, LEAD, TRAIN_YEARS, WINDOW, states_2025, train_rows, window_from_forecast
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, caught_flags, episodes, onset_hours
+from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
 from ml.place_extra import NAMES, five_run_mean
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
-STATES = data.STATE_ABBR
 FIRST = ["MO", "IL"]                                       # the study's first two states
-NEW = [s for s in STATES.values() if s not in FIRST]
-ALL = f"all {len(STATES)}"
-GROUPS = {"MO+IL": FIRST, "+".join(NEW): NEW, ALL: list(STATES.values()), **{s: [s] for s in STATES.values()}}
-TRAININGS = {"MO+IL": FIRST, ALL: list(STATES.values())}
 OFFICIAL = "warnings + outlook"
 OUT = data.ROOT / "ml" / "results" / "midwest_2025.csv"
 
 
+def study_groups():
+    """The groups scored and the trainings, for the states the warehouse holds (not just the seed's list)."""
+    states = [data.STATE_ABBR.get(s, s) for s in data.warehouse_states()]
+    new = [s for s in states if s not in FIRST]
+    every = f"all {len(states)}"
+    new_name = "+".join(new) if len(new) <= 5 else f"the other {len(new)}"
+    groups = {"MO+IL": FIRST, new_name: new, every: states, **{s: [s] for s in states}}
+    return groups, {"MO+IL": FIRST, every: states}
+
+
 def state(fips):
-    return fips.str[:2].map(STATES)
+    return fips.astype(str).str[:2].map(data.STATE_ABBR)
 
 
 def main():
-    f = forecasts("2024-12-31", "2025-12-31")
-    train, _, _, test = tables({n: window_from_forecast(f, k) for n, k in zip(NAMES, RUN_AGES, strict=True)})
-    del f
-    train["state"], test["state"] = state(train.region_fips), state(test.region_fips)
+    groups, trainings = study_groups()
     base = data.resolve_features(FEATURES) + WINDOW
     official = models.NEEDS_COLUMNS["official"]
-    pred = test[["region_fips", "state", "block_start", "y"]].copy()
-    for name, states in TRAININGS.items():
-        rows = train[train.state.isin(states)]
-        print(f"training on {name}: {len(rows):,} rows, {int(rows.y.sum()):,} positives", flush=True)
-        pred[f"{OFFICIAL} ({name})"] = models.build("official").fit(rows[official], rows["y"]).predict_proba(
-            test[official])[:, 1]
-        model = models.build("xgboost", PARAMS).fit(rows[base], rows["y"])
-        pred[f"model ({name})"] = five_run_mean(model, test, base)
+    # the rate table's counts over the full training table, by county, so each training's table is exact
+    counts = data.hourly_counts(THRESHOLD_PCT, TRAIN_YEARS, LEAD, official + ["region_fips"])
+    counts["state"] = state(counts.region_fips)
+    train = train_rows()
+    train["state"] = state(train.region_fips)
+    fitted = {}
+    for name, states in trainings.items():
+        rows, c = train[train.state.isin(states)], counts[counts.state.isin(states)]
+        print(f"training on {name}: {len(rows):,} rows standing for {rows.weight.sum():,.0f}, "
+              f"{int(rows.y.sum()):,} positives", flush=True)
+        fitted[name] = (models.build("official").fit(c[official], c.y, sample_weight=c.weight),
+                        models.build("xgboost", PARAMS).fit(rows[base], rows.y, sample_weight=rows.weight))
+    del train, counts
+
+    parts = []
+    for _, test, _ in states_2025(lambda f: {n: window_from_forecast(f, k) for n, k in
+                                             zip(NAMES, RUN_AGES, strict=True)}):
+        p = test[["region_fips", "block_start", "y"]].copy()
+        p["state"] = state(p.region_fips)
+        for name, (off, model) in fitted.items():
+            p[f"{OFFICIAL} ({name})"] = off.predict_proba(test[official])[:, 1]
+            p[f"model ({name})"] = five_run_mean(model, test, base)
+        parts.append(p)
+        del test
+    pred = pd.concat(parts, ignore_index=True)
     pred.to_parquet(data.ROOT / "data" / "cache" / "midwest_2025_predictions.parquet", index=False)
 
     onsets = onset_hours(2025)
     onsets["state"] = state(onsets.region_fips.astype(str))
     first = storm_day(pd.Series([pd.Timestamp("2024-12-31")]))[0]
     results = []
-    for group, states in GROUPS.items():
+    for group, states in groups.items():
         p = pred[pred.state.isin(states)]
         o = onsets[onsets.state.isin(states)]
+        if p.empty or o.empty or p.y.sum() == 0:
+            print(f"{group}: nothing to score, skipped", flush=True)
+            continue
         row_day = ((storm_day(p.block_start) - first).dt.days).to_numpy()
         onset_day = ((storm_day(o.hour) - first).dt.days).to_numpy()
         counts, _ = day_weights(np.arange(max(row_day.max(), onset_day.max()) + 1))
-        for name in TRAININGS:
+        for name in trainings:
             auc = {k: pr_auc_resamples(p.y, p[f"{k} ({name})"], row_day, counts) for k in (OFFICIAL, "model")}
             r = {"scored_on": group, "trained_on": name, "counties": p.region_fips.nunique(),
                  "new_outages": len(o)}

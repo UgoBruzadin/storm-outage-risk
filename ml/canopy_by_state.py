@@ -28,9 +28,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seeds", default="0,1,2")
     seeds = [int(s) for s in parser.parse_args().seeds.split(",")]
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [VAL_YEAR], LEAD)
-    df["state"] = df.region_fips.str[:2].map(data.STATES)
-    train, val = df[df.year.isin(TRAIN_YEARS)], df[df.year == VAL_YEAR]
+    # training sampled (data.sampled_years); the validation year scored in full, a state at a time
+    train = data.sampled_years(THRESHOLD_PCT, TRAIN_YEARS, LEAD)
+    train["state"] = train.region_fips.astype(str).str[:2].map(data.STATES)
     rows = []
 
     def record(setup, state, spec, seed, y, p):
@@ -40,17 +40,25 @@ def main():
         print(rows[-1], flush=True)
         pd.DataFrame(rows).to_csv(OUT, index=False)
 
+    pooled = {}
     for spec_name, spec in SPECS.items():
         features = data.resolve_features(spec)
         for seed in seeds:
-            params = PARAMS | {"random_state": seed}
-            pooled = models.build("xgboost", params).fit(train[features], train["y"])
-            for state, v in val.groupby("state"):
-                record("pooled", state, spec_name, seed, v["y"].to_numpy(), pooled.predict_proba(v[features])[:, 1])
-            for state in sorted(val.state.unique()):
-                t, v = train[train.state == state], val[val.state == state]
-                fitted = models.build("xgboost", params).fit(t[features], t["y"])
+            pooled[spec_name, seed] = models.build("xgboost", PARAMS | {"random_state": seed}).fit(
+                train[features], train["y"], sample_weight=train["weight"])
+            print(f"pooled model: {spec_name}, seed {seed}", flush=True)
+    for fips, v in data.state_rows(THRESHOLD_PCT, VAL_YEAR, LEAD):
+        state = data.STATES.get(fips, fips)
+        t = train[train.state == state]
+        for spec_name, spec in SPECS.items():
+            features = data.resolve_features(spec)
+            for seed in seeds:
+                record("pooled", state, spec_name, seed, v["y"].to_numpy(),
+                       pooled[spec_name, seed].predict_proba(v[features])[:, 1])
+                fitted = models.build("xgboost", PARAMS | {"random_state": seed}).fit(
+                    t[features], t["y"], sample_weight=t["weight"])
                 record("state", state, spec_name, seed, v["y"].to_numpy(), fitted.predict_proba(v[features])[:, 1])
+        del v
 
     out = pd.DataFrame(rows)
     table = out.pivot_table(index=["setup", "state", "seed"], columns="features", values="onset_pr_auc")

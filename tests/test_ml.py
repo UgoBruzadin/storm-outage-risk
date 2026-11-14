@@ -209,6 +209,117 @@ def test_load_reads_only_the_years_asked_for(tmp_path):
     assert first_2022["prev_block_pct_out"] == 2.0          # the last 2021 block, outside the years asked for
 
 
+def _hourly_warehouse(path, regions=("29001", "29003", "17001"), start="2023-12-31", end="2025-01-02"):
+    """A tiny moving-window warehouse: mart_study__region_1h, coverage and neighbour pairs, ~3% outages."""
+    con = duckdb.connect(str(path))
+    for schema in ("marts", "intermediate"):
+        con.sql(f"CREATE SCHEMA {schema}")
+    leads = ", ".join(f"fut AS fut_max_pct_{x}, 0.0 AS start_pct_{x}" for x in data.HOURLY_LEADS)
+    con.sql(f"""
+        CREATE TABLE marts.mart_study__region_1h AS
+        SELECT *, {leads} FROM (
+            SELECT r AS region_fips, t AS hour, hour(t) AS hour_utc, true AS has_weather, 1000 AS customers,
+                   0.0 AS pct_out, 0.0 AS pct_out_now, (hash(r || t::VARCHAR) % 100)::DOUBLE / 10 AS gust_max_ms,
+                   1.0 AS precip_sum_mm, 5.0 AS shear_0_6km_max_ms, 100.0 AS cape_max_jkg, 8.0 AS wind10_max_ms,
+                   0.0 AS precip_prev_72h_mm, (hash(t::VARCHAR || r) % 100 < 3) AS warn_svr, false AS warn_tor,
+                   false AS warn_wind, false AS warn_winter, 1.0 AS spc_cat,
+                   CASE WHEN hash(r || '|' || t::VARCHAR) % 100 < 3 THEN 9.0 ELSE 0.0 END AS fut
+            FROM (SELECT unnest({list(regions)}) AS r),
+                 range(TIMESTAMP '{start}', TIMESTAMP '{end}', INTERVAL 1 HOUR) AS g(t))
+    """)
+    con.sql("""CREATE TABLE marts.mart_study__region_coverage AS
+               SELECT DISTINCT region_fips, year(hour) AS year, true AS tracked FROM marts.mart_study__region_1h""")
+    con.sql(f"""CREATE TABLE intermediate.int_study__region_neighbors AS
+                SELECT a.r AS region_fips, b.r AS neighbor_fips, true AS is_near, a.r < b.r AS is_upwind
+                FROM (SELECT unnest({list(regions)}) AS r) a, (SELECT unnest({list(regions)}) AS r) b
+                WHERE a.r <> b.r""")
+    con.close()
+    return path
+
+
+def test_sampling_keeps_every_outage_and_weights_add_up(tmp_path):
+    db = _hourly_warehouse(tmp_path / "w.duckdb")
+    full = data.load_hourly(5, [2024], 2, neighbors=False, db=db)
+    lean = data.load_hourly(5, [2024], 2, neighbors=False, db=db, neg_frac=0.1)
+    assert lean.y.sum() == full.y.sum() and (lean[lean.y == 1].weight == 1).all()      # every outage, weight 1
+    assert lean.weight.sum() == pytest.approx(len(full), rel=0.1)                       # stands for the full table
+    assert len(lean) < 0.2 * len(full)
+    again = data.load_hourly(5, [2024], 2, neighbors=False, db=db, neg_frac=0.1)
+    assert lean[["region_fips", "block_start"]].equals(again[["region_fips", "block_start"]])   # same rows every run
+    kept = set(zip(lean.region_fips, lean.block_start, strict=True))
+    assert kept <= set(zip(full.region_fips, full.block_start, strict=True))
+    both = data.load_hourly(5, [2024], 2, neighbors=False, db=db, neg_frac=0.1, sample_years=[])
+    assert len(both) == len(full) and (both.weight == 1).all()                         # a scored year: never sampled
+
+
+def test_hourly_counts_fit_the_same_rate_table_as_the_rows(tmp_path):
+    db = _hourly_warehouse(tmp_path / "w.duckdb")
+    rows = data.load_hourly(5, [2024], 2, neighbors=False, db=db)
+    official = models.NEEDS_COLUMNS["official"]
+    counts = data.hourly_counts(5, [2024], 2, official, db=db)
+    assert counts.weight.sum() == len(rows)
+    from_rows = models.build("official").fit(rows[official], rows.y)
+    from_counts = models.build("official").fit(counts[official], counts.y, sample_weight=counts.weight)
+    assert np.allclose(from_rows.predict_proba(rows[official]), from_counts.predict_proba(rows[official]))
+
+
+def test_weighted_rate_table_equals_repeated_rows():
+    X = pd.DataFrame({"g": [0, 0, 1, 1]})
+    weighted = models.RateBaseline(by=("g",)).fit(X, [1, 0, 1, 0], sample_weight=[1, 3, 2, 2])
+    expanded = pd.DataFrame({"g": [0, 0, 0, 0, 1, 1, 1, 1]})
+    repeated = models.RateBaseline(by=("g",)).fit(expanded, [1, 0, 0, 0, 1, 1, 0, 0])
+    assert np.allclose(weighted.predict_proba(X), repeated.predict_proba(X))
+    assert weighted.overall_ == pytest.approx(repeated.overall_)
+
+
+def test_neighbour_cache_by_year_matches_one_pass_and_rebuilds(tmp_path):
+    db = _hourly_warehouse(tmp_path / "w.duckdb")
+    cache = tmp_path / "nb"
+    by_year = data.neighbor_features(db=db, cache=cache)
+    folder = data._neighbor_cache_dir(db, cache)
+    assert sorted(p.stem for p in folder.glob("*.parquet")) == ["2023", "2024", "2025"]
+    con = duckdb.connect(str(db), read_only=True)
+    base = con.sql("SELECT region_fips, hour, gust_max_ms FROM marts.mart_study__region_1h").df()
+    con.close()
+    # one pass by hand: the strongest gust among each region's near neighbours, every hour
+    grid = base.pivot(index="hour", columns="region_fips", values="gust_max_ms")
+    expect = pd.DataFrame({r: grid.drop(columns=r).max(axis=1) for r in grid.columns}).stack()
+    expect = expect.rename("want").rename_axis(["hour", "region_fips"]).reset_index()
+    got = by_year.merge(expect, on=["region_fips", "hour"])
+    assert len(got) == len(base) and np.allclose(got.near_gust_max_ms, got.want)
+    only = data.neighbor_features(db=db, cache=cache, years=[2024], states=["17"])
+    assert set(only.region_fips) == {"17001"} and set(only.hour.dt.year) == {2024}
+    import os
+    os.utime(db, (1, 1))                                       # the warehouse "changed": the cache is rebuilt
+    assert not data._neighbor_cache_valid(folder, db)
+    data.neighbor_features(db=db, cache=cache, years=[2024])
+    assert data._neighbor_cache_valid(folder, db)
+
+
+def test_fast_bootstrap_equals_the_direct_one():
+    from ml.uncertainty import day_weights, pr_auc_resamples, pr_auc_resamples_slow
+    rng = np.random.default_rng(2)
+    p = rng.random(20_000).round(3)                    # many ties
+    y = (rng.random(20_000) < p * 0.05).astype(int)
+    days = rng.integers(0, 40, 20_000)
+    counts, _ = day_weights(np.arange(40), n=30)
+    slow = pr_auc_resamples_slow(y, p, days, counts)
+    assert np.allclose(pr_auc_resamples(y, p, days, counts), slow, rtol=1e-12, atol=0)
+    assert np.allclose(pr_auc_resamples(y, p, days, counts, block=7), slow, rtol=1e-12, atol=0)   # across blocks
+
+
+def test_cache_returns_the_same_table_and_follows_the_warehouse(tmp_path):
+    db = _hourly_warehouse(tmp_path / "w.duckdb")
+    first = data.load_hourly(5, [2024], 2, neighbors=False, db=db)
+    again = data.load_hourly(5, [2024], 2, neighbors=False, db=db)              # read back from the cache
+    pd.testing.assert_frame_equal(first, again)
+    files = list(data.TABLE_CACHE.glob("hourly/*.parquet"))
+    import os
+    os.utime(db, (1, 1))                                                        # a rebuilt warehouse
+    data.load_hourly(5, [2024], 2, neighbors=False, db=db)
+    assert len(list(data.TABLE_CACHE.glob("hourly/*.parquet"))) == len(files) + 1   # built again, not reused
+
+
 def test_bootstrap_pr_auc_matches_sklearn_with_day_weights():
     from sklearn.metrics import average_precision_score
 

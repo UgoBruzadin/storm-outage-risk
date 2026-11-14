@@ -21,20 +21,24 @@ import numpy as np
 import pandas as pd
 
 from ml import data, models
-from ml.forecast_ensemble import RUN_AGES
 from ml.forecast_test import (
     EQUAL_SHARE,
     LEAD,
+    RUN_NAMES,
     WINDOW,
-    actual_hourly,
-    forecasts,
-    tables,
-    window_from_forecast,
-    window_from_hourly,
-    with_version,
+    fit_versions,
+    five_run_mean,
+    five_runs,
+    official_counts,
+    predict_five_runs,
+    states_2025,
+    train_rows,
+)
+from ml.forecast_test import (
+    TRAIN_YEARS as TEST_TRAIN_YEARS,
 )
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
+from ml.moving_window import FEATURES, PARAMS, caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
 PLACE_DIR = data.ROOT / "data" / "raw" / "place"
@@ -64,12 +68,13 @@ FOLDS = 5
 TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
 RESULTS = data.ROOT / "ml" / "results"
 SELECT_OUT = RESULTS / "place_extra_select.csv"
-NAMES = [f"run {k} h before" for k in RUN_AGES]
+NAMES = RUN_NAMES                                 # the five runs (other scripts import these two from here)
+__all__ = ["NAMES", "five_run_mean"]
 
 
 def add_place(df):
-    """Join the new county inputs onto the modeling rows."""
-    df = df.copy()
+    """Join the new county inputs onto the modeling rows. The files cover the states they were fetched for
+    (ingest/fetch_<source>.py); counties outside them get NaN."""
     df["region_fips"] = df.region_fips.astype(str)
     for name in FILES:
         df = df.merge(pd.read_csv(PLACE_DIR / f"{name}.csv", dtype={"region_fips": str}), on="region_fips", how="left")
@@ -87,28 +92,10 @@ def features_for(base, group):
     return base + [c for c in extra if c not in base]
 
 
-def validation_tables():
-    """Train rows 2020-2023 with actual window weather, and 2024 rows with each run's window weather."""
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [VAL_YEAR], LEAD)
-    df["region_fips"] = df.region_fips.astype(str)
-    df = df.merge(window_from_hourly(actual_hourly(TRAIN_YEARS + [VAL_YEAR])), on=["region_fips", "block_start"],
-                  how="left")
-    train, val = df[df.year.isin(TRAIN_YEARS)], df[df.year == VAL_YEAR].copy()
-    f = forecasts(f"{VAL_YEAR - 1}-12-31", f"{VAL_YEAR}-12-31")
-    for name, k in zip(NAMES, RUN_AGES, strict=True):
-        w = window_from_forecast(f, k).rename(columns={c: f"{c}|{name}" for c in WINDOW})
-        val = val.merge(w, on=["region_fips", "block_start"], how="left")
-    keep = val[[f"win_gust_max_ms|{n}" for n in NAMES]].notna().all(axis=1)
-    print(f"2024 decisions with all five runs: {keep.sum():,} of {len(val):,}", flush=True)
-    return add_place(train), add_place(val[keep])
-
-
-def five_run_mean(model, rows, features):
-    return np.mean([model.predict_proba(with_version(rows, features, n))[:, 1] for n in NAMES], axis=0)
-
-
 def select():
-    train, val = validation_tables()
+    """Group by group (it resumes): the seed models and the held-out-county models are fitted on the sampled
+    2020-2023 rows, then 2024 (every decision with all five runs) is scored in one pass over the states."""
+    train = add_place(train_rows(TRAIN_YEARS))
     base = data.resolve_features(FEATURES) + WINDOW
     rows = pd.read_csv(SELECT_OUT).to_dict("records") if SELECT_OUT.exists() else []
     done = {(r["group"], r["setup"], r["seed"]) for r in rows}
@@ -121,24 +108,41 @@ def select():
         pd.DataFrame(rows).to_csv(SELECT_OUT, index=False)
 
     # sorted by reversed code, so neighbouring counties land in different folds
-    regions = sorted(val.region_fips.unique(), key=lambda fips: fips[::-1])
+    regions = sorted(train.region_fips.unique(), key=lambda fips: fips[::-1])
     fold_of = {fips: i % FOLDS for i, fips in enumerate(regions)}
     for group in [BASE, *GROUPS, ALL]:
         features = features_for(base, group)
-        for seed in SEEDS:
-            if (group, "2024", seed) in done:
-                continue
-            m = models.build("xgboost", PARAMS | {"random_state": seed}).fit(train[features], train["y"])
-            record(group, "2024", seed, val["y"].to_numpy(), five_run_mean(m, val, features))
-        if (group, "held-out counties", 0) not in done:
-            p = pd.Series(0.0, index=val.index)
+        seeds = [s for s in SEEDS if (group, "2024", s) not in done]
+        held_out = (group, "held-out counties", 0) not in done
+        if not seeds and not held_out:
+            continue
+        by_seed = {s: models.build("xgboost", PARAMS | {"random_state": s}).fit(
+            train[features], train.y, sample_weight=train.weight) for s in seeds}
+        by_fold = {}
+        if held_out:
             for fold in range(FOLDS):
-                held = {r for r, k in fold_of.items() if k == fold}
-                t = train[~train.region_fips.isin(held)]
-                v = val[val.region_fips.isin(held)]
-                m = models.build("xgboost", PARAMS | {"random_state": 0}).fit(t[features], t["y"])
-                p[v.index] = five_run_mean(m, v, features)
-            record(group, "held-out counties", 0, val["y"].to_numpy(), p.to_numpy())
+                t = train[train.region_fips.map(fold_of) != fold]
+                by_fold[fold] = models.build("xgboost", PARAMS | {"random_state": 0}).fit(
+                    t[features], t.y, sample_weight=t.weight)
+        ys, ps, held = [], {s: [] for s in seeds}, []
+        for _, val, _ in states_2025(five_runs, year=VAL_YEAR, require_actual=False):
+            val = add_place(val)
+            ys.append(val.y.to_numpy())
+            for s, m in by_seed.items():
+                ps[s].append(five_run_mean(m, val, features))
+            if held_out:
+                fold = val.region_fips.map(fold_of).fillna(-1).to_numpy()
+                p = np.zeros(len(val))
+                for k, m in by_fold.items():
+                    if (fold == k).any():
+                        p[fold == k] = five_run_mean(m, val[fold == k], features)
+                held.append(p)
+            del val
+        y = np.concatenate(ys)
+        for s in seeds:
+            record(group, "2024", s, y, np.concatenate(ps[s]))
+        if held_out:
+            record(group, "held-out counties", 0, y, np.concatenate(held))
     print(verdicts().round(4).to_string(), flush=True)
 
 
@@ -160,28 +164,19 @@ def test():
     kept = [g for g in GROUPS if v.loc[g, "kept"]]
     print("kept:", kept, flush=True)
     kept_inputs = list(dict.fromkeys(c for g in kept for c in GROUPS[g]))
-    f = forecasts("2024-12-31", "2025-12-31")
-    train, _, _, test_rows = tables({n: window_from_forecast(f, k) for n, k in zip(NAMES, RUN_AGES, strict=True)})
-    train, test_rows = add_place(train), add_place(test_rows)
     base = data.resolve_features(FEATURES) + WINDOW
     official = "warnings + outlook"
     versions = {official: models.NEEDS_COLUMNS["official"], BASE: base}
     if kept:
         versions["kept groups"] = base + [c for c in kept_inputs if c not in base]
     versions[ALL] = features_for(base, ALL)
-    pred = test_rows[["region_fips", "block_start", "y"]].copy()
-    seed_scores = {}
-    for label, features in versions.items():
-        if label == official:
-            fitted = models.build("official").fit(train[features], train["y"])
-            pred[label] = fitted.predict_proba(test_rows[features])[:, 1]
-        else:
-            fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
-            pred[label] = five_run_mean(fitted, test_rows, features)
-            seed_scores[label] = [
-                score(pred.y, five_run_mean(models.build("xgboost", PARAMS | {"random_state": s}).fit(
-                    train[features], train["y"]), test_rows, features))["pr_auc"] for s in range(1, 5)]
-        print(label, flush=True)
+    train = add_place(train_rows(TEST_TRAIN_YEARS))
+    fitted = fit_versions({k: ("official" if k == official else "xgboost", f) for k, f in versions.items()},
+                          train, official_counts()[0], seeds=(0, 1, 2, 3, 4))
+    del train
+    pred = predict_five_runs(fitted, add=add_place)
+    seed_scores = {label: [score(pred.y, pred[f"{label}|seed{s}"])["pr_auc"] for s in range(1, 5)]
+                   for label in versions if label != official}
     onsets = onset_hours(2025)
     first = storm_day(pd.Series([pd.Timestamp("2024-12-31")]))[0]
     row_day = ((storm_day(pred.block_start) - first).dt.days).to_numpy()

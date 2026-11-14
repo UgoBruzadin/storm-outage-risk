@@ -34,10 +34,9 @@ from ml.forecast_test import (
     TEST_YEAR,
     TRAIN_YEARS,
     WINDOW,
-    actual_hourly,
-    forecasts,
+    add_actual_window,
+    states_2025,
     window_from_forecast,
-    window_from_hourly,
     with_version,
 )
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
@@ -55,23 +54,30 @@ def newly_out(df):
     return ((df.fut_max_pct - now) / (100 - now).clip(lower=EPS)).clip(0, 1)
 
 
-def load(states):
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [TEST_YEAR], LEAD, onsets_only=False, states=states)
-    df["region_fips"] = df.region_fips.astype(str)
-    df = df[df.pct_out_now.notna()]
+def with_target(df):
+    df = df[df.pct_out_now.notna()].copy()
     df["target"] = newly_out(df)
-    print(f"{len(df):,} decisions, {df.region_fips.nunique()} counties", flush=True)
-    actual = window_from_hourly(actual_hourly(TRAIN_YEARS + [TEST_YEAR]))
-    df = df.merge(actual, on=["region_fips", "block_start"], how="left")
-    train, test = df[df.year.isin(TRAIN_YEARS)], df[df.year == TEST_YEAR].copy()
-    f = forecasts(f"{TEST_YEAR - 1}-12-31", f"{TEST_YEAR}-12-31")
-    for name, age in zip(NAMES, RUN_AGES, strict=True):
-        w = window_from_forecast(f, age)
-        test = test.merge(w.rename(columns={c: f"{c}|{name}" for c in WINDOW}), on=["region_fips", "block_start"],
-                          how="left")
-    keep = test[[f"win_gust_max_ms|{n}" for n in NAMES]].notna().all(axis=1)
-    print(f"{TEST_YEAR} decisions with all five runs: {keep.sum():,} of {len(test):,}", flush=True)
-    return train, test[keep]
+    return df
+
+
+def load_train(states):
+    """Training decisions, every hour (outages included), sampled like the headline's: every window reaching the
+    5% line and data.NEG_FRAC of the others, weighted back. Unbiased for the share too, since a kept row stands
+    for 1 / NEG_FRAC rows like it."""
+    train = data.sampled_years(THRESHOLD_PCT, TRAIN_YEARS, LEAD, onsets_only=False, states=states,
+                               add=lambda df, y: with_target(add_actual_window(df, y)))
+    print(f"{len(train):,} training decisions standing for {train.weight.sum():,.0f}, "
+          f"{train.region_fips.nunique()} counties", flush=True)
+    return train
+
+
+def test_states(states):
+    """2025, every decision with all five runs, one state at a time."""
+    keep = set(states) if states else None
+    for s, _, shown in states_2025(lambda f: {n: window_from_forecast(f, k) for n, k in
+                                              zip(NAMES, RUN_AGES, strict=True)}, onsets=False, every=True):
+        if keep is None or s in keep:
+            yield with_target(shown)
 
 
 def cross_entropy(y, p):
@@ -85,21 +91,31 @@ def main():
     a = ap.parse_args()
     fips = {v: k for k, v in data.STATE_ABBR.items()}
     states = [fips[s] for s in a.states.split(",")] if a.states else None
-    train, test = load(states)
+    train = load_train(states)
     out, calibration = OUT, CALIBRATION
     if states:                                  # a quick run never overwrites the full one
         out, calibration = (p.with_name(p.stem + "_" + a.states.replace(",", "_") + ".csv") for p in (OUT, CALIBRATION))
 
     features = data.resolve_features(FEATURES) + WINDOW
-    pred = {}
-    usual = models.RateBaseline(by=("region_fips", "month")).fit(train, train.target)
-    pred["usual"] = usual.predict_proba(test)[:, 1]
-    official = models.RateBaseline(by=tuple(models.NEEDS_COLUMNS["official"])).fit(train, train.target)
-    pred["warnings"] = official.predict_proba(test)[:, 1]
-    model = XGBRegressor(objective="reg:logistic", n_jobs=8, random_state=0, **PARAMS)
-    model.fit(train[features], train.target)
-    pred["model"] = np.mean([model.predict(with_version(test, features, n)) for n in NAMES], axis=0)
+    # the baselines are weighted means over the sampled rows: estimates of the full table's means
+    usual = models.RateBaseline(by=("region_fips", "month")).fit(train, train.target, sample_weight=train.weight)
+    official = models.RateBaseline(by=tuple(models.NEEDS_COLUMNS["official"])).fit(
+        train, train.target, sample_weight=train.weight)
+    model = XGBRegressor(objective="reg:logistic", n_jobs=8, random_state=0, device=models.XGB_DEVICE, **PARAMS)
+    model.fit(train[features], train.target, sample_weight=train.weight)
+    del train
     print("trained", flush=True)
+
+    parts = []
+    for test in test_states(states):
+        parts.append(pd.DataFrame({
+            "block_start": test.block_start.to_numpy(), "target": test.target.to_numpy(),
+            "usual": usual.predict_proba(test)[:, 1], "warnings": official.predict_proba(test)[:, 1],
+            "model": np.mean([model.predict(with_version(test, features, n)) for n in NAMES], axis=0)}))
+        del test
+    test = pd.concat(parts, ignore_index=True)
+    print(f"{TEST_YEAR} decisions with all five runs: {len(test):,}", flush=True)
+    pred = {k: test[k].to_numpy() for k in ("usual", "warnings", "model")}
 
     y = test.target.to_numpy()
     first = storm_day(pd.Series([pd.Timestamp(f"{TEST_YEAR - 1}-12-31")]))[0]

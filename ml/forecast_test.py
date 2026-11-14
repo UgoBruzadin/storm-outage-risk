@@ -24,13 +24,16 @@ Writes ml/results/forecast_test_2025.csv and the predictions to data/cache/. Nee
 ingest/fetch_hrrr_forecast.py for 2024-12-31 .. 2025-12-31.
 """
 import argparse
+import json
 
 import duckdb
 import numpy as np
 import pandas as pd
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 
 from ml import data, models
-from ml.metrics import score
+from ml.metrics import score, weighted_quantile
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
@@ -39,6 +42,7 @@ RUN_AGE = 2                                   # hours between a run's issue time
 TRAIN_YEARS, VAL_YEAR, TEST_YEAR = [2020, 2021, 2022, 2023, 2024], 2024, 2025
 EQUAL_SHARE = 0.0075                          # the forecast-ready model's alert share at its frozen level
 FCST_DIR = data.ROOT / "data" / "raw" / "weather" / "hrrr_fcst"
+FCST_BY_STATE = data.ROOT / "data" / "cache" / "hrrr_fcst_by_state"
 PREDICTIONS = data.ROOT / "data" / "cache" / "forecast_test_2025_predictions.parquet"
 HOURLY = ["gust_ms", "wind10_ms", "wind850_ms", "shear_ms", "cape_jkg", "precip_mm", "temp_c",
           "freezing_level_m", "icing", "hail"]
@@ -89,24 +93,71 @@ def window_from_hourly(hw):
     return pd.concat(parts).rename_axis("block_start").reset_index()
 
 
-def actual_hourly(years):
+def actual_hourly(years, states=None, until=None):
+    """The weather each hour turned out to be, from the first of `years` through the year after the last.
+    states: only these states' regions; until: stop before this hour (a window needs only 7 hours past a year)."""
     con = duckdb.connect(str(data.DB), read_only=True)
     hw = con.sql(f"""
         SELECT region_fips, hour, gust_ms, wind10_ms, wind850_ms, cape_jkg, precip_mm, temp_c,
                freezing_level_m, u10, v10, u500, v500
         FROM staging.stg_hrrr__hourly
         WHERE year(hour) BETWEEN {min(years)} AND {max(years) + 1}
+          {f"AND hour < TIMESTAMP '{until}'" if until else ""}
+          {"AND left(region_fips, 2) IN (" + ", ".join(f"'{s}'" for s in states) + ")" if states else ""}
     """).df()
     con.close()
     return hw
 
 
-def forecasts(start, end):
+def forecasts(start, end, states=None, source=FCST_DIR):
+    """HRRR runs as issued from `start` to `end`. states: only these states' regions, read from a copy of the
+    daily files split by state (built once), so one state's year of runs is read without the whole country's.
+    source: the folder of daily files (default the point forecasts; forecast_training reads hrrr_grib_area)."""
     days = pd.date_range(start, end, freq="D")
-    f = pd.concat([pd.read_parquet(FCST_DIR / f"{d:%Y%m%d}.parquet") for d in days], ignore_index=True)
+    if states is None:
+        f = pd.concat([pd.read_parquet(source / f"{d:%Y%m%d}.parquet") for d in days], ignore_index=True)
+    else:
+        folder = _forecasts_by_state(days, source)
+        parts = [pd.read_parquet(folder / f"{s}.parquet") for s in states if (folder / f"{s}.parquet").exists()]
+        f = (pd.concat(parts, ignore_index=True) if parts
+             else pd.read_parquet(next(source / f"{d:%Y%m%d}.parquet" for d in days
+                                       if (source / f"{d:%Y%m%d}.parquet").exists())).head(0))
     f["wind10_ms"] = np.hypot(f.u10, f.v10)
     f["wind850_ms"] = np.hypot(f.u850, f.v850)
     return f
+
+
+def _forecasts_by_state(days, source=FCST_DIR):
+    """data/cache/<source>_by_state/<first>_<last>/<state>.parquet: the daily forecast files rewritten one file per
+    state, in one pass over the days. Rebuilt when any daily file changes (size or time); days without a file
+    (runs missing from the archive) are left out."""
+    folder = (FCST_BY_STATE if source == FCST_DIR else FCST_BY_STATE.with_name(f"{source.name}_by_state")) \
+        / f"{days[0]:%Y%m%d}_{days[-1]:%Y%m%d}"
+    sources = [p for p in (source / f"{d:%Y%m%d}.parquet" for d in days) if p.exists()]
+    stamp = {p.name: [p.stat().st_size, p.stat().st_mtime] for p in sources}
+    marker = folder / "_built_from.json"
+    if marker.exists() and json.loads(marker.read_text()) == stamp:
+        return folder
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.glob("*.parquet*"):
+        old.unlink()
+    marker.unlink(missing_ok=True)
+    writers = {}
+    for i, p in enumerate(sources):
+        t = pq.read_table(p)
+        state = pc.utf8_slice_codeunits(t["region_fips"], 0, 2)
+        for s in pc.unique(state).to_pylist():
+            part = t.filter(pc.equal(state, s))
+            if s not in writers:
+                writers[s] = pq.ParquetWriter(folder / f"{s}.parquet.tmp", part.schema)
+            writers[s].write_table(part.cast(writers[s].schema))
+        if (i + 1) % 50 == 0:
+            print(f"forecasts by state: {i + 1}/{len(sources)} days", flush=True)
+    for s, w in writers.items():
+        w.close()
+        (folder / f"{s}.parquet.tmp").rename(folder / f"{s}.parquet")
+    marker.write_text(json.dumps(stamp))
+    return folder
 
 
 def window_from_forecast(f, run_age=RUN_AGE):
@@ -119,23 +170,87 @@ def window_from_forecast(f, run_age=RUN_AGE):
     return s
 
 
-def tables(versions):
-    """Train, validation and 2025 rows, with actual window weather, and each version's window weather in
-    the 2025 rows as `<feature>|<version>`; only 2025 decisions that every version has are kept.
-    versions: {name: window table} from window_from_hourly / window_from_forecast."""
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [TEST_YEAR], LEAD)
+def actual_window(year, states=None):
+    """The window weather that actually happened, for every decision hour of `year` and every region: built once
+    per year and lead for the whole country (data.cached) and read back for the states asked for."""
+    def build():
+        w = window_from_hourly(actual_hourly([year], until=f"{year + 1}-01-02"))
+        w = w[w.block_start.dt.year == year]
+        w.insert(0, "state", w.region_fips.str[:2])
+        return data.shrink(w.reset_index(drop=True))
+    w = data.cached("actual_window", {"year": year, "lead": LEAD}, build, code_files=(data.__file__, __file__),
+                    filters=[("state", "in", list(states))] if states else None)
+    return w.drop(columns="state")
+
+
+def add_actual_window(df, year):
+    """One year's decisions + the window weather that actually happened (data.sampled_years' `add`)."""
     df["region_fips"] = df.region_fips.astype(str)
-    print("actual weather windows", flush=True)
-    actual = window_from_hourly(actual_hourly(TRAIN_YEARS + [TEST_YEAR]))
-    df = df.merge(actual, on=["region_fips", "block_start"], how="left")
-    train, val_train = df[df.year.isin(TRAIN_YEARS)], df[df.year < VAL_YEAR]
-    val, test = df[df.year == VAL_YEAR], df[df.year == TEST_YEAR].copy()
+    return df.merge(actual_window(year), on=["region_fips", "block_start"], how="left")
+
+
+def train_rows(years=TRAIN_YEARS, onsets_only=True):
+    """The training decisions with the window weather that actually happened, built one year at a time and
+    sampled (data.NEG_FRAC; the `weight` column restores the full table's totals): the whole country's training
+    years never have to be in memory at once."""
+    return data.sampled_years(THRESHOLD_PCT, years, LEAD, add=add_actual_window, onsets_only=onsets_only)
+
+
+def states_2025(make_versions, onsets=True, every=False, year=TEST_YEAR, require_actual=True):
+    """A scored year (2025 unless `year` says otherwise), one state at a time: yields (state, scored, shown).
+    `scored` = the onset decisions (as scored everywhere) that have every version's window weather and (if
+    require_actual) the actual one, `shown` = every decision with every version (for maps; None unless
+    every=True). Each version's window weather is in `<feature>|<version>`. Never sampled.
+    make_versions: forecasts -> {name: window table} (window_from_hourly / window_from_forecast)."""
+    for s in data.warehouse_states():
+        f = forecasts(f"{year - 1}-12-31", f"{year}-12-31", states=[s])
+        if f.empty:
+            print(f"{data.STATE_ABBR.get(s, s)}: no HRRR forecasts, skipped", flush=True)
+            continue
+        versions = make_versions(f)
+        del f
+        actual = actual_window(year, states=[s])
+        scored = shown = None
+        if onsets:
+            rows = data.load_hourly(THRESHOLD_PCT, [year], LEAD, states=[s], float32=True)
+            scored = with_windows(rows, actual, versions, require_actual=require_actual)
+            print(f"{data.STATE_ABBR.get(s, s)}: {year} decisions with every version: {len(scored):,} of "
+                  f"{len(rows):,}", flush=True)
+            if scored.empty:
+                continue
+        if every:
+            shown = with_windows(data.load_hourly(THRESHOLD_PCT, [year], LEAD, onsets_only=False, states=[s],
+                                                  float32=True), actual, versions, require_actual=False)
+        yield s, scored, shown
+
+
+def with_windows(rows, actual, versions, require_actual):
+    """Decisions + the actual window weather + each version's as `<feature>|<version>`, keeping the decisions
+    that have every version (and the actual weather, if require_actual)."""
+    rows["region_fips"] = rows.region_fips.astype(str)
+    rows = rows.merge(actual, on=["region_fips", "block_start"], how="left")
     for name, w in versions.items():
-        test = test.merge(w.rename(columns={c: f"{c}|{name}" for c in WINDOW}),
+        rows = rows.merge(w.rename(columns={c: f"{c}|{name}" for c in WINDOW}),
                           on=["region_fips", "block_start"], how="left")
-    keep = test[[f"win_gust_max_ms|{n}" for n in versions] + ["win_gust_max_ms"]].notna().all(axis=1)
-    print(f"2025 decisions with every version: {keep.sum():,} of {len(test):,}", flush=True)
-    return train, val_train, val, test[keep]
+    need = [f"win_gust_max_ms|{n}" for n in versions] + (["win_gust_max_ms"] if require_actual else [])
+    return rows[rows[need].notna().all(axis=1)].reset_index(drop=True)
+
+
+def fit_pair(model, features, train, counts=None, counts_val_train=None):
+    """The model on every training year, and on the years before VAL_YEAR with its alert level: the 99th
+    percentile of its VAL_YEAR probabilities (weighted, since VAL_YEAR's training rows are a sample).
+    A rate table ("official") is fitted on hourly_counts, the full table's counts, not on the sample."""
+    params = PARAMS if model == "xgboost" else None
+    val_train, val = train[train.year < VAL_YEAR], train[train.year == VAL_YEAR]
+    if counts is not None:
+        fitted = models.build(model, params).fit(counts[features], counts.y, sample_weight=counts.weight)
+        early = models.build(model, params).fit(counts_val_train[features], counts_val_train.y,
+                                                sample_weight=counts_val_train.weight)
+    else:
+        fitted = models.build(model, params).fit(train[features], train.y, sample_weight=train.weight)
+        early = models.build(model, params).fit(val_train[features], val_train.y, sample_weight=val_train.weight)
+    level = weighted_quantile(early.predict_proba(val[features])[:, 1], val.weight, 0.99)
+    return fitted, level
 
 
 def with_version(test, features, version):
@@ -146,30 +261,93 @@ def with_version(test, features, version):
     return x
 
 
+RUN_AGES = [2, 3, 4, 5, 6]               # the headline's five runs; forecast hours up to 6 + 2 + 5 = 13 (all stored)
+RUN_NAMES = [f"run {k} h before" for k in RUN_AGES]
+
+
+def five_runs(f):
+    """The window weather from each of the five runs issued 2-6 hours before a decision (states_2025's versions)."""
+    return {n: window_from_forecast(f, k) for n, k in zip(RUN_NAMES, RUN_AGES, strict=True)}
+
+
+def five_run_mean(model, rows, features):
+    """The headline's probability: the model fed each of the five runs in turn, averaged."""
+    return np.mean([model.predict_proba(with_version(rows, features, n))[:, 1] for n in RUN_NAMES], axis=0)
+
+
+def fit_versions(specs, train, counts, seeds=(0,)):
+    """specs: {label: (model, features)} -> {label: (fitted, features)}. XGBoost on the sampled training rows with
+    their weights; a rate table ("official") on hourly_counts. More seeds add "<label>|seed<s>" entries."""
+    out = {}
+    for label, (model, features) in specs.items():
+        if model == "official":
+            out[label] = (models.build("official").fit(counts[features], counts.y, sample_weight=counts.weight),
+                          features)
+            continue
+        for s in seeds:
+            fitted = models.build(model, PARAMS | {"random_state": s}).fit(train[features], train.y,
+                                                                            sample_weight=train.weight)
+            out[label if s == seeds[0] else f"{label}|seed{s}"] = (fitted, features)
+        print(f"fitted {label}", flush=True)
+    return out
+
+
+def predict_five_runs(fitted, year=TEST_YEAR, add=None, require_actual=True):
+    """Each fitted version's probability for every scored decision of `year`, a state at a time: the mean over the
+    five runs for a model with window weather, its plain probability otherwise. add(rows) -> rows joins more
+    columns onto each state's rows first (place inputs)."""
+    parts = []
+    for _, rows, _ in states_2025(five_runs, year=year, require_actual=require_actual):
+        if add is not None:
+            rows = add(rows)
+        out = rows[["region_fips", "block_start", "y"]].copy()
+        for label, (m, features) in fitted.items():
+            out[label] = (five_run_mean(m, rows, features) if WINDOW[0] in features
+                          else m.predict_proba(rows[features])[:, 1])
+        parts.append(out)
+        del rows
+    return pd.concat(parts, ignore_index=True)
+
+
+def official_counts():
+    """The warnings + outlook rate table's counts over the full training table, and over the years before VAL_YEAR."""
+    official = models.NEEDS_COLUMNS["official"]
+    return (data.hourly_counts(THRESHOLD_PCT, TRAIN_YEARS, LEAD, official),
+            data.hourly_counts(THRESHOLD_PCT, [y for y in TRAIN_YEARS if y < VAL_YEAR], LEAD, official))
+
+
 def predict():
     """Every version's 2025 probabilities on the same decisions, and each one's alert level fixed on 2024."""
-    f = forecasts(f"{TEST_YEAR - 1}-12-31", f"{TEST_YEAR}-12-31")
-    train, val_train, val, test = tables({
-        "1 h fcst": window_from_hourly(f[f.fhour == 1].drop(columns=["run", "fhour"])),
-        "forecast": window_from_forecast(f)})
+    train = train_rows()
     base = data.resolve_features(FEATURES)
     official = models.NEEDS_COLUMNS["official"]
-
-    out = test[["region_fips", "block_start", "y"]].copy()
-    levels = {}
+    counts, counts_early = official_counts()
+    specs, levels = [], {}
     for label, model, features, versions in (
         ("warnings + outlook", "official", official, ["-"]),
         ("forecast-ready", "xgboost", base, ["-"]),
         ("+ window weather", "xgboost", base + WINDOW, ["actual", "1 h fcst", "forecast"]),
     ):
-        params = PARAMS if model == "xgboost" else None
-        fitted = models.build(model, params).fit(train[features], train["y"])
-        level = pd.Series(models.build(model, params).fit(val_train[features], val_train["y"])
-                          .predict_proba(val[features])[:, 1]).quantile(0.99)
+        fitted, level = fit_pair(model, features, train, *((counts, counts_early) if model == "official" else ()))
         for version in versions:
             name = label if version == "-" else f"{label}: {version}"
-            out[name], levels[name] = fitted.predict_proba(with_version(test, features, version))[:, 1], level
-            print(name, flush=True)
+            specs.append((name, fitted, features, version))
+            levels[name] = level
+        print(f"fitted {label}", flush=True)
+    del train
+
+    def versions(f):
+        return {"1 h fcst": window_from_hourly(f[f.fhour == 1].drop(columns=["run", "fhour"])),
+                "forecast": window_from_forecast(f)}
+
+    parts = []
+    for _, test, _ in states_2025(versions):
+        out = test[["region_fips", "block_start", "y"]].copy()
+        for name, fitted, features, version in specs:
+            out[name] = fitted.predict_proba(with_version(test, features, version))[:, 1]
+        parts.append(out)
+        del test
+    out = pd.concat(parts, ignore_index=True)
     out.to_parquet(PREDICTIONS, index=False)
     pd.Series(levels).to_json(PREDICTIONS.with_suffix(".levels.json"))
     return out, levels

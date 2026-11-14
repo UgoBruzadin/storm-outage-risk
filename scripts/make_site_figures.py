@@ -360,17 +360,30 @@ def canopy_effect():
             for state, e in effect}
 
 
+def nums(values, digits):
+    """Per-county numbers for story.json, rounded; null where a county has no value (no outage data, no census
+    match), never NaN, which isn't valid JSON."""
+    return [None if pd.isna(v) or not np.isfinite(v) else (round(float(v)) if digits == 0 else round(float(v), digits))
+            for v in values]
+
+
 def place_data(canopy):
     """Each county's census numbers for the trees slide, and each one's correlation with the storm hit rate per state.
     Housing density and customers span orders of magnitude, so both are correlated on a log scale, as they're mapped."""
     values = {"homes": canopy.share_homes_pre1960, "density": np.log10(canopy.housing_per_km2),
               "customers": np.log10(canopy.customers)}
-    return {"homes": [round(float(v), 3) for v in canopy.share_homes_pre1960],
-            "density": [round(float(v), 1) for v in canopy.housing_per_km2],
-            "customers": [int(v) for v in canopy.customers],
-            "r": {key: {state: round(float(np.corrcoef(v[canopy.state == state],
-                                                       canopy.storm_hit_rate[canopy.state == state])[0, 1]), 2)
-                        for state in sorted(canopy.state.unique())} for key, v in values.items()}}
+    def known(v, f):                                      # a county without census numbers -> null
+        return [None if pd.isna(x) else f(x) for x in v]
+
+    def r(v, state):
+        ok = (canopy.state == state) & np.isfinite(v) & np.isfinite(canopy.storm_hit_rate)
+        return round(float(np.corrcoef(v[ok], canopy.storm_hit_rate[ok])[0, 1]), 2) if ok.sum() > 2 else None
+
+    return {"homes": known(canopy.share_homes_pre1960, lambda x: round(float(x), 3)),
+            "density": known(canopy.housing_per_km2, lambda x: round(float(x), 1)),
+            "customers": known(canopy.customers, int),
+            "r": {key: {state: r(v, state) for state in sorted(canopy.state.dropna().unique())}
+                  for key, v in values.items()}}
 
 
 def lines_data(order):
@@ -382,11 +395,11 @@ def lines_data(order):
     coop = pd.read_csv(place / "utilities.csv", dtype={"region_fips": str}).set_index("region_fips").reindex(order)
     frag = pd.read_csv(RESULTS / "place_fragility.csv", dtype={"region_fips": str}).set_index("region_fips")
     frag = frag.reindex(order)
-    return {"road_m": [round(float(v)) for v in roads.road_km / frag.customers * 1000],
-            "road_treed": [round(float(v), 3) for v in roads.road_treed_share],
-            "coop": [round(float(v), 3) if pd.notna(v) else None for v in coop.util_share_coop],
-            "beyond": [round(float(v), 3) for v in np.log2(frag.ratio_after_size)],
-            "tracked": [bool(v) for v in frag.tracked]}
+    return {"road_m": nums(roads.road_km / frag.customers * 1000, 0),
+            "road_treed": nums(roads.road_treed_share, 3),
+            "coop": nums(coop.util_share_coop, 3),
+            "beyond": nums(np.log2(frag.ratio_after_size), 3),
+            "tracked": [None if pd.isna(v) else bool(v) for v in frag.tracked]}
 
 def story_data(gdf):
     """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm
@@ -505,8 +518,8 @@ def story_data(gdf):
                      "new": [int(v) for v in acc.new_outages.fillna(0)],
                      "caught": [int(v) for v in acc.caught.fillna(0)],
                      "expected": [round(float(v), 2) for v in acc.expected.fillna(0)]},
-        "canopy": {"pct": [round(float(v), 1) for v in canopy.canopy_mean_pct],
-                   "hit": [round(float(v), 4) for v in canopy.storm_hit_rate],
+        "canopy": {"pct": nums(canopy.canopy_mean_pct, 1),
+                   "hit": nums(canopy.storm_hit_rate, 4),
                    "r": {state: round(float(np.corrcoef(g.canopy_mean_pct, g.storm_hit_rate)[0, 1]), 2)
                          for state, g in canopy.groupby("state")} | {
                        "all": round(float(np.corrcoef(canopy.canopy_mean_pct, canopy.storm_hit_rate)[0, 1]), 2)},

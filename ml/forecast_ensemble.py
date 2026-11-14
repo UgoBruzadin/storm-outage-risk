@@ -22,53 +22,55 @@ import pandas as pd
 
 from ml import data, models
 from ml.forecast_test import (
-    LEAD,
+    RUN_AGES,
     TEST_YEAR,
     WINDOW,
-    actual_hourly,
-    forecasts,
-    tables,
+    states_2025,
+    train_rows,
     window_from_forecast,
-    window_from_hourly,
     with_version,
 )
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+from ml.moving_window import FEATURES, PARAMS
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 
-RUN_AGES = [2, 3, 4, 5, 6]               # forecast hours up to 6 + 2 + 5 = 13, the most stored
 BINS = [0, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 1]
 RESULTS = data.ROOT / "ml" / "results"
 
 
 def main():
-    f = forecasts(f"{TEST_YEAR - 1}-12-31", f"{TEST_YEAR}-12-31")
     names = [f"run {k} h before" for k in RUN_AGES]
-    train, _, _, test = tables({n: window_from_forecast(f, k) for n, k in zip(names, RUN_AGES, strict=True)})
     features = data.resolve_features(FEATURES) + WINDOW
-    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
-    probs = np.column_stack([fitted.predict_proba(with_version(test, features, n))[:, 1] for n in names])
+    train = train_rows()
+    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"], sample_weight=train["weight"])
+    del train
 
-    out = test[["region_fips", "block_start", "y"]].copy()
-    out["p_mean"], out["p_low"], out["p_high"] = probs.mean(axis=1), probs.min(axis=1), probs.max(axis=1)
-    out["p_newest"] = probs[:, 0]
+    def run_probs(rows):
+        return np.column_stack([fitted.predict_proba(with_version(rows, features, n))[:, 1] for n in names])
+
+    # one state at a time: the scored onset decisions, and, for display only (the story page's storm, the
+    # dashboard's storm room), the same model's chance for every county and hour of 2025, including hours that
+    # aren't scored because the county was out or recently out
+    scored_parts, shown_parts, prob_parts = [], [], []
+    for _, test, every in states_2025(lambda f: {n: window_from_forecast(f, k) for n, k in
+                                                 zip(names, RUN_AGES, strict=True)}, every=True):
+        probs = run_probs(test)
+        out = test[["region_fips", "block_start", "y"]].copy()
+        out["p_mean"], out["p_low"], out["p_high"] = probs.mean(axis=1), probs.min(axis=1), probs.max(axis=1)
+        out["p_newest"] = probs[:, 0]
+        scored_parts.append(out)
+        prob_parts.append(probs)
+        every_probs = run_probs(every)
+        shown = every[["region_fips", "block_start"]].copy()
+        shown["p_mean"], shown["p_low"] = every_probs.mean(axis=1), every_probs.min(axis=1)
+        shown["p_high"] = every_probs.max(axis=1)
+        shown_parts.append(shown)
+        del test, every
+    out = pd.concat(scored_parts, ignore_index=True)
+    probs = np.concatenate(prob_parts)
     out.to_parquet(data.ROOT / "data" / "cache" / "forecast_ensemble_2025.parquet", index=False)
-
-    # for display only (the story page's storm, the dashboard's storm room): the same model's chance for every
-    # county and hour of 2025, including hours that aren't scored because the county was out or recently out
-    windows = {n: window_from_forecast(f, k) for n, k in zip(names, RUN_AGES, strict=True)}
-    every = data.load_hourly(THRESHOLD_PCT, [TEST_YEAR], LEAD, onsets_only=False)
-    every["region_fips"] = every.region_fips.astype(str)
-    every = every.merge(window_from_hourly(actual_hourly([TEST_YEAR])), on=["region_fips", "block_start"], how="left")
-    for n, w in windows.items():
-        every = every.merge(w.rename(columns={c: f"{c}|{n}" for c in WINDOW}), on=["region_fips", "block_start"],
-                            how="left")
-    every = every.dropna(subset=[f"win_gust_max_ms|{n}" for n in names])
-    every_probs = np.column_stack([fitted.predict_proba(with_version(every, features, n))[:, 1] for n in names])
-    shown = every[["region_fips", "block_start"]].copy()
-    shown["p_mean"], shown["p_low"] = every_probs.mean(axis=1), every_probs.min(axis=1)
-    shown["p_high"] = every_probs.max(axis=1)
-    shown.to_parquet(data.ROOT / "data" / "cache" / "forecast_ensemble_all_2025.parquet", index=False)
+    pd.concat(shown_parts, ignore_index=True).to_parquet(
+        data.ROOT / "data" / "cache" / "forecast_ensemble_all_2025.parquet", index=False)
 
     first = pd.Timestamp(f"{TEST_YEAR - 1}-12-31")
     row_day = (storm_day(out.block_start) - first).dt.days.to_numpy()

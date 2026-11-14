@@ -12,7 +12,7 @@ import pandas as pd
 
 from ml import data, models
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, predict_states
 
 TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
 GRID = {"max_depth": [4, 6], "min_child_weight": [20, 100], "n_estimators": [800, 1500]}
@@ -22,14 +22,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lead", type=int, default=2)
     args = parser.parse_args()
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [VAL_YEAR], args.lead)
-    train, val = df[df.year.isin(TRAIN_YEARS)], df[df.year == VAL_YEAR]
+    train = data.sampled_years(THRESHOLD_PCT, TRAIN_YEARS, args.lead)   # sampled; 2024 is scored in full
     features = data.resolve_features(FEATURES)
-    rows = []
+    fitted = {}
     for values in itertools.product(*GRID.values()):
         params = PARAMS | dict(zip(GRID, values, strict=True))
-        model = models.build("xgboost", params).fit(train[features], train["y"])
-        s = score(val["y"].to_numpy(), model.predict_proba(val[features])[:, 1])
+        fitted[values] = (models.build("xgboost", params).fit(train[features], train.y, sample_weight=train.weight),
+                          features, None)
+        print(f"fitted {dict(zip(GRID, values, strict=True))}", flush=True)
+    del train
+    val = predict_states(fitted, VAL_YEAR, args.lead, keep=("y",))
+    rows = []
+    for values in fitted:
+        s = score(val["y"].to_numpy(), val[values].to_numpy())
         rows.append(dict(zip(GRID, values, strict=True))
                     | {"onset_pr_auc": s["pr_auc"], "recall_top1": s["recall_top1"]})
         print(rows[-1], flush=True)

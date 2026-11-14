@@ -27,7 +27,9 @@ from ml import forecast_test as ft
 from ml.forecast_ensemble import BINS
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
 
-AREA_DIR = data.ROOT / "data" / "raw" / "weather" / "hrrr_fcst_area"
+# HRRR runs as issued with county-wide summaries for every county (ingest/fetch_hrrr_grib.py --area, the same columns
+# as the MO + IL zarr extract ingest/fetch_hrrr_forecast_area.py wrote to hrrr_fcst_area)
+AREA_DIR = data.ROOT / "data" / "raw" / "weather" / "hrrr_grib_area"
 RESULTS = data.ROOT / "ml" / "results"
 YEARS = [2020, 2021, 2022, 2023, 2024, 2025]
 LEAD, NEWEST, AGES = 2, 2, [2, 3, 4, 5, 6]
@@ -35,104 +37,149 @@ AREA_COLS = ["area_gust_max", "area_gust_share20", "area_wind1h_max", "area_wind
              "area_precip_max", "area_precip_share10", "area_refc_max", "area_refc_share45", "area_vil_max",
              "area_ltng_max", "area_ltng_share"]
 AREA_WINDOW = [f"win_{c}" for c in AREA_COLS]
+FC = {c: f"{c}|fc" for c in ft.WINDOW}           # the newest run's point summaries, beside the actual weather's
 
 
-def windows(run_ages, years):
+def window_of(f, age):
     """Per decision (region, hour): the window's weather from the run issued `age` hours before it, point summaries
-    (as forecast_test.py) and the maximum of each county-wide summary over the window, reduced day by day."""
-    parts = {age: [] for age in run_ages}
-    days = pd.date_range(f"{min(years) - 1}-12-31", f"{max(years)}-12-31", freq="D")
-    for i, day in enumerate(days):
-        path = AREA_DIR / f"{day:%Y%m%d}.parquet"
-        if not path.exists():
-            continue
-        f = pd.read_parquet(path)
-        f["wind10_ms"], f["wind850_ms"] = np.hypot(f.u10, f.v10), np.hypot(f.u850, f.v850)
-        for age in run_ages:
-            first = age + LEAD
-            g = f[f.fhour.between(first, first + 5)]
-            point = ft.window_from_forecast(g, age)
-            area = g.groupby(["region_fips", "run"])[AREA_COLS].max().reset_index()
-            area.columns = ["region_fips", "run"] + AREA_WINDOW
-            area["block_start"] = area.pop("run") + pd.Timedelta(hours=age)
-            w = point.merge(area, on=["region_fips", "block_start"], how="left")
-            parts[age].append(w.astype({c: "float32" for c in ft.WINDOW + AREA_WINDOW}))
-        if i % 100 == 0:
-            print(f"windows: {day:%Y-%m-%d}", flush=True)
-    return {age: pd.concat(p, ignore_index=True) for age, p in parts.items() if p}
+    (as forecast_test.py) and the maximum of each county-wide summary over the window."""
+    first = age + LEAD
+    g = f[f.fhour.between(first, first + 5)]
+    point = ft.window_from_forecast(g, age)
+    area = g.groupby(["region_fips", "run"])[AREA_COLS].max().reset_index()
+    area.columns = ["region_fips", "run"] + AREA_WINDOW
+    area["block_start"] = area.pop("run") + pd.Timedelta(hours=age)
+    return point.merge(area, on=["region_fips", "block_start"], how="left") \
+                .astype({c: "float32" for c in ft.WINDOW + AREA_WINDOW})
+
+
+def windows(year, age, states=None):
+    """window_of() for every decision of `year`, built a state at a time from the daily files split by state, cached
+    for the whole country per year and run age (data.cached) and read back for `states`."""
+    def build():
+        parts = []
+        for s in data.warehouse_states():
+            f = ft.forecasts(f"{year - 1}-12-31", f"{year}-12-31", states=[s], source=AREA_DIR)
+            if len(f):
+                w = window_of(f, age)
+                parts.append(w[w.block_start.dt.year == year].assign(state=s))
+            del f
+        return pd.concat(parts, ignore_index=True)
+    w = data.cached("area_window", {"year": year, "age": age, "lead": LEAD}, build,
+                    code_files=(data.__file__, ft.__file__, __file__),
+                    filters=[("state", "in", list(states))] if states else None)
+    return w.drop(columns="state")
+
+
+def add_windows(df, year):
+    """One year's decisions + the actual window weather + the newest run's as `<feature>|fc` and its county-wide
+    summaries; only decisions the newest run covers (data.sampled_years' `add`)."""
+    df = ft.add_actual_window(df, year)
+    newest = windows(year, NEWEST).rename(columns=FC)
+    df = df.merge(newest, on=["region_fips", "block_start"], how="inner").dropna(subset=["win_gust_max_ms|fc"])
+    for c in ft.WINDOW:                        # the actual weather under the names the model uses
+        df[f"{c}|actual"] = df[c]
+    return df
+
+
+def use(frame, source):
+    """The rows with the window weather swapped for `source`'s (actual or fc)."""
+    x = frame.copy()
+    x[ft.WINDOW] = frame[[f"{c}|{source}" for c in ft.WINDOW]].to_numpy()
+    return x
+
+
+def test_rows(year):
+    """Every scored decision of `year`, a state at a time, with the windows add_windows() gives training rows."""
+    for s, rows in data.state_rows(THRESHOLD_PCT, year, LEAD):
+        rows = ft.add_actual_window(rows, year)
+        newest = windows(year, NEWEST, states=[s]).rename(columns=FC)
+        rows = rows.merge(newest, on=["region_fips", "block_start"], how="inner").dropna(
+            subset=["win_gust_max_ms|fc"])
+        for c in ft.WINDOW:
+            rows[f"{c}|actual"] = rows[c]
+        yield s, rows
+
+
+def fit(train, features, source):
+    return models.build("xgboost", PARAMS).fit(use(train, source)[features], train.y, sample_weight=train.weight)
 
 
 def main():
-    df = data.load_hourly(THRESHOLD_PCT, YEARS, LEAD)
-    df["region_fips"] = df.region_fips.astype(str)
-    actual = ft.window_from_hourly(ft.actual_hourly(YEARS))
-    w = windows(AGES, YEARS)
-    newest = w[NEWEST]
+    """Training rows sampled a year at a time (data.sampled_years), the warnings + outlook rate table on the full
+    table's counts, every test year scored a state at a time."""
     base = data.resolve_features(FEATURES)
     cols = models.NEEDS_COLUMNS["official"]
-
-    # rows every version has: the newest run's window exists, and the actual weather for the trained-on-actual model
-    df = df.merge(newest.rename(columns={c: f"{c}|fc" for c in ft.WINDOW}), on=["region_fips", "block_start"],
-                  how="inner")
-    df = df.merge(actual, on=["region_fips", "block_start"], how="left").dropna(subset=["win_gust_max_ms|fc"])
-    for c in ft.WINDOW:                        # forecast features under the names the model uses
-        df[f"{c}|actual"] = df[c]
-    train, test = df[df.year < 2025], df[df.year == 2025].copy()
-    print(f"train {len(train):,} rows, test {len(test):,}", flush=True)
-
-    def use(frame, source):
-        x = frame.copy()
-        x[ft.WINDOW] = frame[[f"{c}|{source}" for c in ft.WINDOW]].to_numpy()
-        return x
-
-    def mean_over_runs(fitted, features):
-        """2025 probabilities averaged over the runs issued 2-6 hours before (where all five exist)."""
-        t = test[["region_fips", "block_start", *[c for c in features if c not in ft.WINDOW + AREA_WINDOW]]]
-        probs = []
-        for age in AGES:
-            a = w[age]
-            a = a[a.block_start.dt.year == 2025]
-            x = t.merge(a, on=["region_fips", "block_start"], how="left")
-            probs.append(fitted.predict_proba(x[features])[:, 1])
-        probs = np.column_stack(probs)
-        ok = ~np.isnan(probs).any(axis=1)
-        return probs.mean(axis=1), ok
-
-    official = models.build("official").fit(train[cols], train["y"]).predict_proba(test[cols])[:, 1]
     runs = {
         "trained on actual weather, fed forecasts (current)": (base + ft.WINDOW, "actual"),
         "trained on forecasts": (base + ft.WINDOW, "fc"),
         "trained on forecasts + county-wide summaries": (base + ft.WINDOW + AREA_WINDOW, "fc"),
     }
+    train = data.sampled_years(THRESHOLD_PCT, YEARS[:-1], LEAD, add=add_windows)
+    fitted = {label: fit(train, f, s) for label, (f, s) in runs.items()}
+    del train
+    c = data.hourly_counts(THRESHOLD_PCT, YEARS[:-1], LEAD, cols)
+    official = models.build("official").fit(c[cols], c.y, sample_weight=c.weight)
+
+    # 2025, a state at a time: the newest run, and the mean over the five runs where all five exist
+    y, off, newest = [], [], {k: [] for k in runs}
+    mean_runs, ok = {k: [] for k in runs}, []
+    for s, test in test_rows(2025):
+        y.append(test.y.to_numpy())
+        off.append(official.predict_proba(test[cols])[:, 1])
+        fc = use(test, "fc")
+        for label, (features, _) in runs.items():
+            newest[label].append(fitted[label].predict_proba(fc[features])[:, 1])
+        point = test[["region_fips", "block_start", *[c for c in base if c not in ft.WINDOW + AREA_WINDOW]]]
+        probs, have = {label: [] for label in runs}, []
+        for age in AGES:
+            x = point.merge(windows(2025, age, states=[s]), on=["region_fips", "block_start"], how="left")
+            have.append(x[ft.WINDOW[0]].notna().to_numpy())
+            for label, (features, _) in runs.items():
+                probs[label].append(fitted[label].predict_proba(x[features])[:, 1])
+        for label in runs:
+            mean_runs[label].append(np.column_stack(probs[label]).mean(axis=1))
+        # all five runs' windows exist (XGBoost scores a missing window as missing, never as NaN, so the
+        # probabilities can't tell; MO + IL's E40-E42 checked the probabilities, which kept every row)
+        ok.append(np.column_stack(have).all(axis=1))
+        del test, fc, point
+    y, off, ok = np.concatenate(y), np.concatenate(off), np.concatenate(ok)
     rows, best, best_score = [], None, -1
     for label, (features, source) in runs.items():
-        fitted = models.build("xgboost", PARAMS).fit(use(train, source)[features], train["y"])
-        p = fitted.predict_proba(use(test, "fc")[features])[:, 1]
-        pm, ok = mean_over_runs(fitted, features)
-        row = {"model": label, "pr_auc_newest_run": ap(test.y, p), "pr_auc_official": ap(test.y, official),
-               "ratio_newest": ap(test.y, p) / ap(test.y, official),
-               "pr_auc_mean_of_runs": ap(test.y[ok], pm[ok]), "pr_auc_official_same_rows": ap(test.y[ok], official[ok]),
-               "rows_with_all_runs": int(ok.sum()), "rows": len(test)}
+        p, pm = np.concatenate(newest[label]), np.concatenate(mean_runs[label])
+        row = {"model": label, "pr_auc_newest_run": ap(y, p), "pr_auc_official": ap(y, off),
+               "ratio_newest": ap(y, p) / ap(y, off),
+               "pr_auc_mean_of_runs": ap(y[ok], pm[ok]), "pr_auc_official_same_rows": ap(y[ok], off[ok]),
+               "rows_with_all_runs": int(ok.sum()), "rows": len(y)}
         rows.append(row)
         print(row, flush=True)
         if label != list(runs)[0] and row["pr_auc_newest_run"] > best_score:
-            best, best_score = (label, features, source, fitted, p), row["pr_auc_newest_run"]
+            best, best_score = (label, features, source, p), row["pr_auc_newest_run"]
     pd.DataFrame(rows).to_csv(RESULTS / "forecast_training_2025.csv", index=False)
 
     # E42: the better version on four test years, and its calibration on 2025
-    label, features, source, fitted, p = best
-    calib = pd.DataFrame({"y": test.y.to_numpy(), "p": p, "bin": pd.cut(p, BINS, include_lowest=True)})
+    label, features, source, p = best
+    calib = pd.DataFrame({"y": y, "p": p, "bin": pd.cut(p, BINS, include_lowest=True)})
     calib.groupby("bin", observed=True).agg(decisions=("y", "size"), predicted=("p", "mean"), observed=("y", "mean")) \
          .to_csv(RESULTS / "forecast_training_calibration_2025.csv")
     yrows = []
     for year in (2022, 2023, 2024, 2025):
-        tr, te = df[df.year < year], df[df.year == year]
-        m = models.build("xgboost", PARAMS).fit(use(tr, source)[features], tr["y"])
-        pm_ = m.predict_proba(use(te, "fc")[features])[:, 1]
-        o = models.build("official").fit(tr[cols], tr["y"]).predict_proba(te[cols])[:, 1]
+        years = list(range(YEARS[0], year))
+        tr = data.sampled_years(THRESHOLD_PCT, years, LEAD, add=add_windows)
+        m = fit(tr, features, source)
+        del tr
+        c = data.hourly_counts(THRESHOLD_PCT, years, LEAD, cols)
+        o_model = models.build("official").fit(c[cols], c.y, sample_weight=c.weight)
+        ys, pm_, o = [], [], []
+        for _, te in test_rows(year):
+            ys.append(te.y.to_numpy())
+            pm_.append(m.predict_proba(use(te, "fc")[features])[:, 1])
+            o.append(o_model.predict_proba(te[cols])[:, 1])
+            del te
+        ys, pm_, o = np.concatenate(ys), np.concatenate(pm_), np.concatenate(o)
         yrows.append({"model": label, "test_year": year, "train_years": f"2020-{year - 1}",
-                      "positive_windows": int(te.y.sum()), "pr_auc_model": ap(te.y, pm_),
-                      "pr_auc_official": ap(te.y, o), "ratio": ap(te.y, pm_) / ap(te.y, o)})
+                      "positive_windows": int(ys.sum()), "pr_auc_model": ap(ys, pm_),
+                      "pr_auc_official": ap(ys, o), "ratio": ap(ys, pm_) / ap(ys, o)})
         print(yrows[-1], flush=True)
     pd.DataFrame(yrows).to_csv(RESULTS / "forecast_training_years.csv", index=False)
 

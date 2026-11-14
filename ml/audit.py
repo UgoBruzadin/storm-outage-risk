@@ -45,11 +45,24 @@ def check(rows, name, a, b, tol=1e-6):
     print(rows[-1], flush=True)
 
 
+TIMING_COLS = ["region_fips", "block_start", "gust_max_ms", "precip_sum_mm", "pct_out_now", "max_pct_out_prev_24h",
+               "fut_max_pct", "start_pct", "near_pct_out_max", "warn_svr", "warn_tor", "spc_cat"]
+
+
+def sample_decisions(n, seed=0):
+    """A uniform sample of n scored decisions of YEAR, drawn a state at a time (each state's share of n is its share
+    of the decisions), so the whole country's year is never in memory at once."""
+    total = data.hourly_counts(THRESHOLD_PCT, [YEAR], LEAD, ["warn_svr"]).weight.sum()
+    parts = []
+    for i, (_, rows) in enumerate(data.state_rows(THRESHOLD_PCT, [YEAR][0], LEAD)):
+        k = min(len(rows), round(n * len(rows) / total))
+        parts.append(rows[TIMING_COLS].sample(k, random_state=seed + i))
+        del rows
+    return pd.concat(parts, ignore_index=True)
+
+
 def timing():
-    df = data.load_hourly(THRESHOLD_PCT, [YEAR], LEAD)
-    s = df.sample(SAMPLE, random_state=0)[["region_fips", "block_start", "gust_max_ms", "precip_sum_mm",
-                                            "pct_out_now", "max_pct_out_prev_24h", "fut_max_pct", "start_pct",
-                                            "near_pct_out_max", "warn_svr", "warn_tor", "spc_cat"]]
+    s = sample_decisions(SAMPLE)
     c = con()
     c.register("s", s)
     rows = []
@@ -115,19 +128,30 @@ def timing():
     check(rows, "outlook: category from the latest product issued before h", o.spc_cat, o.recomputed)
     c.close()
 
-    # forecasts: the run issued 2 h before, forecast hours 4-9 = the window h+2 ... h+7
+    # forecasts: the run issued 2 h before, forecast hours 4-9 = the window h+2 ... h+7; ~2,000 windows, drawn a
+    # state at a time in proportion to its counties
     from ml.forecast_test import window_from_forecast
-    f = forecasts(f"{YEAR - 1}-12-31", f"{YEAR}-12-31")
-    win = window_from_forecast(f).set_index(["region_fips", "block_start"])
-    pick = win.sample(2000, random_state=0)
-    recomputed, runs_before = [], []
-    fi = f.set_index(["region_fips", "run"])
-    for (fips, h), _ in pick.iterrows():
-        g = fi.loc[(fips, h - pd.Timedelta(hours=2))]
-        g = g[(g.hour >= h + pd.Timedelta(hours=2)) & (g.hour < h + pd.Timedelta(hours=8))]
-        recomputed.append(g.gust_ms.max() if len(g) == 6 else np.nan)
-        runs_before.append(h - pd.Timedelta(hours=2) < h)
-    check(rows, "forecast: max gust from the run issued at h-2, valid h+2 ... h+7", pick.win_gust_max_ms,
+    states = data.warehouse_states()
+    c = con()
+    per_state = dict(c.sql("SELECT left(region_fips, 2), count(DISTINCT region_fips) FROM marts.mart_study__region_1h "
+                           "GROUP BY 1").fetchall())
+    c.close()
+    picked, recomputed, runs_before = [], [], []
+    for i, st in enumerate(states):
+        f = forecasts(f"{YEAR - 1}-12-31", f"{YEAR}-12-31", states=[st])
+        if f.empty:
+            continue
+        win = window_from_forecast(f).set_index(["region_fips", "block_start"])
+        pick = win.sample(min(len(win), round(2000 * per_state[st] / sum(per_state.values()))), random_state=i)
+        fi = f.set_index(["region_fips", "run"]).sort_index()
+        for (fips, h), _ in pick.iterrows():
+            g = fi.loc[(fips, h - pd.Timedelta(hours=2))]
+            g = g[(g.hour >= h + pd.Timedelta(hours=2)) & (g.hour < h + pd.Timedelta(hours=8))]
+            recomputed.append(g.gust_ms.max() if len(g) == 6 else np.nan)
+            runs_before.append(h - pd.Timedelta(hours=2) < h)
+        picked.append(pick.win_gust_max_ms)
+        del f, win, fi
+    check(rows, "forecast: max gust from the run issued at h-2, valid h+2 ... h+7", pd.concat(picked),
           recomputed, tol=1e-4)
     rows.append({"check": "forecast: run issued before the decision", "n": len(runs_before),
                  "agree": float(np.mean(runs_before)), "max_abs_diff": float("nan")})
@@ -135,7 +159,8 @@ def timing():
 
 
 def shift():
-    df = data.load_hourly(THRESHOLD_PCT, [YEAR], LEAD, neighbors=False)[["region_fips", "block_start", "y"]]
+    df = pd.concat([rows[["region_fips", "block_start", "y"]] for _, rows in
+                    data.state_rows(THRESHOLD_PCT, YEAR, LEAD, neighbors=False)], ignore_index=True)
     c = con()
     hw = c.sql(f"""SELECT region_fips, hour, gust_ms FROM staging.stg_hrrr__hourly
                    WHERE hour BETWEEN TIMESTAMP '{YEAR - 1}-12-30' AND TIMESTAMP '{YEAR + 1}-01-02'""").df()
@@ -163,35 +188,61 @@ def shift():
 
 
 def shuffled():
-    df = data.load_hourly(THRESHOLD_PCT, [2020, 2021, 2022, 2023, 2024, YEAR], LEAD)
-    train, test = df[df.year < YEAR], df[df.year == YEAR]
+    """Labels shuffled across the (sampled) training rows, unweighted: they no longer depend on the inputs, so any
+    2025 PR-AUC above the base rate is a leak. 2025 scored in full, a state at a time."""
+    from ml.moving_window import predict_states
+    train = data.sampled_years(THRESHOLD_PCT, [2020, 2021, 2022, 2023, 2024], LEAD)
     features = data.resolve_features(FEATURES)
-    rows = []
+    fitted = {}
     for seed in (0, 1):
         y = np.random.default_rng(seed).permutation(train["y"].to_numpy())
-        p = models.build("xgboost", PARAMS).fit(train[features], y).predict_proba(test[features])[:, 1]
-        rows.append({"seed": seed, "pr_auc_shuffled_training": average_precision_score(test["y"], p),
+        fitted[seed] = (models.build("xgboost", PARAMS).fit(train[features], y), features, None)
+    del train
+    test = predict_states(fitted, YEAR, LEAD, keep=("y",))
+    rows = []
+    for seed in (0, 1):
+        rows.append({"seed": seed, "pr_auc_shuffled_training": average_precision_score(test["y"], test[seed]),
                      "base_rate": float(test["y"].mean())})
         print(rows[-1], flush=True)
     pd.DataFrame(rows).to_csv(RESULTS / "audit_shuffled.csv", index=False)
 
 
 def forecast():
-    f = forecasts(f"{YEAR - 1}-12-31", f"{YEAR}-12-31")
-    f["wind10_ms"] = np.hypot(f.u10, f.v10)
-    c = con()
-    a = c.sql(f"""SELECT region_fips, hour, gust_ms, wind10_ms, cape_jkg, precip_mm, temp_c
-                  FROM staging.stg_hrrr__hourly WHERE year(hour) = {YEAR}""").df()
-    c.close()
-    m = f.merge(a, on=["region_fips", "hour"], suffixes=("_f", "_a"))
+    """Forecast error by forecast hour, summed a state at a time (sums, so the means and the correlation are exact)."""
+    variables = ("gust_ms", "wind10_ms", "cape_jkg", "precip_mm", "temp_c")
+    sums = []
+    for st in data.warehouse_states():
+        f = forecasts(f"{YEAR - 1}-12-31", f"{YEAR}-12-31", states=[st])
+        if f.empty:
+            continue
+        c = con()
+        a = c.sql(f"""SELECT region_fips, hour, gust_ms, wind10_ms, cape_jkg, precip_mm, temp_c
+                      FROM staging.stg_hrrr__hourly WHERE year(hour) = {YEAR} AND left(region_fips, 2) = '{st}'""").df()
+        c.close()
+        m = f.merge(a, on=["region_fips", "hour"], suffixes=("_f", "_a"))
+        del f, a
+        d = pd.DataFrame({"fhour": m.fhour, "n": 1.0})
+        for v in variables:
+            err = m[f"{v}_f"] - m[f"{v}_a"]
+            d[f"{v}_n"], d[f"{v}_abs"], d[f"{v}_err"] = err.notna().astype(float), err.abs(), err
+        storm = m.gust_ms_a >= 15
+        x, y = m.gust_ms_f.where(storm), m.gust_ms_a.where(storm)
+        ok = (x.notna() & y.notna()).astype(float)
+        d["g_n"], d["g_x"], d["g_y"] = ok, x.where(ok > 0), y.where(ok > 0)
+        d["g_xx"], d["g_yy"], d["g_xy"] = d.g_x ** 2, d.g_y ** 2, d.g_x * d.g_y
+        sums.append(d.groupby("fhour").sum(min_count=1))
+        del m, d
+    s = pd.concat(sums).groupby(level=0).sum(min_count=1)
     rows = []
-    for fh, g in m.groupby("fhour"):
-        r = {"fhour": int(fh), "n": len(g)}
-        for v in ("gust_ms", "wind10_ms", "cape_jkg", "precip_mm", "temp_c"):
-            r[f"{v}_mae"] = float((g[f"{v}_f"] - g[f"{v}_a"]).abs().mean())
-            r[f"{v}_bias"] = float((g[f"{v}_f"] - g[f"{v}_a"]).mean())
-        storm = g.gust_ms_a >= 15
-        r["gust_corr_when_gusty"] = float(g.loc[storm, "gust_ms_f"].corr(g.loc[storm, "gust_ms_a"]))
+    for fh, g in s.iterrows():
+        r = {"fhour": int(fh), "n": int(g.n)}
+        for v in variables:
+            r[f"{v}_mae"] = float(g[f"{v}_abs"] / g[f"{v}_n"])
+            r[f"{v}_bias"] = float(g[f"{v}_err"] / g[f"{v}_n"])
+        n = g.g_n
+        cov = g.g_xy / n - (g.g_x / n) * (g.g_y / n)
+        var_x, var_y = g.g_xx / n - (g.g_x / n) ** 2, g.g_yy / n - (g.g_y / n) ** 2
+        r["gust_corr_when_gusty"] = float(cov / np.sqrt(var_x * var_y))
         rows.append(r)
     out = pd.DataFrame(rows)
     out.to_csv(RESULTS / "audit_forecast.csv", index=False)
@@ -222,10 +273,16 @@ def missing():
     pred = pd.read_parquet(data.ROOT / "data" / "cache" / "forecast_ensemble_2025.parquet",
                            columns=["region_fips", "block_start"])
     on = onset_hours(YEAR)
-    reachable = set()
-    for offset in range(LEAD, LEAD + 6):
-        reachable |= set(zip(pred.region_fips, pred.block_start + pd.Timedelta(hours=offset), strict=True))
-    on["reachable"] = [(r, h) in reachable for r, h in zip(on.region_fips, on.hour, strict=True)]
+    # (region, hour) as one integer each, so the whole country's decisions don't become a Python set of tuples
+    codes = {r: i for i, r in enumerate(sorted(set(pred.region_fips.astype(str)) | set(on.region_fips.astype(str))))}
+
+    def key(regions, hours):
+        h = (pd.to_datetime(hours) - pd.Timestamp("2000-01-01")) // pd.Timedelta(hours=1)
+        return regions.astype(str).map(codes).to_numpy(dtype=np.int64) * 1_000_000 + h.to_numpy(dtype=np.int64)
+
+    base = key(pred.region_fips, pred.block_start)
+    reachable = np.unique(np.concatenate([base + offset for offset in range(LEAD, LEAD + 6)]))
+    on["reachable"] = np.isin(key(on.region_fips, on.hour), reachable)
     print(f"new outages with at least one scored decision that could have caught them: "
           f"{on.reachable.sum()} of {len(on)} ({on.reachable.mean():.1%})")
     s["new_outages"], s["new_outages_reachable"] = len(on), int(on.reachable.sum())

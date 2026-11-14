@@ -15,9 +15,9 @@ import pandas as pd
 
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
-from ml.forecast_test import EQUAL_SHARE, LEAD, WINDOW, forecasts, tables, window_from_forecast
+from ml.forecast_test import EQUAL_SHARE, LEAD, TRAIN_YEARS, WINDOW, states_2025, train_rows, window_from_forecast
 from ml.metrics import score
-from ml.moving_window import FEATURES, PARAMS, caught_flags, onset_hours
+from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, onset_hours
 from ml.place_extra import NAMES, five_run_mean
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 
@@ -37,19 +37,29 @@ def main():
     well = set(cov.region_fips[cov.share >= max(CUTS)])
     score_sets = {"all counties": every, f"covered {max(CUTS):.0%}+": well}
 
-    f = forecasts("2024-12-31", "2025-12-31")
-    train, _, _, test = tables({n: window_from_forecast(f, k) for n, k in zip(NAMES, RUN_AGES, strict=True)})
-    del f
-    for t in (train, test):
-        t["region_fips"] = t.region_fips.astype(str)
     base = data.resolve_features(FEATURES) + WINDOW
     official = models.NEEDS_COLUMNS["official"]
-    pred = test[["region_fips", "block_start", "y"]].copy()
+    # the rate table's counts over the full training table, by county, so each training's table is exact
+    counts = data.hourly_counts(THRESHOLD_PCT, TRAIN_YEARS, LEAD, official + ["region_fips"])
+    counts["region_fips"] = counts.region_fips.astype(str)
+    train = train_rows()
+    fitted = {}
     for name, regions in train_sets.items():
-        rows = train[train.region_fips.isin(regions)]
+        rows, c = train[train.region_fips.isin(regions)], counts[counts.region_fips.isin(regions)]
         print(f"training {name}: {rows.region_fips.nunique()} counties, {int(rows.y.sum()):,} positives", flush=True)
-        pred[f"off|{name}"] = models.build("official").fit(rows[official], rows.y).predict_proba(test[official])[:, 1]
-        pred[f"mod|{name}"] = five_run_mean(models.build("xgboost", PARAMS).fit(rows[base], rows.y), test, base)
+        fitted[name] = (models.build("official").fit(c[official], c.y, sample_weight=c.weight),
+                        models.build("xgboost", PARAMS).fit(rows[base], rows.y, sample_weight=rows.weight))
+    del train, counts
+    parts = []
+    for _, test, _ in states_2025(lambda f: {n: window_from_forecast(f, k) for n, k in
+                                             zip(NAMES, RUN_AGES, strict=True)}):
+        p = test[["region_fips", "block_start", "y"]].copy()
+        for name, (off, model) in fitted.items():
+            p[f"off|{name}"] = off.predict_proba(test[official])[:, 1]
+            p[f"mod|{name}"] = five_run_mean(model, test, base)
+        parts.append(p)
+        del test
+    pred = pd.concat(parts, ignore_index=True)
 
     onsets = onset_hours(2025)
     onsets["region_fips"] = onsets.region_fips.astype(str)

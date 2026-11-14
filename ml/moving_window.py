@@ -25,7 +25,7 @@ import argparse
 import pandas as pd
 
 from ml import data, models
-from ml.metrics import score
+from ml.metrics import score, weighted_quantile
 
 THRESHOLD_PCT = 5
 TRAIN_YEARS, VAL_YEAR, TEST_YEAR = [2020, 2021, 2022, 2023, 2024], 2024, 2025
@@ -67,6 +67,54 @@ def fit_predict(model, spec, train, test):
     return fitted.predict_proba(test[cols])[:, 1]
 
 
+def fit_runs(runs, lead, train_years=TRAIN_YEARS, val_year=VAL_YEAR, levels=True, threshold=THRESHOLD_PCT,
+             transform=None):
+    """Each run fitted on the sampled training table (rate tables on the full table's counts), and its alert level:
+    the top 1% of the same run trained on the years before val_year and scored on val_year (weighted, since
+    val_year's rows are a sample; None if levels=False). Returns {label: (fitted, columns, level)}.
+    transform(rows, year) -> rows changes each training year's rows (as predict_states' transform)."""
+    train = data.sampled_years(threshold, train_years, lead, add=transform)
+    val_train, val = train[train.year < val_year], train[train.year == val_year]
+    early_years = [y for y in train_years if y < val_year]
+    out = {}
+    for label, model, spec in runs:
+        cols = models.NEEDS_COLUMNS.get(model) if spec is None else data.resolve_features(spec)
+        params = None if spec is None else PARAMS
+        if spec is None:          # a rate table: exact counts over the full table, not the sample
+            c = data.hourly_counts(threshold, train_years, lead, cols)
+            fitted = models.build(model, params).fit(c[cols], c.y, sample_weight=c.weight)
+        else:
+            fitted = models.build(model, params).fit(train[cols], train.y, sample_weight=train.weight)
+        level = None
+        if levels:
+            if spec is None:
+                e = data.hourly_counts(threshold, early_years, lead, cols)
+                early = models.build(model, params).fit(e[cols], e.y, sample_weight=e.weight)
+            else:
+                early = models.build(model, params).fit(val_train[cols], val_train.y, sample_weight=val_train.weight)
+            level = weighted_quantile(early.predict_proba(val[cols])[:, 1], val.weight, 0.99)
+        out[label] = (fitted, cols, level)
+        print(f"lead {lead}: fitted {label}", flush=True)
+    return out
+
+
+def predict_states(fitted, year, lead, keep=("region_fips", "block_start", "y"), threshold=THRESHOLD_PCT,
+                   transform=None, **kwargs):
+    """Every run's probabilities for every decision of `year`, scored a state at a time (never sampled).
+    fitted: {label: (model, columns, level)}; a label may be any hashable (a tuple becomes a column name as is).
+    transform(rows, year) -> rows changes each state's rows before scoring (e.g. weather an hour late)."""
+    parts = []
+    for _, rows in data.state_rows(threshold, year, lead, **kwargs):
+        if transform is not None:
+            rows = transform(rows, year)
+        out = rows[list(keep)].copy()
+        for label, (m, cols, _) in fitted.items():
+            out[label] = m.predict_proba(rows[cols])[:, 1]
+        parts.append(out)
+        del rows
+    return pd.concat(parts, ignore_index=True)
+
+
 def caught_flags(test, flagged, onsets, lead):
     """For each onset hour: inside the window of at least one flagged decision hour?"""
     alerts = test.loc[flagged, ["region_fips", "block_start"]]
@@ -94,12 +142,10 @@ def main():
     onsets = onset_hours(TEST_YEAR)
     rows = []
     for lead in leads:
-        df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [TEST_YEAR], lead)
-        train, test = df[df.year.isin(TRAIN_YEARS)], df[df.year == TEST_YEAR]
-        val_train, val = df[df.year < VAL_YEAR], df[df.year == VAL_YEAR]
-        for label, model, spec in RUNS:
-            p = fit_predict(model, spec, train, test)
-            level = pd.Series(fit_predict(model, spec, val_train, val)).quantile(0.99)
+        fitted = fit_runs(RUNS, lead)
+        test = predict_states(fitted, TEST_YEAR, lead)
+        for label, _, _ in RUNS:
+            p, level = test[label].to_numpy(), fitted[label][2]
             flagged = pd.Series(p > level, index=test.index)
             s = score(test["y"].to_numpy(), p)
             rows.append({"lead_hours": lead, "run": label, "onset_pr_auc": s["pr_auc"],

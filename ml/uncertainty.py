@@ -28,8 +28,8 @@ def day_weights(days, n=N_RESAMPLES, seed=0):
     return counts, codes
 
 
-def pr_auc_resamples(y, p, codes, counts):
-    """PR-AUC (sklearn's average_precision_score, weighted) for every resample, sorting once."""
+def pr_auc_resamples_slow(y, p, codes, counts):
+    """The direct version, one resample at a time (kept as the reference the test checks the fast one against)."""
     order = np.argsort(-np.asarray(p), kind="stable")
     y, p, codes = np.asarray(y, dtype=float)[order], np.asarray(p)[order], codes[order]
     last = np.r_[p[1:] != p[:-1], True]               # the last row of each run of tied scores
@@ -40,6 +40,47 @@ def pr_auc_resamples(y, p, codes, counts):
         precision = np.divide(tp, tp + fp, out=np.zeros_like(tp), where=(tp + fp) > 0)
         out[i] = np.sum(np.diff(np.r_[0, tp / tp[-1]]) * precision)
     return out
+
+
+def pr_auc_resamples(y, p, codes, counts, block=50_000):
+    """PR-AUC (sklearn's average_precision_score, weighted) for every resample, sorting once.
+
+    Recall only moves at runs of tied scores that contain an outage (~0.5% of decisions), so only those runs count.
+    At the end of each such run g, a resample's true positives are sum_d counts[d] x (outages of day d ranked at or
+    above g) and its alerts sum_d counts[d] x (decisions of day d at or above g): two matrix products over the
+    days for all resamples at once, instead of a weighted cumulative sum over every decision per resample. Every
+    count is a whole number, so the result equals pr_auc_resamples_slow up to the order of the final sum, and is
+    ~100x faster on the whole country's 27M decisions."""
+    order = np.argsort(-np.asarray(p), kind="stable")
+    y = np.asarray(y)[order].astype(bool)
+    p, codes = np.asarray(p)[order], np.asarray(codes)[order]
+    n_days = counts.shape[1]
+    run_end = np.flatnonzero(np.r_[p[1:] != p[:-1], True])          # last row of each run of tied scores
+    tp_run = np.cumsum(y)[run_end]
+    ends = run_end[np.diff(np.r_[0, tp_run]) > 0]                    # runs where recall moves
+    c = counts.T.astype(float)                                       # days x resamples
+    by_day = np.argsort(codes, kind="stable")                        # row positions grouped by day, in rank order
+    day_start = np.searchsorted(codes[by_day], np.arange(n_days + 1))
+    pos_rows = np.flatnonzero(y)
+    pos_by_day = pos_rows[np.argsort(codes[pos_rows], kind="stable")]
+    pos_start = np.searchsorted(codes[pos_by_day], np.arange(n_days + 1))
+    total_tp = np.bincount(codes[y], minlength=n_days) @ c           # each resample's outages
+    ap = np.zeros(len(counts))
+    prev_tp = np.zeros(len(counts))
+    for lo in range(0, len(ends), block):                             # blocks of runs: bounded memory
+        e = ends[lo:lo + block]
+        n_rows = np.empty((len(e), n_days))
+        n_pos = np.empty((len(e), n_days))
+        for d in range(n_days):
+            n_rows[:, d] = np.searchsorted(by_day[day_start[d]:day_start[d + 1]], e, side="right")
+            n_pos[:, d] = np.searchsorted(pos_by_day[pos_start[d]:pos_start[d + 1]], e, side="right")
+        tp, alerts = n_pos @ c, n_rows @ c                            # runs x resamples
+        precision = np.divide(tp, alerts, out=np.zeros_like(tp), where=alerts > 0)
+        d_tp = np.diff(np.vstack([prev_tp, tp]), axis=0)
+        ap += (d_tp * precision).sum(axis=0)
+        prev_tp = tp[-1]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return ap / total_tp
 
 
 def weighted_mean_resamples(values, codes, counts):

@@ -13,8 +13,11 @@ rise and fall with the same storms. The question is about the difference, so bot
 Usage: pixi run python -m ml.significance
 Writes ml/results/significance_2025.csv. Reads the predictions saved by ml/export_hourly.py's sources.
 """
+import os
+
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 from scipy.stats import rankdata
 from sklearn.metrics import average_precision_score
 
@@ -23,6 +26,18 @@ from ml.export_hourly import MODELS, TEST_YEAR, predictions
 from ml.uncertainty import day_weights, pr_auc_resamples, storm_day
 
 N_PERMUTATIONS = 1000
+# permutations run in parallel (each is a PR-AUC over every 2025 decision: ~3 h per comparison on one core for the
+# whole country); the swaps are drawn in the same order as one core would, so the p-values are the same
+N_JOBS = min(12, os.cpu_count() or 1)
+
+
+def _swapped_differences(y, pa, pb, day, swaps):
+    """The permutation null for a batch of per-day swap draws (uniform numbers, one per storm day)."""
+    out = np.empty(len(swaps))
+    for i, u in enumerate(swaps):
+        swap = u[day] < 0.5
+        out[i] = average_precision_score(y, np.where(swap, pb, pa)) - average_precision_score(y, np.where(swap, pa, pb))
+    return out
 COMPARISONS = [  # (challenger, reference)
     ("No forecasts", "Warnings + outlook"),
     ("With HRRR forecasts (mean of 5 runs)", "Warnings + outlook"),
@@ -32,6 +47,13 @@ COMPARISONS = [  # (challenger, reference)
 ]
 
 
+OUT = data.ROOT / "ml" / "results" / "significance_2025.csv"
+# comparisons finished so far (a comparison is ~45 min for the whole country): a stopped run resumes after the
+# last one, and OUT is written only when every comparison is done, so the pipeline never takes a partial file
+# for a finished step
+PARTIAL = OUT.with_suffix(".partial.csv")
+
+
 def main():
     pred = predictions()
     y = pred.y.to_numpy()
@@ -39,19 +61,24 @@ def main():
     day = (storm_day(pred.block_start) - first).dt.days.to_numpy()
     counts, _ = day_weights(np.arange(day.max() + 1))
     boot = {}
-    rows = []
+    rows = pd.read_csv(PARTIAL).to_dict("records") if PARTIAL.exists() else []
+    assert [(r["challenger"], r["reference"]) for r in rows] == COMPARISONS[:len(rows)], f"{PARTIAL} is stale"
+    if rows:
+        print(f"resuming after {len(rows)} comparisons saved in {PARTIAL}", flush=True)
     rng = np.random.default_rng(0)
-    for a, b in COMPARISONS:
+    for i, (a, b) in enumerate(COMPARISONS):
+        # drawn for every comparison, done or not, so a resumed run uses the same swaps as an uninterrupted one
+        draws = [rng.random(day.max() + 1) for _ in range(N_PERMUTATIONS)]
+        if i < len(rows):
+            continue
         for m in (a, b):
             if m not in boot:
                 boot[m] = pr_auc_resamples(y, pred[MODELS[m]], day, counts)
         pa, pb = rankdata(pred[MODELS[a]]) / len(pred), rankdata(pred[MODELS[b]]) / len(pred)
         observed = average_precision_score(y, pa) - average_precision_score(y, pb)
-        null = np.empty(N_PERMUTATIONS)
-        for i in range(N_PERMUTATIONS):
-            swap = rng.random(day.max() + 1)[day] < 0.5
-            null[i] = (average_precision_score(y, np.where(swap, pb, pa))
-                       - average_precision_score(y, np.where(swap, pa, pb)))
+        batches = np.array_split(np.arange(N_PERMUTATIONS), N_JOBS * 4)
+        null = np.concatenate(Parallel(n_jobs=N_JOBS)(
+            delayed(_swapped_differences)(y, pa, pb, day, [draws[i] for i in b]) for b in batches))
         diff = boot[a] - boot[b]
         rows.append({"challenger": a, "reference": b, "pr_auc_challenger": average_precision_score(y, pred[MODELS[a]]),
                      "pr_auc_reference": average_precision_score(y, pred[MODELS[b]]),
@@ -60,7 +87,9 @@ def main():
                      "p_permutation": float(((null >= observed).sum() + 1) / (N_PERMUTATIONS + 1)),
                      "n_storm_days": int(day.max() + 1)})
         print(rows[-1], flush=True)
-        pd.DataFrame(rows).to_csv(data.ROOT / "ml" / "results" / "significance_2025.csv", index=False)
+        pd.DataFrame(rows).to_csv(PARTIAL, index=False)
+    pd.DataFrame(rows).to_csv(OUT, index=False)
+    PARTIAL.unlink()
 
 
 if __name__ == "__main__":

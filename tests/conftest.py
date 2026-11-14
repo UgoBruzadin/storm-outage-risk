@@ -19,6 +19,10 @@ sys.path.insert(0, str(ROOT))                  # `from ml import ...`
 APP_DATA = Path(tempfile.mkdtemp(prefix="app-data-"))
 os.environ["APP_DATA"] = str(APP_DATA)
 
+import ml.data  # noqa: E402  (after sys.path)
+
+ml.data.TABLE_CACHE = Path(tempfile.mkdtemp(prefix="table-cache-"))    # tests never write into data/cache
+
 
 def square(x, y):
     return json.dumps({"type": "Polygon", "coordinates": [[[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1], [x, y]]]})

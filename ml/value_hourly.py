@@ -20,8 +20,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from ml import data, models
-from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT
+from ml import data
+from ml.moving_window import FEATURES, THRESHOLD_PCT, fit_runs, predict_states
 from ml.value import MIXES, RESTORATION_CUT, STAGING_COST, mix_cost
 
 LEAD = 2
@@ -83,13 +83,10 @@ def net_savings(test, flagged, events, saved, cost):
 
 
 def main():
-    df = data.load_hourly(THRESHOLD_PCT, TRAIN_YEARS + [TEST_YEAR], LEAD)
-    train, test = df[df.year.isin(TRAIN_YEARS)], df[df.year == TEST_YEAR].copy()
-    cols = models.NEEDS_COLUMNS["official"]
-    test["official"] = models.build("official").fit(train[cols], train["y"]).predict_proba(test[cols])[:, 1]
-    features = data.resolve_features(FEATURES)
-    fitted = models.build("xgboost", PARAMS).fit(train[features], train["y"])
-    test["model"] = fitted.predict_proba(test[features])[:, 1]
+    # sampled training, exact rate-table counts, 2025 scored a state at a time (moving_window.fit_runs)
+    fitted = fit_runs([("official", "official", None), ("model", "xgboost", FEATURES)], LEAD, TRAIN_YEARS,
+                      levels=False)
+    test = predict_states(fitted, TEST_YEAR, LEAD)
     train_ev, test_ev = outages(TRAIN_YEARS), outages([TEST_YEAR]).reset_index(drop=True)
     rows = []
     for mix_name, mix in MIXES.items():

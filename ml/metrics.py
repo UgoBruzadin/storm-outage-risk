@@ -51,3 +51,12 @@ def score(y, p, top=0.01):
         "n_test": int(len(y)),
         "n_events": int(y.sum()),
     }
+
+
+def weighted_quantile(p, weight, q):
+    """The q-quantile of p when each row stands for `weight` rows (a sampled table): the smallest value with at
+    least a share q of the total weight at or below it. With equal weights it is np.quantile's 'inverted_cdf'."""
+    p, weight = np.asarray(p, dtype=float), np.asarray(weight, dtype=float)
+    order = np.argsort(p, kind="stable")
+    cum = np.cumsum(weight[order])
+    return float(p[order][np.searchsorted(cum, q * cum[-1], side="left")])

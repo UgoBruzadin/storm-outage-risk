@@ -16,6 +16,9 @@ Seeds default to 0; pass random_state (e.g. a list of seeds) to repeat a run and
 how much of a difference is noise. Any model accepts class_weight: balanced, which weights
 events by (non-events / events) during training, as BigQuery ML's auto_class_weights does.
 """
+import os
+import warnings
+
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin, clone
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
@@ -31,11 +34,15 @@ class RateBaseline(BaseEstimator, ClassifierMixin):
     def __init__(self, by=()):
         self.by = by
 
-    def fit(self, X, y):
-        self.overall_ = float(np.mean(y))
+    def fit(self, X, y, sample_weight=None):
+        """sample_weight: rows standing for several decisions (a sampled table, or data.hourly_counts)."""
+        y = np.asarray(y, dtype=float)
+        w = np.ones(len(y)) if sample_weight is None else np.asarray(sample_weight, dtype=float)
+        self.overall_ = float(np.sum(w * y) / np.sum(w))
         if self.by:
-            frame = X[list(self.by)].assign(_y=np.asarray(y))
-            self.rates_ = frame.groupby(list(self.by))["_y"].mean()
+            frame = X[list(self.by)].assign(_wy=w * y, _w=w)
+            sums = frame.groupby(list(self.by))[["_wy", "_w"]].sum()
+            self.rates_ = sums["_wy"] / sums["_w"]
         self.classes_ = np.array([0, 1])
         return self
 
@@ -90,9 +97,18 @@ def _lightgbm(**params):
     return LGBMClassifier(**{"random_state": 0, "verbose": -1, "n_jobs": -1, **params})
 
 
+# Where XGBoost trains: "cpu" (default), or "cuda" in the gpu environment (pixi run -e gpu ...; ~9x faster on an
+# RTX 3070). The same settings and seed on another device give slightly different trees (floating-point sums run
+# in another order), so a comparison between models should use one device throughout.
+XGB_DEVICE = os.environ.get("STORM_XGB_DEVICE", "cpu")
+# a GPU-trained model scoring rows held in memory: XGBoost copies them over and says so every time
+warnings.filterwarnings("ignore", message=".*Falling back to prediction using DMatrix.*")
+
+
 def _xgboost(**params):
     from xgboost import XGBClassifier
-    return XGBClassifier(**{"random_state": 0, "n_jobs": -1, "tree_method": "hist", "eval_metric": "aucpr", **params})
+    return XGBClassifier(**{"random_state": 0, "n_jobs": -1, "tree_method": "hist", "eval_metric": "aucpr",
+                            "device": XGB_DEVICE, **params})
 
 
 WARNINGS = ("warn_svr", "warn_tor", "warn_wind", "warn_winter")

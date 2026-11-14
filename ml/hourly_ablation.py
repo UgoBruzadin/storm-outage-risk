@@ -14,7 +14,7 @@ import pandas as pd
 
 from ml import data, models
 from ml.metrics import score
-from ml.moving_window import PARAMS, THRESHOLD_PCT
+from ml.moving_window import PARAMS, THRESHOLD_PCT, predict_states
 
 TRAIN_YEARS, VAL_YEAR = [2020, 2021, 2022, 2023], 2024
 BASE = "weather+place+recent_now+warnings+outlook"
@@ -39,17 +39,23 @@ def main():
     configs = dict(list(CONFIGS.items()) if args.configs is None
                    else [list(CONFIGS.items())[int(i)] for i in args.configs.split(",")])
     train_years = list(range(args.train_start, VAL_YEAR))
-    df = data.load_hourly(THRESHOLD_PCT, train_years + [VAL_YEAR], args.lead)
-    train, val = df[df.year.isin(train_years)], df[df.year == VAL_YEAR]
+    train = data.sampled_years(THRESHOLD_PCT, train_years, args.lead)    # sampled; 2024 is scored in full
+    fitted = {}
+    for name, spec in configs.items():
+        features = data.resolve_features(spec)
+        for seed in seeds:
+            fitted[name, seed] = (models.build("xgboost", PARAMS | {"random_state": seed}).fit(
+                train[features], train.y, sample_weight=train.weight), features, None)
+            print(f"fitted {name}, seed {seed}", flush=True)
+    del train
+    val = predict_states(fitted, VAL_YEAR, args.lead, keep=("y",))
     rows = []
     suffix = ("" if args.train_start == TRAIN_YEARS[0] else f"_from{args.train_start}") + \
         (f"_{args.tag}" if args.tag else "")
     out = data.ROOT / "ml" / "results" / f"hourly_ablation_lead{args.lead}{suffix}.csv"
     for name, spec in configs.items():
-        features = data.resolve_features(spec)
         for seed in seeds:
-            model = models.build("xgboost", PARAMS | {"random_state": seed}).fit(train[features], train["y"])
-            s = score(val["y"].to_numpy(), model.predict_proba(val[features])[:, 1])
+            s = score(val["y"].to_numpy(), val[name, seed].to_numpy())
             rows.append({"lead_hours": args.lead, "train_years": f"{train_years[0]}–{train_years[-1]}",
                          "config": name, "features": spec, "seed": seed,
                          "onset_pr_auc": s["pr_auc"], "precision_top1": s["precision_top1"],
