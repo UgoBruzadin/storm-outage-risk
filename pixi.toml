@@ -105,7 +105,20 @@ pytest = "*"
 scikit-learn = ">=1.9.1,<2"   # ml/ tests run in CI too
 pyyaml = "*"
 
+# --- GPU: XGBoost on an NVIDIA card (the Linux workstation; `pixi run -e gpu ...`) ------
+# The same environment as default with XGBoost's CUDA build; STORM_XGB_DEVICE tells ml/models.py to train on it.
+[feature.gpu]
+platforms = ["linux-64"]
+system-requirements = { cuda = "12" }
+
+[feature.gpu.dependencies]
+py-xgboost = { version = "*", build = "cuda*" }
+
+[feature.gpu.activation.env]
+STORM_XGB_DEVICE = "cuda"
+
 [environments]
 default = { features = ["dev", "dbt", "models"], solve-group = "default" }
+gpu = { features = ["dev", "dbt", "models", "gpu"] }                     # linux-64 + NVIDIA only
 app = { features = ["app"], no-default-feature = true }                  # Docker image
 ci = { features = ["app", "dev", "dbt", "models"], no-default-feature = true }     # GitHub Actions: tests, lint, dbt parse
