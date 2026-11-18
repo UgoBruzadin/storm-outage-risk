@@ -242,13 +242,15 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .bar-right { gap: 8px; }
 }
 @media (max-width: 370px) {
-  .bar a[data-t="nav.portfolio"] { display: none; }   /* still linked at the end of the page */
+  .bar a[data-t="nav.portfolio"], .bar a[data-t="nav.code_on_github"] { display: none; }   /* still linked at the end of the page */
 }
 @media (prefers-reduced-motion: reduce) {
   .src, .table-card, .card-body { transition: none; }
   .flow path, .flow-v path { animation: none; }
 }
 </style>
+<script data-goatcounter="https://ugonunes.goatcounter.com/count"
+        async src="https://gc.zgo.at/count.js"></script>
 </head>
 <body>
 <div class="progress" aria-hidden="true"></div>
@@ -256,6 +258,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <a class="home" href="./" data-t="nav.home"></a>
   <span class="bar-right">
     <a href="https://ugobruzadin.github.io/portfolio/" data-t="nav.portfolio"></a>
+    <a href="https://github.com/UgoBruzadin/storm-outage-risk" data-t="nav.code_on_github"></a>
     <a href="writeup/" data-t="nav.writeup"></a>
     <button class="theme" type="button"></button>
   </span>

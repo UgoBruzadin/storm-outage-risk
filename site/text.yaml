@@ -14,7 +14,8 @@
 nav:
   home: "⚡ Storm Outage Risk"
   portfolio: Portfolio
-  writeup: "Full write-up →"
+  code_on_github: GitHub
+  writeup: Full write-up
   to_dark: Switch to dark mode
   to_light: Switch to light mode
 
