@@ -1,12 +1,30 @@
 check,n,agree,max_abs_diff
-"weather: max gust, the 6 h before the decision",20000,1.0,0.0
-"weather: total rain, the 6 h before the decision",20000,1.0,0.0
-outages: the hour before the decision,20000,1.0,0.0
-outages: worst hour of the 24 h before,20000,1.0,0.0
-"neighbours: worst outage within 100 km, the hour before",20000,1.0,0.0
-label: worst hour of h+2 ... h+7,20000,1.0,0.0
-"label: the hour before the window (h+1), selection only",20000,1.0,0.0
-"warnings: every 2025 flag has a warning issued before h, still in force",2226,1.0,
-outlook: category from the latest product issued before h,20000,1.0,0.0
-"forecast: max gust from the run issued at h-2, valid h+2 ... h+7",2000,1.0,0.0
-forecast: run issued before the decision,2000,1.0,
+"weather: max gust, the 6 h before the decision",19999,1.0,9.155273446026513e-07
+"weather: total rain, the 6 h before the decision",19999,1.0,3.662109378410605e-06
+outages: the hour before the decision,19999,1.0,2.3108193047960413e-07
+outages: worst hour of the 24 h before,19999,1.0,2.1551147568743545e-06
+"neighbours: worst outage within 100 km, the hour before",19999,1.0,3.5586572550982964e-06
+label: worst hour of h+2 ... h+7,19999,1.0,3.536508941692773e-06
+"label: the hour before the window (h+1), selection only",19999,1.0,2.217108185931238e-07
+"weather: total rain, the 72 h before the decision",19999,1.0,7.32421875682121e-06
+"history: events per year, as of Jan 1 of the row's year",19999,1.0,6.916215880892196e-06
+"history: storm hit rate, as of Jan 1 of the row's year",19999,1.0,2.921796316002201e-08
+history: ends on or before Jan 1 of the row's year,19999,1.0,
+place: latitude from regions_study.csv,19999,1.0,1.9042968730786924e-06
+place: longitude from regions_study.csv,19999,1.0,3.808593746157385e-06
+place: road per customer from roads.csv,19999,1.0,3.306349976028855e-07
+place: road under canopy from roads.csv,19999,1.0,2.95639037695139e-08
+place: tree height from treemap.csv,19999,1.0,3.808593746157385e-06
+place: poorly drained soil from soil.csv,19999,1.0,2.975463864185457e-08
+place: utility SAIDI from utilities.csv,19999,1.0,2.8222656283105607e-05
+place: flood zone share from flood_zones.csv,19999,1.0,2.7465820284788833e-08
+place: poorly drained soil x 72 h rain,19999,1.0,5.6777954142717135e-06
+"warnings: every 2025 flag has a warning issued before h, still in force",36188,1.0,
+outlook: category from the latest product issued before h,19999,1.0,0.0
+"forecast: max gust from the run issued at h-2, valid h+2 ... h+7",1998,1.0,0.0
+forecast: run issued before the decision,1998,1.0,
+"forecast: win_gust_hours15 from the run issued at h-2, valid h+2 ... h+7",1998,1.0,0.0
+"forecast: win_gust_hours20 from the run issued at h-2, valid h+2 ... h+7",1998,1.0,0.0
+"forecast: win_gust_mean from the run issued at h-2, valid h+2 ... h+7",1998,1.0,1.9073486328125e-06
+"forecast: win_gust_median from the run issued at h-2, valid h+2 ... h+7",1998,1.0,0.0
+"forecast: win_gustiness_max from the run issued at h-2, valid h+2 ... h+7",1998,1.0,0.0
