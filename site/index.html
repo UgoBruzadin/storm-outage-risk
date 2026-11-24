@@ -4,15 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Storm Outage Risk, in Two Minutes</title>
-<meta name="description" content="How early can you know which counties will lose power in a storm? A county-level outage model for Missouri and Illinois, tested two hours ahead on a year it never trained on.">
+<!-- DRAFT (site-usa). TODO(rerun): add the headline ratio to og:description and the image alt once story.json is
+     rebuilt; social.jpg is still the Missouri + Illinois image and needs a USA version. -->
+<meta name="description" content="How early can you know which counties will lose power in a storm? A county-level outage model for the lower 48 states, tested two hours ahead on a year it never trained on.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ugobruzadin.github.io/storm-outage-risk/">
-<meta property="og:title" content="Which counties will lose power in the next storm, two hours ahead?">
-<meta property="og:description" content="A county-level outage model built on public data and real weather forecasts. Two hours ahead, it ranks new outages 2.4× better than official warnings and outlooks (95% range 2.0–3.3×), tested on 2025.">
+<meta property="og:title" content="Which US counties will lose power in the next storm, two hours ahead?">
+<meta property="og:description" content="A county-level outage model for the lower 48, built on public data and real weather forecasts, tested two hours ahead on 2025 against official warnings and outlooks.">
 <meta property="og:image" content="https://ugobruzadin.github.io/storm-outage-risk/assets/social.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Two maps of Missouri and Illinois with all 1,436 new outages of 2025 as dots, blue where the forecast alerted in time: the model caught 429, official warnings and outlooks caught 243.">
+<meta property="og:image:alt" content="TODO: describe the USA social image">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 <script>
@@ -50,6 +52,12 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--line); font-size: .9rem; }
 .bar a { text-decoration: none; font-weight: 600; }
 .bar-right { display: flex; align-items: center; gap: 12px; }
+/* the state picker: results and maps for one state (or Missouri + Illinois); the whole country by default */
+.pick { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+.pick select { font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; max-width: 11rem; }
+.st.picked text { font-weight: 700; }
+.st.picked rect { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
 .theme { font: 1rem/1 system-ui, sans-serif; width: 32px; height: 32px; padding: 0; cursor: pointer; color: var(--ink);
   background: transparent; border: 1px solid var(--line); border-radius: 999px; }
 .bar .home { color: var(--ink); }
@@ -113,7 +121,28 @@ strong { color: var(--ink); }
 .map h3 { font-size: 1rem; margin: 0 0 6px; }
 .map svg { max-height: 44svh; width: auto; max-width: 100%; margin: 0 auto; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
-.county { stroke: var(--surface); stroke-width: .5; }
+/* maps zoom to a state (the picker, or the storm map's buttons): keep the counties around it inside the frame */
+#map-pred, #map-acc, #map-place, #map-hit, #map-live { overflow: hidden; }
+.county { stroke: var(--surface); stroke-width: .25; vector-effect: non-scaling-stroke; }
+#map-live .county { stroke-width: .5; }
+.county.hit { stroke: var(--ink); stroke-width: 1.3; }
+.state { vector-effect: non-scaling-stroke; }
+/* the storm: one USA map, zoom buttons over its corner */
+.storm-map { position: relative; }
+#map-pred { max-height: 62svh; width: auto; max-width: 100%; margin: 0 auto; touch-action: pan-x pan-y; cursor: grab; }
+.zoom { position: absolute; top: 6px; right: 6px; display: flex; flex-direction: column; gap: 6px; }
+.zoom button { width: 36px; height: 36px; font: 600 1.05rem/1 system-ui, sans-serif; cursor: pointer; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: .9rem; color: var(--ink-2); cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+/* the app plan: cards */
+.cards6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 8px 0 18px; }
+.cards6 div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  font-size: .95rem; color: var(--ink-2); }
+.cards6 b { display: block; color: var(--ink); margin-bottom: 4px; }
+.status { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600;
+  background: color-mix(in srgb, var(--warm) 16%, transparent); color: var(--warm); margin: 0 0 16px; }
+.pending { color: var(--muted); }
 .state { fill: none; stroke: var(--ink-2); stroke-width: 1; pointer-events: none; }
 .controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 .play { font: 600 .9rem system-ui, sans-serif; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
@@ -184,7 +213,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 .axis path, .axis line { stroke: var(--line); }
 .gridline line { stroke: var(--grid); }
 .label { fill: var(--ink); font-size: 16px; }
-#savings .label, #lead-chart .label, #calib .label, #alert-bars .label, #holds-chart .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+#calib .label, #alert-bars .label, #miss-bars .label, #holds-chart .label,
+#choice-chart .label, #state-chart .label { paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
 .label.muted { fill: var(--muted); }
 .big-label { fill: var(--ink); font-size: 18px; font-weight: 700; }
 .callout { font-weight: 600; margin: 14px 0 0; max-width: 62ch; }
@@ -223,6 +253,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .src { padding: 8px 14px; }
   .table-card { padding: 18px; }
   .next { grid-template-columns: 1fr; }
+  .cards6 { grid-template-columns: 1fr; gap: 8px; }
+  .cards6 div { font-size: .88rem; padding: 10px 12px; }
   .pipe { grid-template-columns: 1fr 50px; gap: 0; }   /* boxes, then a trunk down their right side into the card */
   .flow { display: none; }
   .flow-v { display: block; width: 50px; height: 100%; overflow: visible; }
@@ -238,11 +270,13 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .card .note { display: none; }
 }
 @media (max-width: 480px) {       /* keep the top bar on one line on phones */
-  .bar { padding: 12px; font-size: .82rem; }
-  .bar-right { gap: 8px; }
-}
-@media (max-width: 370px) {
+  .pick > span { display: none; }
+  .bar { padding: 12px; font-size: .78rem; }
+  .bar-right { gap: 6px; }
+  .bar a { white-space: nowrap; }
+  .bar .home { display: none; }                         /* "← Live forecast" is the way home on phones */
   .bar a[data-t="nav.portfolio"] { display: none; }   /* still linked at the end of the page */
+  .pick select { max-width: 5.6rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .src, .table-card, .card-body { transition: none; }
@@ -253,8 +287,11 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <body>
 <div class="progress" aria-hidden="true"></div>
 <nav class="bar">
-  <a class="home" href="./" data-t="nav.home"></a>
+  <a class="home" href="usa/" data-t="nav.home"></a>
   <span class="bar-right">
+    <a href="usa/" data-t="nav.app"></a>
+    <label class="pick"><span data-t="pick.label"></span>
+      <select id="state-pick" aria-label="Show results for a state"></select></label>
     <a href="https://ugobruzadin.github.io/portfolio/" data-t="nav.portfolio"></a>
     <a href="writeup/" data-t="nav.writeup"></a>
     <button class="theme" type="button"></button>
@@ -264,52 +301,32 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
 <div class="tip" role="status"></div>
 
 <main>
-<section class="slide" id="live">
-  <p class="kicker"><span class="beta" data-t="live.beta"></span> <span id="live-kicker"></span></p>
-  <h1 data-t="live.title"></h1>
-  <p class="lead" id="live-lead"></p>
-  <div class="live">
-    <div class="live-map">
-      <svg id="map-live" viewBox="0 0 460 410" role="img"></svg>
-      <div class="controls" style="display: none">
-        <button class="play" type="button" data-t="storm.play"></button>
-        <input class="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Hour of the forecast">
-        <span class="when"></span>
-      </div>
-      <p class="note" id="live-saved"></p>
-    </div>
-    <div class="live-side">
-      <h3 data-t="live.top"></h3>
-      <ol id="live-top"></ol>
-      <div class="live-key" id="live-key"></div>
-      <p class="note" id="live-status"></p>
-      <p class="note disclaimer" data-t="live.disclaimer"></p>
-      <p class="note" data-t="live.model"></p>
-      <a class="live-repo" href="https://github.com/UgoBruzadin/storm-outage-live" data-t="live.repo"></a>
-    </div>
-  </div>
-</section>
-
 <section class="slide" id="storm">
   <p class="kicker" data-t="storm.kicker"></p>
-  <h2 data-t="storm.title"></h2>
-  <p class="lead" data-t="storm.lead"></p>
-  <div class="maps">
-    <div class="map"><h3 data-t="storm.map_risk"></h3><svg id="map-pred" viewBox="0 0 460 470" role="img" aria-label="Outage risk by county, decided two hours ahead"></svg></div>
-    <div class="map"><h3 data-t="storm.map_actual"></h3><svg id="map-actual" viewBox="0 0 460 470" role="img" aria-label="Worst share of customers out by county in the same six hours"></svg></div>
+  <h1 data-t="storm.title"></h1>
+  <p class="lead" id="storm-lead"></p>
+  <div class="storm-map">
+    <svg id="map-pred" role="img"></svg>
+    <div class="zoom">
+      <button type="button" data-zoom="in">+</button>
+      <button type="button" data-zoom="out">−</button>
+      <button type="button" data-zoom="reset">⤢</button>
+    </div>
   </div>
   <div class="controls">
     <button class="play" type="button" data-t="storm.play"></button>
     <input class="scrub" type="range" min="0" value="0" step="1" aria-label="Hour of the storm">
     <span class="when"></span>
-    <span class="totals"></span>
+    <label class="check"><input type="checkbox" id="storm-actual" checked> <span data-t="storm.actual"></span></label>
   </div>
+  <p class="totals" id="storm-totals"></p>
+  <p class="note"><span data-t="storm.display"></span> <span data-t="storm.zoom_hint"></span></p>
 </section>
 
 <section class="slide" id="data">
   <p class="kicker" data-t="data.kicker"></p>
   <h2 data-t="data.title"></h2>
-  <p class="lead" data-t="data.lead"></p>
+  <p class="lead" id="data-lead"></p>
   <div class="pipe">
     <div class="sources"></div>
     <svg class="flow" viewBox="0 0 90 250" aria-hidden="true">
@@ -336,14 +353,14 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
           <b data-t="traps.gaps.title"></b></button>
         <div class="card-body"><div class="inner" id="gaps">
           <p class="lead" data-t="traps.gaps.lead"></p>
-          <svg id="heartbeat" role="img" aria-label="Snapshots recorded per six hours, 21 to 27 May 2024: steady at 24, dropping to 1 on 24 May"></svg>
+          <svg id="heartbeat" role="img" aria-label="Snapshots recorded per six hours, 21 to 27 May 2024, with a drop on 24 May"></svg>
         </div></div>
       </article>
       <article class="card">
         <button class="card-head" type="button" aria-expanded="false"><span class="num">2</span>
           <b data-t="traps.persist.title"></b></button>
         <div class="card-body"><div class="inner" id="persist">
-          <p class="lead" data-t="traps.persist.lead"></p>
+          <p class="lead" id="persist-lead"></p>
           <svg id="persistence" role="img" aria-label="Score on every period versus on new outages only"></svg>
           <p class="note" data-t="traps.persist.note"></p>
         </div></div>
@@ -352,7 +369,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
         <button class="card-head" type="button" aria-expanded="false"><span class="num">3</span>
           <b data-t="traps.peek.title"></b></button>
         <div class="card-body"><div class="inner" id="peek">
-          <p class="lead" data-t="traps.peek.lead"></p>
+          <p class="lead" id="peek-lead"></p>
           <svg id="timeline" role="img" aria-label="What each version of the model knows, relative to the decision and the six hours it predicts"></svg>
         </div></div>
       </article>
@@ -365,14 +382,20 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="kicker" data-t="ladder.kicker"></p>
   <h2 id="ladder-title"></h2>
   <svg id="ladder-chart" role="img" aria-label="How many times better than warnings and outlook alone, with 95% ranges, for each version"></svg>
+  <p class="lead" id="ladder-state"></p>
+  <p class="note" id="ladder-previous"></p>
   <p class="note" id="ladder-note"></p>
 </section>
 
-<section class="slide" id="lead">
-  <p class="kicker" data-t="lead.kicker"></p>
-  <h2 data-t="lead.title"></h2>
-  <svg id="lead-chart" role="img" aria-label="Score on new outages against hours ahead, for each version"></svg>
-  <p class="note" data-t="lead.note"></p>
+<section class="slide" id="choices">
+  <p class="kicker" data-t="choices.kicker"></p>
+  <h2 data-t="choices.title"></h2>
+  <p class="lead" id="choices-base"></p>
+  <p class="lead" id="choices-lead"></p>
+  <div class="key" id="choices-key"></div>
+  <svg id="choice-chart" role="img" aria-label="Gain on 2024 from each change to the model, with 95% ranges, kept or not"></svg>
+  <p class="note" data-t="choices.rule"></p>
+  <p class="note" id="choices-test"></p>
 </section>
 
 <section class="slide" id="alerts">
@@ -385,6 +408,15 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="note" id="alerts-note"></p>
 </section>
 
+<section class="slide" id="misses">
+  <p class="kicker" data-t="misses.kicker"></p>
+  <h2 id="misses-title"></h2>
+  <p class="lead" id="misses-lead"></p>
+  <div class="key" id="misses-key"></div>
+  <svg id="miss-bars" role="img" aria-label="Share of each kind of new outage caught, the model against warnings and outlook"></svg>
+  <p class="note" data-t="misses.note"></p>
+</section>
+
 <section class="slide" id="ranges">
   <p class="kicker" data-t="ranges.kicker"></p>
   <h2 id="ranges-title"></h2>
@@ -392,6 +424,14 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <div class="key" id="ranges-key"></div>
   <svg id="calib" role="img" aria-label="For each group of predictions, what the model said against how often an outage followed"></svg>
   <p class="note" data-t="ranges.note"></p>
+</section>
+
+<section class="slide" id="states">
+  <p class="kicker" data-t="states.kicker"></p>
+  <h2 id="states-title"></h2>
+  <p class="lead" id="states-lead"></p>
+  <svg id="state-chart" role="img" aria-label="Each state's ratio to warnings and outlook, with 95% ranges"></svg>
+  <p class="note" id="states-note"></p>
 </section>
 
 <section class="slide" id="where">
@@ -419,19 +459,38 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="lead" id="trees-lead"></p>
   <div class="tabs" role="tablist" id="place-tabs"></div>
   <div class="maps">
-    <div class="map"><h3 id="place-title"></h3><svg id="map-place" viewBox="0 0 460 470" role="img"></svg></div>
-    <div class="map"><h3 class="hit-switch" id="hit-switch"></h3><svg id="map-hit" viewBox="0 0 460 470" role="img"></svg></div>
+    <div class="map"><h3 id="place-title"></h3><svg id="map-place" viewBox="0 0 460 345" role="img"></svg></div>
+    <div class="map"><h3 class="hit-switch" id="hit-switch"></h3><svg id="map-hit" viewBox="0 0 460 345" role="img"></svg></div>
   </div>
   <p class="place-r" id="place-r"></p>
   <p class="note" id="trees-note"></p>
 </section>
 
-<section class="slide" id="value">
-  <p class="kicker" data-t="value.kicker"></p>
-  <h2 id="value-title"></h2>
-  <p class="lead" data-t="value.lead"></p>
-  <svg id="savings" role="img" aria-label="Estimated net savings in 2025 from staging crews on each forecast, four scenarios each"></svg>
-  <p class="note" data-t="value.note"></p>
+<section class="slide" id="live">
+  <p class="kicker"><span class="beta" data-t="live.beta"></span> <span id="live-kicker"></span></p>
+  <h2 data-t="live.title"></h2>
+  <p class="lead" id="live-lead"></p>
+  <div class="live">
+    <div class="live-map">
+      <svg id="map-live" viewBox="0 0 460 410" role="img"></svg>
+      <div class="controls" style="display: none">
+        <button class="play" type="button" data-t="storm.play"></button>
+        <input class="scrub" type="range" min="0" max="0" value="0" step="1" aria-label="Hour of the forecast">
+        <span class="when"></span>
+      </div>
+      <p class="note" id="live-saved"></p>
+    </div>
+    <div class="live-side">
+      <h3 data-t="live.top"></h3>
+      <ol id="live-top"></ol>
+      <div class="live-key" id="live-key"></div>
+      <p class="note" id="live-status"></p>
+      <p class="note disclaimer" data-t="live.disclaimer"></p>
+      <p class="note" data-t="live.model"></p>
+      <p class="note" id="live-usa"></p>
+      <a class="live-repo" href="https://github.com/UgoBruzadin/storm-outage-live" data-t="live.repo"></a>
+    </div>
+  </div>
 </section>
 
 <section class="slide" id="end">
@@ -473,7 +532,21 @@ const fmt = d3.format(",");
 const pct = d3.format(".0%");
 const pct1 = d3.format(".1%");
 const signed = v => (v > 0 ? "+" : "−") + Math.abs(v).toFixed(2);
-const stateAbbr = s => (s === "Missouri" ? "MO" : "IL");
+const ABBR = { Alabama: "AL", Arizona: "AZ", Arkansas: "AR", California: "CA", Colorado: "CO", Connecticut: "CT",
+  Delaware: "DE", "District of Columbia": "DC", Florida: "FL", Georgia: "GA", Idaho: "ID", Illinois: "IL", Indiana: "IN",
+  Iowa: "IA", Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD", Massachusetts: "MA",
+  Michigan: "MI", Minnesota: "MN", Mississippi: "MS", Missouri: "MO", Montana: "MT", Nebraska: "NE", Nevada: "NV",
+  "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY", "North Carolina": "NC",
+  "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK", Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI",
+  "South Carolina": "SC", "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT", Virginia: "VA",
+  Washington: "WA", "West Virginia": "WV", Wisconsin: "WI", Wyoming: "WY" };
+const stateAbbr = s => ABBR[s] || s;
+const LIVE_STATES = ["Missouri", "Illinois"];          // the frozen blind test (storm-outage-live, live-v1.1)
+// a number story.json doesn't have yet (file missing, or the pipeline hasn't refreshed it) shows as "[pending]"
+const pending = () => `<span class="pending">${Tp("common.pending")}</span>`;
+const have = v => v != null && Number.isFinite(+v);
+const or = (v, f) => (have(v) ? f(v) : pending());
+const signedPct = v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%";
 
 // every word on the page lives in text.yaml: T(key, {name: value}) fills {name} placeholders and turns
 // **bold** / *italics* into HTML; Tp gives plain text, for SVG labels
@@ -600,12 +673,47 @@ addEventListener("scroll", () => {
   progress.style.width = (100 * h.scrollTop / (h.scrollHeight - h.clientHeight)) + "%";
 }, { passive: true });
 
+// the state picker: ?state=MO or ?state=MO,IL. The storm, county and trees maps zoom to the pick, the result,
+// state and trees slides quote its numbers, and the state list marks it; nothing picked = the whole country
+const BY_ABBR = Object.fromEntries(Object.entries(ABBR).map(([name, a]) => [a, name]));
+let PICK = [];
+function readPick() {
+  const q = new URLSearchParams(location.search).get("state");
+  PICK = q ? [...new Set(q.toUpperCase().split(/[\s,+]+/).map(a => BY_ABBR[a]).filter(Boolean))] : [];
+}
+readPick();
+const isMoIl = () => PICK.length === 2 && PICK.includes("Missouri") && PICK.includes("Illinois");
+const pickName = () => (isMoIl() ? Tp("pick.moil") : PICK.join(" + "));
+// the counties to fit a map to: the picked states', or every county
+const pickFit = (features, fc) => (PICK.length
+  ? { type: "FeatureCollection", features: features.filter(f => PICK.includes(f.properties.state)) } : fc);
+// the picked states' row in story.json's states_results (Missouri + Illinois has its own row)
+function pickResult(data) {
+  const rows = (data.states_results || {}).rows || [];
+  if (isMoIl()) return rows.find(r => r.key === "MO+IL");
+  return PICK.length === 1 ? rows.find(r => r.name === PICK[0]) : null;
+}
+function pickMenu(data, onPick) {
+  const sel = document.querySelector("#state-pick");
+  const names = [...new Set(data.counties.map(c => c.state))].filter(n => ABBR[n]).sort();
+  const opts = [["", Tp("pick.all")], ["MO,IL", Tp("pick.moil")], ...names.map(n => [ABBR[n], n])];
+  sel.innerHTML = opts.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join("");
+  sel.value = isMoIl() ? "MO,IL" : PICK.length === 1 ? ABBR[PICK[0]] : "";
+  sel.addEventListener("change", () => {
+    const url = new URL(location.href);
+    if (sel.value) url.searchParams.set("state", sel.value); else url.searchParams.delete("state");
+    history.replaceState(null, "", url);
+    readPick();
+    onPick();
+  });
+}
+
 // a chart's drawing width: its container's, at least 320
 const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getBoundingClientRect().width || 900));
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-11-03a"),          // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-11-19-usa"),       // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
@@ -615,8 +723,8 @@ Promise.all([
   const features = data.counties.map(c => ({ type: "Feature", id: c.id, properties: c, geometry: c.geometry }));
   const states = data.states.map(s => ({ type: "Feature", properties: s, geometry: s.geometry }));
   const fc = { type: "FeatureCollection", features };
-  liveNow(features, states, fc);
-  storm(data, features, states, fc);
+  liveNow(data, features, states);
+  const stormFocus = storm(data, features, states, fc);
   pipeline(data);
   // charts drawn at their real width (text stays legible on phones); redrawn, finished, on resize
   const charts = [
@@ -624,25 +732,31 @@ Promise.all([
     ["#persistence", animate => persistence(data, animate)],
     ["#timeline", animate => timeline(data, animate)],
     ["#ladder-chart", animate => ladder(data, animate)],
-    ["#lead-chart", animate => leadTime(data, animate)],
+    ["#choice-chart", animate => choices(data, animate)],
+    ["#state-chart", animate => statesChart(data, animate)],
     ["#alert-bars", animate => alerts(data, animate)],
+    ["#miss-bars", animate => misses(data, animate)],
     ["#calib", animate => calibration(data, animate)],
-    ["#savings", animate => savings(data, animate)],
     ["#map-acc", animate => accuracy(data, features, states, fc, animate)],
     ["#holds-chart", animate => holdsUp(data, animate)],
     ["#map-place", animate => trees(data, features, states, fc, animate)],
   ];
   charts.forEach(([, draw]) => draw(true));
+  // a new pick redraws every chart, finished, and moves the storm map
+  const redraw = () => charts.forEach(([sel, draw]) => { d3.select(sel).selectAll("*").remove(); draw(false); });
+  pickMenu(data, () => { redraw(); stormFocus(true); });
+  stormFocus(false);
   let lastWidth = innerWidth;
   addEventListener("resize", () => {
     if (Math.abs(innerWidth - lastWidth) < 40) return;
     lastWidth = innerWidth;
-    charts.forEach(([sel, draw]) => { d3.select(sel).selectAll("*").remove(); draw(false); });
+    redraw();
   });
 });
 
 function countyMap(svg, features, states, fc, width, height) {
-  const projection = d3.geoConicEqualArea().parallels([36.5, 42]).rotate([91.5, 0]).fitSize([width, height], fc);
+  // Albers equal-area for the lower 48 (fitted to whichever counties are passed: the country, or MO + IL live)
+  const projection = d3.geoConicEqualArea().parallels([29.5, 45.5]).rotate([96, 0]).fitSize([width, height], fc);
   const path = d3.geoPath(projection);
   const g = svg.append("g");
   const counties = g.selectAll("path.county").data(features).join("path").attr("class", "county").attr("d", path);
@@ -675,7 +789,13 @@ function legend(svg, x, y, w, colors, domain, ticks, format, title) {
 
 // the live forecast from the storm-outage-live repo, refreshed by its hourly job: latest.json, and hours/ for the past 12 hours
 const LIVE = "https://raw.githubusercontent.com/UgoBruzadin/storm-outage-live/main";
-function liveNow(features, states, fc) {
+function liveNow(data, allFeatures, allStates) {
+  const features = allFeatures.filter(f => LIVE_STATES.includes(f.properties.state));
+  const states = allStates.filter(s => LIVE_STATES.includes(s.properties.name));
+  const fc = { type: "FeatureCollection", features };
+  const u = data.live_usa || {};
+  document.querySelector("#live-usa").innerHTML = T("live.usa", { ratio: or(u.ratio, v => v.toFixed(1)),
+    lo: or(u.ratio_lo, v => v.toFixed(1)), hi: or(u.ratio_hi, v => v.toFixed(1)), keeps: or(u.keeps, pct) });
   const svg = d3.select("#map-live").attr("aria-label", Tp("live.map_label"));
   const counties = countyMap(svg, features, states, fc, 460, 410);
   counties.attr("fill", "var(--idle)");
@@ -748,30 +868,41 @@ function liveNow(features, states, fc) {
   }).catch(() => { status.innerHTML = T("live.error"); });
 }
 
+// the storm: one map of the lower 48, the risk decided LEAD hours before each 6-hour window (fill), with the counties
+// that were >= 5% out in the window outlined; zoom with the buttons, ctrl + wheel or two fingers, drag to move
 function storm(data, features, states, fc) {
-  const pred = d3.select("#map-pred"), actual = d3.select("#map-actual");
-  const pc = countyMap(pred, features, states, fc, 460, 410);
-  const ac = countyMap(actual, features, states, fc, 460, 410);
-  const maxP = Math.min(0.6, d3.max(data.storm.flatMap(s => s.prob)));
-  const maxO = 25;     // worst share out: 5% is an outage here, so the scale tops out at 25% and clamps
+  const scale = data.storm_scale || 1, P = v => (v == null ? null : v / scale);
+  const W = 960, H = 640, mapH = 580;
+  const svg = d3.select("#map-pred").attr("viewBox", `0 0 ${W} ${H}`).attr("aria-label", Tp("storm.map_label"));
+  document.querySelector("#storm-lead").innerHTML = T("storm.lead", { counties: fmt(data.counties.length) });
+  const view = svg.append("g");
+  const pc = countyMap(view, features, states, fc, W, mapH);
+  const maxP = Math.min(0.6, d3.max(data.storm.flatMap(s => s.prob.map(P))) || 0.6);
   const colorP = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, maxP]).clamp(true);
-  const colorO = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("orange"))).domain([0, maxO]).clamp(true);
-  legend(pred, 80, 445, 300, () => ramp("blue"), [0, maxP], [0, 0.2, 0.4, 0.6].filter(t => t <= maxP), pct,
+  legend(svg, W / 2 - 150, H - 34, 300, () => ramp("blue"), [0, maxP], [0, 0.2, 0.4, 0.6].filter(t => t <= maxP), pct,
     Tp("storm.legend_risk"));
-  legend(actual, 80, 445, 300, () => ramp("orange"), [0, maxO], [0, 5, 10, 15, 20, 25], d => d + (d === 25 ? "%+" : "%"),
-    Tp("storm.legend_actual"));
-  // a compact legend under each map, shown on phones instead of the in-map one
-  const mlegends = [[pred, () => ramp("blue"), "0%", pct(maxP)], [actual, () => ramp("orange"), "0%", maxO + "%+"]]
-    .map(([svg, colors, lo, hi]) => {
-      const box = d3.select(svg.node().parentNode).append("div").attr("class", "mlegend");
-      box.append("span").text(lo); const bar = box.append("i"); box.append("span").text(hi);
-      const paint = () => bar.style("background", `linear-gradient(to right, ${colors().join(",")})`);
-      paint(); return paint;
-    });
-  repaint.push(...mlegends);
+  const outlined = svg.append("g").attr("class", "legend").attr("transform", `translate(${W / 2 + 170},${H - 34})`);
+  outlined.append("rect").attr("width", 14).attr("height", 10).attr("y", -1).attr("fill", "none")
+    .attr("stroke", "var(--ink)").attr("stroke-width", 2);
+  outlined.append("text").attr("x", 20).attr("y", 8).text(Tp("storm.legend_actual"));
+  // zoom: wheel only with ctrl / cmd (plain scrolling moves the page), one finger scrolls the page, two zoom
+  const zoom = d3.zoom().scaleExtent([1, 16]).translateExtent([[0, 0], [W, mapH]])
+    .filter(e => (e.type === "wheel" ? e.ctrlKey || e.metaKey : e.type.startsWith("touch") ? e.touches.length > 1 : !e.button))
+    .on("zoom", e => view.attr("transform", e.transform));
+  svg.call(zoom).style("touch-action", "pan-x pan-y");
+  const zoomBy = k => svg.transition().duration(REDUCE ? 0 : 300).call(zoom.scaleBy, k);
+  document.querySelectorAll("#storm .zoom button").forEach(b => {
+    const k = b.dataset.zoom;
+    b.setAttribute("aria-label", Tp(`storm.${k === "in" ? "zoom_in" : k === "out" ? "zoom_out" : "reset"}`));
+    b.title = b.getAttribute("aria-label");
+    b.addEventListener("click", () => (k === "reset"
+      ? svg.transition().duration(REDUCE ? 0 : 400).call(zoom.transform, d3.zoomIdentity) : zoomBy(k === "in" ? 1.6 : 1 / 1.6)));
+  });
+  const actual = document.querySelector("#storm-actual");
   const scrub = document.querySelector("#storm .scrub");
   scrub.max = data.storm.length - 1;
   scrub.addEventListener("input", () => { stop(); show(+scrub.value); });
+  actual.addEventListener("change", () => show(i, false));
   let i = 0, timer = null;
   const clock = (t, opts) => new Date(t).toLocaleString("en-US", { timeZone: "America/Chicago", ...opts });
   function when(start) {
@@ -779,25 +910,28 @@ function storm(data, features, states, fc) {
     return Tp("storm.when", { window: `${clock(t, { weekday: "short", hour: "numeric" })}–${clock(end, { hour: "numeric" })}`,
                               decided: clock(decided, { hour: "numeric" }) });
   }
+  const total = s => d3.sum(Object.values(s.out || {}));
   function show(k, animate = true) {
     i = k;
     const s = data.storm[k];
     const dur = animate && !REDUCE ? 350 : 0;
-    pc.transition().duration(dur).attr("fill", (d, j) => (s.prob[j] == null ? css("--idle") : colorP()(s.prob[j])));
-    ac.transition().duration(dur).attr("fill", (d, j) => (s.pct[j] == null ? css("--idle") : colorO()(s.pct[j])));
+    pc.transition().duration(dur).attr("fill", (d, j) => (s.prob[j] == null ? css("--idle") : colorP()(P(s.prob[j]))));
+    pc.classed("hit", (d, j) => actual.checked && s.pct[j] != null && s.pct[j] >= 5);
+    pc.filter(".hit").raise();
     scrub.value = k;
     d3.select("#storm .when").text(when(s.start));
-    d3.select("#storm .totals").text(Tp("storm.totals", { mo: fmt(s.out_mo), il: fmt(s.out_il) }));
+    const top = Object.entries(s.out || {}).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([name, n]) => `${stateAbbr(name)} ${fmt(n)}`).join(", ");
+    document.querySelector("#storm-totals").textContent = Tp("storm.totals", { total: fmt(total(s)), top });
   }
-  const tipHtml = (d, j) => {
-    const s = data.storm[i];
+  const index = new Map(features.map((f, j) => [f, j]));
+  pc.on("pointermove", (e, d) => {
+    const s = data.storm[i], j = index.get(d);
     const risk = s.prob[j] == null ? T("storm.tip_none") :
-      T("storm.tip_risk", { p: pct(s.prob[j]), low: pct(s.low[j]), high: pct(s.high[j]) });
-    return `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>${risk}<br>` +
-      T("storm.tip_worst", { pct: s.pct[j] == null ? T("storm.tip_unknown") : s.pct[j] + "% out" });
-  };
-  [pc, ac].forEach(sel => sel.on("pointermove", (e, d) => showTip(e, tipHtml(d, features.indexOf(d))))
-    .on("pointerleave", hideTip));
+      T("storm.tip_risk", { p: pct(P(s.prob[j])), low: pct(P(s.low[j])), high: pct(P(s.high[j])) });
+    showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>${risk}<br>` +
+      T("storm.tip_worst", { pct: s.pct[j] == null ? T("storm.tip_unknown") : s.pct[j] + "% out" }));
+  }).on("pointerleave", hideTip);
   const button = document.querySelector("#storm .play");
   function stop() { clearInterval(timer); timer = null; button.textContent = Tp("storm.play"); }
   function play() {
@@ -808,14 +942,27 @@ function storm(data, features, states, fc) {
   }
   button.addEventListener("click", play);
   repaint.push(() => show(i, false));
-  if (REDUCE) { show(d3.maxIndex(data.storm, s => s.out_mo + s.out_il), false); return; }
+  // zoom to the picked states (the whole country when none)
+  const projection = d3.geoConicEqualArea().parallels([29.5, 45.5]).rotate([96, 0]).fitSize([W, mapH], fc);
+  function focus(animate) {
+    let tr = d3.zoomIdentity;
+    if (PICK.length) {
+      const [[x0, y0], [x1, y1]] = d3.geoPath(projection).bounds(pickFit(features, fc));
+      const k = Math.max(1, Math.min(16, 0.9 / Math.max((x1 - x0) / W, (y1 - y0) / mapH)));
+      tr = d3.zoomIdentity.translate(W / 2, mapH / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
+    }
+    (animate && !REDUCE ? svg.transition().duration(600) : svg).call(zoom.transform, tr);
+  }
+  if (REDUCE) { show(d3.maxIndex(data.storm, total), false); return focus; }
   show(0, false);
   onEnter(document.querySelector("#storm"), play);
+  return focus;
 }
 
 function pipeline(data) {
   const el = document.querySelector("#data");
   document.querySelector("#tests").textContent = Tp("data.tests", { n: data.pipeline.tests });
+  document.querySelector("#data-lead").innerHTML = T("data.lead", { counties: fmt(data.pipeline.counties) });
   const big = document.querySelector("#periods");
   onEnter(el, () => {
     el.classList.add("played");
@@ -867,6 +1014,8 @@ function heartbeat(data, animate) {
 
 function persistence(data, animate) {
   const still = REDUCE || !animate;
+  document.querySelector("#persist-lead").innerHTML = T("traps.persist.lead",
+    { times: (data.persistence.all / data.persistence.new).toFixed(1) });
   const W = widthOf("#persistence"), narrow = W < 600;
   const rows = [
     { label: Tp("traps.persist.bar_all"), value: data.persistence.all, color: "var(--other)" },
@@ -875,7 +1024,7 @@ function persistence(data, animate) {
   // labels left of the bars, or above them on phones
   const left = narrow ? 0 : 240, rowH = narrow ? 70 : 64, top = narrow ? 24 : 12;
   const svg = d3.select("#persistence").attr("viewBox", `0 0 ${W} ${top + rows.length * rowH}`);
-  const x = d3.scaleLinear().domain([0, 0.45]).range([0, W - left - 70]);
+  const x = d3.scaleLinear().domain([0, Math.max(0.45, data.persistence.all)]).range([0, W - left - 70]);
   const g = svg.selectAll("g.row").data(rows).join("g").attr("class", "row")
     .attr("transform", (d, i) => `translate(${left},${top + i * rowH})`);
   g.append("text").attr("class", "label").attr("x", narrow ? 0 : -16).attr("y", narrow ? -8 : 26)
@@ -895,6 +1044,9 @@ function persistence(data, animate) {
 function timeline(data, animate) {
   const still = REDUCE || !animate;
   const L = data.lead, byKey = Object.fromEntries(data.ladder.map(d => [d.key, d]));
+  document.querySelector("#peek-lead").innerHTML = T("traps.peek.lead", {
+    ceiling: byKey["Perfect weather (ceiling)"].value.toFixed(3), none: byKey["No forecasts"].value.toFixed(3),
+    ours: byKey["With HRRR forecasts (mean of 5 runs)"].value.toFixed(3) });
   const W = widthOf("#timeline"), narrow = W < 600;
   const rows = [
     { name: Tp("traps.peek.row_first"), score: byKey["Perfect weather (ceiling)"].value,
@@ -954,12 +1106,26 @@ function ladder(data, animate) {
   const rows = data.ladder.filter(d => d !== official), ours = rows.find(d => d.ours);
   const pCeiling = data.significance["Perfect weather (ceiling) vs With HRRR forecasts (mean of 5 runs)"];
   document.querySelector("#ladder-title").innerHTML = T("ladder.title", { ratio: ours.ratio.toFixed(1) });
+  const ceiling = rows.find(d => d.ceiling), e = data.e55 || {};
   document.querySelector("#ladder-note").innerHTML = T("ladder.note", { decisions: fmt(data.alerts.decisions),
-    outages: fmt(data.alerts.new_outages), p_ceiling: pCeiling.toFixed(2) });
+    outages: fmt(data.alerts.new_outages), positive: or(e.positive_hours, fmt), random: data.alerts.base_rate.toFixed(3),
+    ceiling: ceiling.ratio.toFixed(1), p_ceiling: pCeiling.toFixed(3) });
+  document.querySelector("#ladder-previous").innerHTML = T("ladder.previous", { vs_prev: or(e.vs_previous, v => v.toFixed(2)),
+    vs_lo: or(e.vs_previous_lo, v => v.toFixed(2)), vs_hi: or(e.vs_previous_hi, v => v.toFixed(2)),
+    better: or(e.better_than_previous, pct), reach: pct(ours.value / ceiling.value) });
+  const pr = pickResult(data), stateLine = document.querySelector("#ladder-state");
+  stateLine.innerHTML = !PICK.length ? ""
+    : !pr ? T("ladder.state_none", { name: pickName() })
+    : !pr.judged ? T("ladder.state_few", { name: pickName(), new: fmt(pr.new), min: data.states_results.min })
+    : T("ladder.state", { name: pickName(), ratio: pr.ratio.toFixed(1), lo: or(pr.lo, v => v.toFixed(1)),
+                          hi: or(pr.hi, v => v.toFixed(1)), new: fmt(pr.new), caught: pct(pr.caught),
+                          official: pct(pr.official_caught) });
+  stateLine.style.display = PICK.length ? "" : "none";
   const label = d => TEXT.ladder.labels[d.key] || d.label;
   const W = widthOf("#ladder-chart"), narrow = W < 600, rowH = narrow ? 62 : 56, left = narrow ? 0 : 300, top = 30;
   const svg = d3.select("#ladder-chart").attr("viewBox", `0 0 ${W} ${top + rows.length * rowH + 10}`);
-  const x = d3.scaleLinear().domain([0, 3.8]).range([0, W - left - (narrow ? 70 : 190)]);
+  const x = d3.scaleLinear().domain([0, Math.max(3.8, d3.max(rows, d => d.ratio_hi) * 1.05)])
+    .range([0, W - left - (narrow ? 70 : 190)]);
   // the official forecasts: the 1× line every bar is measured against
   const base = svg.append("g").attr("transform", `translate(${left},0)`);
   base.append("line").attr("x1", x(1)).attr("x2", x(1)).attr("y1", top - 8).attr("y2", top + rows.length * rowH - 10)
@@ -1012,7 +1178,8 @@ function holdsUp(data, animate) {
   }
   tabs.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", b.dataset.key === holdsTab));
   const tt = t[holdsTab], light = "color-mix(in srgb, var(--accent) 45%, var(--surface))";
-  document.querySelector("#holds-lead").innerHTML = T(`holds.tabs.${holdsTab}.lead`);
+  document.querySelector("#holds-lead").innerHTML = T(`holds.tabs.${holdsTab}.lead`,
+    { thin: or((data.scope || {}).thin, fmt) });
   document.querySelector("#holds-note").innerHTML = T(`holds.tabs.${holdsTab}.note`);
   const times = v => `${v.toFixed(1)}×`, share = v => `${Math.round(v * 100)}%`;
   let rows, keys, baseline = 1, fmtV = times;
@@ -1025,10 +1192,15 @@ function holdsUp(data, animate) {
     baseline = null; fmtV = share;
     rows = h.storms.map(r => ({ label: tt.labels[r.key], sub: Tp("holds.tabs.storms.count", { n: fmt(r.n) }),
       bars: [{ v: r.model, c: "var(--accent)", strong: true }, { v: r.official, c: "var(--other)" }] }));
-  } else {
+  } else if (holdsTab === "counties") {
     keys = []; fmtV = v => `${v.toFixed(2)}×`;
     rows = [{ label: tt.seen, bars: [{ v: h.counties.seen, c: light }] },
             { label: tt.unseen, bars: [{ v: h.counties.unseen, c: "var(--accent)", strong: true }] }];
+  } else {                                     // coverage: trained without the barely covered counties
+    keys = []; fmtV = v => `${v.toFixed(2)}×`;
+    rows = (data.coverage || []).filter(r => r.scored_on === "all counties" && tt.rows[r.trained_on])
+      .map((r, k) => ({ label: tt.rows[r.trained_on], bars: [{ v: r.ratio, c: k ? light : "var(--accent)", strong: !k }] }));
+    if (!rows.length) rows = [{ label: Tp("common.pending"), bars: [{ v: 0, c: light }] }];
   }
   document.querySelector("#holds-key").innerHTML = keys.map(([name, c]) => `<span style="--c:${c}">${name}</span>`).join("");
   const W = widthOf("#holds-chart"), narrow = W < 600, left = narrow ? 0 : 230, top = baseline ? 26 : 6;
@@ -1071,59 +1243,6 @@ function holdsUp(data, animate) {
   if (holdsSeen) play(); else onEnter(document.querySelector("#holds"), play);
 }
 
-function leadTime(data, animate) {
-  const still = REDUCE || !animate;
-  const W = widthOf("#lead-chart"), narrow = W < 600, H = narrow ? 400 : 400;
-  const m = { l: narrow ? 44 : 56, r: narrow ? 12 : 250, t: 24, b: narrow ? 104 : 44 };
-  const svg = d3.select("#lead-chart").attr("viewBox", `0 0 ${W} ${H}`);
-  const x = d3.scaleLinear().domain([0, 6]).range([m.l, W - m.r]);
-  const y = d3.scaleLinear().domain([0, 0.11]).range([H - m.b, m.t]);
-  svg.append("g").attr("class", "gridline").attr("transform", `translate(${m.l},0)`)
-    .call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat("")).select(".domain").remove();
-  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - m.b})`)
-    .call(d3.axisBottom(x).tickValues([0, 1, 2, 3, 6]).tickFormat(d => d + " h"));
-  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5))
-    .select(".domain").remove();
-  svg.append("text").attr("class", "label muted").attr("x", W - m.r).attr("y", H - m.b + 38).attr("text-anchor", "end")
-    .text(Tp("lead.axis"));
-  const colors = ["var(--other)", "var(--warm)", "var(--accent)"];
-  const series = data.lead_time.map((s, k) => ({ ...s, label: TEXT.lead.labels[s.key] || s.label, color: colors[k] }));
-  const line = d3.line().x(p => x(p.lead)).y(p => y(p.value));
-  const paths = svg.selectAll("path.s").data(series).join("path").attr("class", "s").attr("fill", "none")
-    .attr("stroke", d => d.color).attr("stroke-width", d => (d.color === "var(--accent)" ? 3 : 2.2)).attr("d", d => line(d.points));
-  svg.selectAll("g.pts").data(series).join("g").attr("class", "pts").selectAll("circle").data(d => d.points.map(p => ({ ...p, s: d })))
-    .join("circle").attr("cx", p => x(p.lead)).attr("cy", p => y(p.value)).attr("r", 4.5).attr("fill", p => p.s.color)
-    .attr("stroke", "var(--surface)").attr("stroke-width", 1.5)
-    .on("pointermove", (e, p) => showTip(e, `<b>${p.s.label}</b>${p.lead} h ahead: ${p.value.toFixed(3)}`)).on("pointerleave", hideTip);
-  // the forecast version, tested at 2 h
-  const f = data.ladder.find(d => d.ours);
-  const star = svg.append("g").attr("opacity", still ? 1 : 0);
-  star.append("circle").attr("cx", x(2)).attr("cy", y(f.value)).attr("r", 8).attr("fill", "var(--accent)")
-    .attr("stroke", "var(--surface)").attr("stroke-width", 2);
-  star.append("text").attr("class", "label").attr("x", x(2) + 14).attr("y", y(f.value) - 8).style("font-weight", 700)
-    .text(Tp(narrow ? "lead.point_narrow" : "lead.point", { score: f.value.toFixed(3) }));
-  // direct labels at the right end of each line (a legend on phones)
-  if (!narrow) {
-    svg.selectAll("text.end").data(series).join("text").attr("class", "label end")
-      .attr("x", x(6) + 12).attr("y", d => y(d.points[d.points.length - 1].value) + 5 + (d.color === "var(--warm)" ? 8 : d.color === "var(--other)" ? -4 : 0))
-      .style("fill", d => d.color).style("font-size", "14px").text(d => d.label);
-  } else {
-    const lg = svg.append("g").attr("transform", `translate(${m.l},${H - m.b + 50})`);
-    series.forEach((s, k) => {
-      lg.append("rect").attr("x", 0).attr("y", k * 18 - 6).attr("width", 14).attr("height", 4).attr("fill", s.color);
-      lg.append("text").attr("class", "label").attr("x", 20).attr("y", k * 18).style("font-size", "12px").text(s.label);
-    });
-  }
-  if (still) return;
-  paths.each(function () {
-    const len = this.getTotalLength();
-    d3.select(this).attr("stroke-dasharray", len).attr("stroke-dashoffset", len);
-  });
-  onEnter(document.querySelector("#lead"), () => {
-    paths.transition().delay((d, i) => i * 500).duration(1400).ease(d3.easeCubicInOut).attr("stroke-dashoffset", 0);
-    star.transition().delay(2200).duration(500).attr("opacity", 1);
-  });
-}
 
 // rows of paired horizontal bars, with each row's label on the left (above the bars on phones)
 function barRows(sel, section, rows, domainMax, format, animate) {
@@ -1170,6 +1289,20 @@ function alerts(data, animate) {
   ], 0.35, pct, animate);
 }
 
+// the storms warnings miss: share of each kind of new outage caught, model against warnings + outlook alerting as often
+function misses(data, animate) {
+  const s = data.holds.storms, all = d3.sum(s, r => r.n), quiet = s.find(r => r.key === "other");
+  const model = "var(--accent)", official = "var(--other)";
+  document.querySelector("#misses-title").innerHTML = T("misses.title", { share: pct(quiet.n / all) });
+  document.querySelector("#misses-lead").innerHTML = T("misses.lead", { n: fmt(quiet.n), all: fmt(all),
+    model: pct(quiet.model), official: pct(quiet.official), times: Math.round(quiet.model / quiet.official) });
+  barKey("#misses-key", [[Tp("misses.key_model"), model], [Tp("misses.key_official"), official]]);
+  const order = ["other", "convective", "winter"];
+  barRows("#miss-bars", "#misses", order.map(k => s.find(r => r.key === k)).filter(Boolean).map(r => ({
+    label: Tp(`misses.labels.${r.key}`, { n: fmt(r.n) }),
+    bars: [{ v: r.model, c: model, strong: true }, { v: r.official, c: official }] })), 0.45, pct, animate);
+}
+
 // what the model said (mean of the five latest forecasts) against how often an outage followed, group by group
 function calibration(data, animate) {
   const bins = data.calibration, ex = bins.find(b => b.mean > 0.05 && b.mean < 0.1) || bins[bins.length - 2];
@@ -1182,73 +1315,21 @@ function calibration(data, animate) {
     bars: [{ v: b.mean, c: said }, { v: b.observed, c: happened, strong: true }] })), 0.35, pct1, animate);
 }
 
-function savings(data, animate) {
-  const still = REDUCE || !animate;
-  const v = data.value, W = widthOf("#savings"), narrow = W < 600, rowH = narrow ? 48 : 50;
-  const left = narrow ? 0 : 250, right = narrow ? 8 : 150;
-  const model = v.forecasts.find(f => f.ours).scenarios;
-  const official = v.forecasts.find(f => f.key === "official").scenarios;
-  const ahead = model.map((m, i) => m - official[i]);   // model minus official, within the same scenario
-  document.querySelector("#value-title").innerHTML = T("value.title",
-    { low: d3.min(ahead).toFixed(0), high: d3.max(ahead).toFixed(0) });
-  const label = d => TEXT.value.labels[d.key] || d.label;
-  const svg = d3.select("#savings").attr("viewBox", `0 0 ${W} ${36 + v.forecasts.length * rowH}`);
-  const all = v.forecasts.flatMap(f => f.scenarios);
-  const x = d3.scaleLinear().domain([Math.min(0, d3.min(all)), d3.max(all)]).nice().range([left, W - right]);
-  const money = m => (Math.abs(m) < 0.05 ? "$0" : `${m < 0 ? "−" : ""}$${Math.abs(m).toFixed(1)}M`);
-  svg.append("g").attr("class", "gridline").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
-    .call(d3.axisBottom(x).ticks(narrow ? 4 : 5).tickSize(-(v.forecasts.length * rowH)).tickFormat(""))
-    .select(".domain").remove();
-  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${16 + v.forecasts.length * rowH})`)
-    .call(d3.axisBottom(x).ticks(narrow ? 4 : 5).tickFormat(d => (d === 0 ? "0" : `${d < 0 ? "−" : ""}$${Math.abs(d)}M`)))
-    .select(".domain").remove();
-  svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 6).attr("y2", 16 + v.forecasts.length * rowH)
-    .attr("stroke", "var(--ink-2)");
-  const color = f => (f.ours ? "var(--accent)" : f.key === "perfect" ? "var(--muted)" : "var(--other)");
-  const g = svg.selectAll("g.row").data(v.forecasts).join("g").attr("class", "row")
-    .attr("transform", (d, i) => `translate(0,${(narrow ? 30 : 24) + i * rowH})`);
-  g.append("text").attr("class", d => "label" + (d.ours ? "" : " muted")).attr("x", narrow ? 0 : left - 14)
-    .attr("y", narrow ? -12 : 5).attr("text-anchor", narrow ? "start" : "end").style("font-weight", d => (d.ours ? 700 : 400))
-    .text(label);
-  const lo_ = d => d3.min(d.scenarios), hi_ = d => d3.max(d.scenarios);
-  const bands = g.append("rect").attr("y", -5).attr("height", 10).attr("rx", 5).attr("fill", color).attr("opacity", 0.35)
-    .attr("x", d => (still ? x(lo_(d)) : x(0))).attr("width", d => (still ? x(hi_(d)) - x(lo_(d)) : 0));
-  const dotsSel = g.selectAll("circle").data(d => d.scenarios.map((m, k) => ({ m, k, f: d }))).join("circle")
-    .attr("r", narrow ? 4.5 : 5.5).attr("fill", d => color(d.f)).attr("stroke", "var(--surface)").attr("stroke-width", 1.5)
-    .attr("cx", d => (still ? x(d.m) : x(0)))
-    .on("pointermove", (e, d) => {
-      const s = v.scenarios[d.k];
-      showTip(e, `<b>${label(d.f)}: ${money(d.m)}</b>` + T("value.tip", { cut: pct(s.cut), cost: fmt(s.cost) }));
-    }).on("pointerleave", hideTip);
-  const vals = g.append("text").attr("class", "label").attr("y", 5).attr("opacity", still ? 1 : 0)
-    .attr("x", d => (narrow ? W - right : x(hi_(d)) + 12)).attr("text-anchor", narrow ? "end" : "start")
-    .attr("dy", narrow ? -17 : 0).style("font-size", narrow ? "13px" : null)
-    .text(d => `${money(lo_(d))} to ${money(hi_(d))}`);
-  if (still) return;
-  onEnter(document.querySelector("#value"), () => {
-    const delay = (d, i) => 300 + i * 250;
-    bands.transition().delay(delay).duration(900).ease(d3.easeCubicOut)
-      .attr("x", d => x(lo_(d))).attr("width", d => x(hi_(d)) - x(lo_(d)));
-    dotsSel.transition().delay(d => 300 + v.forecasts.indexOf(d.f) * 250).duration(900).ease(d3.easeCubicOut)
-      .attr("cx", d => x(d.m));
-    vals.transition().delay((d, i) => 900 + i * 250).duration(500).attr("opacity", 1);
-  });
-}
-
 function accuracy(data, features, states, fc, animate) {
   const still = REDUCE || !animate;
-  const acc = data.accuracy, W = widthOf("#map-acc"), H = Math.round(Math.min(W * 0.8, 560));
+  const acc = data.accuracy, W = widthOf("#map-acc"), H = Math.round(Math.min(W * 0.66, 620));
   const svg = d3.select("#map-acc").attr("viewBox", `0 0 ${W} ${H}`);
   const judged = acc.new.map(n => n >= acc.min_events);
   const share = acc.new.map((n, j) => (judged[j] ? acc.caught[j] / n : null));
+  const sc = data.scope || {};
   document.querySelector("#where-lead").innerHTML = T("where.lead", { caught: pct(d3.sum(acc.caught) / d3.sum(acc.new)),
-    min: acc.min_events });
+    min: acc.min_events, thin: or(sc.thin, fmt), counties: or(sc.with_outages, fmt) });
   hatch(svg, "hatch");
-  const counties = countyMap(svg, features, states, fc, W, H - 10);
+  const counties = countyMap(svg, features, states, pickFit(features, fc), W, H - 10);
   const color = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, 1]);
   const fill = (d, j) => (judged[j] ? color()(share[j]) : "url(#hatch)");
   counties.attr("fill", still ? fill : "var(--surface)").attr("opacity", still ? 1 : 0);
-  legend(svg, 4, 26, Math.min(140, W * 0.3), () => ramp("blue"), [0, 1], [0, 0.5, 1], pct, Tp("where.legend"));
+  legend(svg, 8, H - 34, Math.min(140, W * 0.3), () => ramp("blue"), [0, 1], [0, 0.5, 1], pct, Tp("where.legend"));
   counties.on("pointermove", (e, d) => {
     const j = features.indexOf(d);
     showTip(e, `<b>${d.properties.name}, ${stateAbbr(d.properties.state)}</b>` +
@@ -1260,14 +1341,133 @@ function accuracy(data, features, states, fc, animate) {
     .delay((d, j) => 200 + (judged[j] ? share[j] * 1600 : 1800)).duration(500).attr("opacity", 1).attr("fill", fill));
 }
 
-let placeTab = "trees", hitTab = "hit", placePaint = () => {};
+// E55's choices on 2024: each change's gain with its 95% storm-day range, kept or not
+function choices(data, animate) {
+  const rows = data.choices, still = REDUCE || !animate;
+  if (!rows) { document.querySelector("#choices-lead").innerHTML = pending(); return; }
+  const mo = ((data.states_results || {}).rows || []).find(r => r.key === "MO+IL");
+  const all = ((data.states_results || {}).rows || []).find(r => r.key === (data.states_results || {}).trained_on);
+  const size = rows.find(r => r.stage === "size" && r.chosen), comb = rows.find(r => r.stage === "combine" && r.chosen);
+  document.querySelector("#choices-lead").innerHTML = T("choices.lead", {
+    share: mo && all ? pct(mo.new / all.new) : pending(), size: size ? signedPct(size.gain) : pending(),
+    n: rows.filter(r => r.stage === "inputs" && r.kept).length,
+    inputs: comb ? signedPct(comb.gain) : pending(), held_out: comb && have(comb.held_out) ? signedPct(comb.held_out) : pending() });
+  const b = data.baselines, share = k => ((b && b.rows.find(r => r.key === k)) || {}).share;
+  document.querySelector("#choices-base").innerHTML = T("choices.baselines", {
+    county: or(share("gust bins per county"), pct), weather: or(share("weather only (XGBoost)"), pct) });
+  const e = data.e55 || {};
+  document.querySelector("#choices-test").innerHTML = T("choices.test", { score: or(e.value, v => v.toFixed(3)),
+    lo: or(e.lo, v => v.toFixed(3)), hi: or(e.hi, v => v.toFixed(3)), ratio: or(e.ratio, v => v.toFixed(2)) });
+  const kept = "var(--accent)", no = "var(--other)", lightKept = "color-mix(in srgb, var(--accent) 45%, var(--surface))";
+  barKey("#choices-key", [[Tp("choices.kept"), kept], [Tp("choices.rejected"), no]]);
+  const W = widthOf("#choice-chart"), narrow = W < 600, left = narrow ? 0 : 330, rowH = narrow ? 40 : 24, headH = 30;
+  const stages = ["size", "inputs", "combine"];
+  let y = 4; const items = [];
+  stages.forEach(st => {
+    items.push({ head: true, text: Tp(`choices.stages.${st}`), y }); y += headH;
+    rows.filter(r => r.stage === st).forEach(r => { items.push({ ...r, y }); y += rowH; });
+    y += 8;
+  });
+  const svg = d3.select("#choice-chart").attr("viewBox", `0 0 ${W} ${y}`);
+  const lo = Math.min(-0.02, d3.min(rows, r => r.gain_lo)), hi = d3.max(rows, r => r.gain_hi);
+  const x = d3.scaleLinear().domain([lo, hi]).range([left, W - (narrow ? 60 : 170)]);
+  svg.append("line").attr("x1", x(0)).attr("x2", x(0)).attr("y1", 0).attr("y2", y).attr("stroke", "var(--muted)")
+    .attr("stroke-dasharray", "4 4");
+  items.filter(d => d.head).forEach(d => svg.append("text").attr("class", "label").attr("x", 0).attr("y", d.y + 18)
+    .style("font-weight", 700).style("font-size", "14px").text(d.text));
+  const g = svg.selectAll("g.row").data(items.filter(d => !d.head)).join("g").attr("class", "row")
+    .attr("transform", d => `translate(0,${d.y})`);
+  const by = narrow ? 18 : 3, bh = 16;
+  g.append("text").attr("class", d => "label" + (d.kept ? "" : " muted")).attr("x", narrow ? 0 : left - 12)
+    .attr("y", narrow ? 13 : 16).attr("text-anchor", narrow ? "start" : "end").style("font-size", "14px")
+    .style("font-weight", d => (d.chosen ? 700 : 400)).text(d => TEXT.choices.labels[d.key] || d.key);
+  const color = d => (!d.kept ? no : d.chosen || d.stage === "inputs" ? kept : lightKept);
+  const bars = g.append("rect").attr("y", by).attr("height", bh).attr("rx", 3).attr("fill", color)
+    .attr("x", d => (still ? x(Math.min(0, d.gain)) : x(0))).attr("width", d => (still ? Math.abs(x(d.gain) - x(0)) : 0));
+  g.append("line").attr("x1", d => x(d.gain_lo)).attr("x2", d => x(d.gain_hi)).attr("y1", by + bh / 2).attr("y2", by + bh / 2)
+    .attr("stroke", "var(--ink-2)").attr("stroke-width", 1.4);
+  g.append("text").attr("class", "label").attr("x", d => x(Math.max(d.gain_hi, 0)) + 8).attr("y", by + bh / 2 + 5)
+    .style("font-size", "13px").style("font-weight", d => (d.chosen ? 700 : 400))
+    .text(d => signedPct(d.gain) + (narrow || !have(d.held_out) ? "" : ` · held out ${signedPct(d.held_out)}`));
+  g.on("pointermove", (e, d) => showTip(e, `<b>${TEXT.choices.labels[d.key] || d.key}</b>` +
+      T("choices.tip", { gain: signedPct(d.gain), lo: signedPct(d.gain_lo), hi: signedPct(d.gain_hi) }) +
+      (have(d.held_out) ? T("choices.tip_held", { held: signedPct(d.held_out) }) : ""))).on("pointerleave", hideTip);
+  if (still) return;
+  onEnter(document.querySelector("#choices"), () => bars.transition().delay((d, k) => k * 60).duration(700)
+    .ease(d3.easeCubicOut).attr("x", d => x(Math.min(0, d.gain))).attr("width", d => Math.abs(x(d.gain) - x(0))));
+}
+
+// state by state: each state's ratio to warnings + outlook with its 95% range; states with too few new outages
+// are named in the lead, not drawn
+function statesChart(data, animate) {
+  const sr = data.states_results, still = REDUCE || !animate;
+  if (!sr) { document.querySelector("#states-title").innerHTML = pending(); return; }
+  const rows = sr.rows.filter(r => !r.group && r.judged && have(r.ratio)).sort((a, b) => b.ratio - a.ratio);
+  const few = sr.rows.filter(r => !r.group && !r.judged).sort((a, b) => a.new - b.new);
+  const clear = rows.filter(r => have(r.lo) && r.lo > 1).length;
+  document.querySelector("#states-title").innerHTML = clear === rows.length
+    ? T("states.title_all", { n: rows.length }) : T("states.title_some", { n: clear, judged: rows.length });
+  const group = k => sr.rows.find(r => r.key === k) || {};
+  document.querySelector("#states-lead").innerHTML = T("states.lead", { min: sr.min,
+    few: few.length ? few.map(r => `${r.name} (${r.new})`).join(", ") : Tp("common.none"),
+    moil: or(group("MO+IL").ratio, v => v.toFixed(1)), others: or(group("the other 46").ratio, v => v.toFixed(1)) });
+  const t = sr.transfer;
+  document.querySelector("#states-note").innerHTML = T("states.note", { transfer: t ? t.ratio.toFixed(1) : pending(),
+    lo: t ? t.lo.toFixed(1) : pending(), hi: t ? t.hi.toFixed(1) : pending(), others: t ? t.key : pending() });
+  const W = widthOf("#state-chart"), cols = W >= 760 ? 2 : 1, per = Math.ceil(rows.length / cols);
+  const rowH = 18, top = 30, colW = W / cols, labelW = 118, XMAX = 10;
+  const svg = d3.select("#state-chart").attr("viewBox", `0 0 ${W} ${top + per * rowH + 6}`);
+  const x = d3.scaleLinear().domain([0, XMAX]).range([labelW, colW - 56]);
+  for (let c = 0; c < cols; c++) {
+    const g = svg.append("g").attr("transform", `translate(${c * colW},0)`);
+    g.append("g").attr("class", "axis").attr("transform", `translate(0,${top - 6})`)
+      .call(d3.axisTop(x).tickValues([1, 2, 4, 6, 8, 10]).tickFormat(d => d + "×").tickSize(3)).select(".domain").remove();
+    g.append("line").attr("x1", x(1)).attr("x2", x(1)).attr("y1", top - 4).attr("y2", top + per * rowH)
+      .attr("stroke", "var(--muted)").attr("stroke-dasharray", "4 4");
+    if (c === 0) g.append("text").attr("class", "label muted").attr("x", 0).attr("y", top - 14).style("font-size", "12px")
+      .text(Tp("states.axis"));
+  }
+  const g = svg.selectAll("g.st").data(rows).join("g").attr("class", d => "st" + (PICK.includes(d.name) ? " picked" : ""))
+    .attr("transform", (d, k) => `translate(${Math.floor(k / per) * colW},${top + (k % per) * rowH})`)
+    .attr("opacity", still ? 1 : 0);
+  g.append("rect").attr("width", colW - 8).attr("height", rowH).attr("fill", "transparent");
+  g.append("text").attr("class", "label").attr("x", labelW - 10).attr("y", rowH / 2 + 5).attr("text-anchor", "end")
+    .style("font-size", "13px").text(d => d.name);
+  g.append("line").attr("x1", d => x(Math.min(d.lo ?? d.ratio, XMAX))).attr("x2", d => x(Math.min(d.hi ?? d.ratio, XMAX)))
+    .attr("y1", rowH / 2).attr("y2", rowH / 2).attr("stroke", "var(--ink-2)").attr("stroke-width", 1.3);
+  g.filter(d => d.hi > XMAX).append("path").attr("fill", "var(--ink-2)")
+    .attr("d", `M${x(XMAX)},${rowH / 2 - 4} l6,4 l-6,4 z`);
+  g.append("circle").attr("cx", d => x(Math.min(d.ratio, XMAX))).attr("cy", rowH / 2).attr("r", 4.5).attr("fill", "var(--accent)")
+    .attr("stroke", "var(--surface)").attr("stroke-width", 1.2);
+  g.append("text").attr("class", "label").attr("x", d => x(Math.min(d.hi ?? d.ratio, XMAX)) + (d.hi > XMAX ? 12 : 8))
+    .attr("y", rowH / 2 + 4).style("font-size", "12px").text(d => `${d.ratio.toFixed(1)}×`);
+  g.on("pointermove", (e, d) => showTip(e, T("states.tip", { name: d.name, ratio: d.ratio.toFixed(1),
+    lo: or(d.lo, v => v.toFixed(1)), hi: or(d.hi, v => v.toFixed(1)), new: fmt(d.new), counties: fmt(d.counties),
+    caught: pct(d.caught), official: pct(d.official_caught) }))).on("pointerleave", hideTip);
+  if (still) return;
+  onEnter(document.querySelector("#states"), () => g.transition().delay((d, k) => k * 25).duration(300).attr("opacity", 1));
+}
+
+let placeTab = "road_trees", hitTab = "beyond", placePaint = () => {};
 // the trees slide: a county fact on the left (tabs), and on the right either the storm hit rate or the outages
 // beyond what the weather and county size predict (ml/place_fragility.py); the line under the maps correlates the two
 function trees(data, features, states, fc, animate) {
   const still = REDUCE || !animate;
   const c = data.canopy, p = data.place, ln = data.lines, t = TEXT.trees.tabs, index = new Map(features.map((f, j) => [f, j]));
-  const mo = c.model.Missouri, il = c.model.Illinois, sgn = v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1) + "%";
-  document.querySelector("#trees-lead").innerHTML = T("trees.lead");
+  const effects = Object.values(c.model || {}).filter(e => e.seeds).map(e => e.mean);
+  const roads = (data.choices || []).find(r => r.key === "roads + street canopy");
+  const rt = ln.road_trees_by_state || {};
+  const one = PICK.length === 1 && rt.states ? rt.states[PICK[0]] : null;
+  document.querySelector("#trees-lead").innerHTML = T("trees.lead", {
+    roads: roads ? signedPct(roads.gain) : pending(),
+    held: roads && have(roads.held_out) ? signedPct(roads.held_out) : pending(),
+    canopy_lo: effects.length ? signedPct(d3.min(effects)) : pending(),
+    canopy_hi: effects.length ? signedPct(d3.max(effects)) : pending(),
+    positive: or(rt.positive, fmt), tested: or(rt.tested, fmt), clear: or(rt.clear, fmt) })
+    + (!PICK.length ? "" : " " + (one
+      ? T(one.positive ? "trees.state_yes" : one.negative ? "trees.state_neg" : "trees.state_no",
+          { name: PICK[0], r: signed(one.r), n: one.n })
+      : PICK.length === 1 ? T("trees.state_few", { name: PICK[0], min: rt.min }) : ""));
   const thousands = d => (d < 6 ? `${10 ** (d - 3)}k` : "1M");
   const meters = d => (d >= 1000 ? `${+(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`);
   // density, customers and road per customer span orders of magnitude: mapped by their logarithm, shown in plain numbers
@@ -1310,17 +1510,18 @@ function trees(data, features, states, fc, animate) {
     const v = rights[hitTab], j = index.get(d);
     return v.ok(j) ? scale(v.colors(), v.domain)(v.values[j]) : "url(#hatch-thin)";
   };
-  const placed = countyMap(left, features, states, fc, 460, 410), hit = countyMap(right, features, states, fc, 460, 410);
+  const fit = pickFit(features, fc);
+  const placed = countyMap(left, features, states, fit, 460, 290), hit = countyMap(right, features, states, fit, 460, 290);
   placed.attr("fill", fillPlace);
   hit.attr("fill", fillHit);
   const keys = Object.fromEntries(Object.entries(views).map(([k, v]) => {
     const g = left.append("g");
-    legend(g, 80, 445, 300, () => ramp(v.color), v.domain, v.ticks, v.tick, Tp(`trees.tabs.${k}.legend`));
+    legend(g, 80, 318, 300, () => ramp(v.color), v.domain, v.ticks, v.tick, Tp(`trees.tabs.${k}.legend`));
     return [k, g];
   }));
   const rightKeys = Object.fromEntries(Object.entries(rights).map(([k, v]) => {
     const g = right.append("g");
-    legend(g, 80, 445, 300, v.colors, v.domain, v.ticks, v.tick, Tp(`trees.right.${k}.legend`));
+    legend(g, 80, 318, 300, v.colors, v.domain, v.ticks, v.tick, Tp(`trees.right.${k}.legend`));
     return [k, g];
   }));
   // a compact legend under each map, shown on phones instead of the in-map one
@@ -1335,11 +1536,11 @@ function trees(data, features, states, fc, animate) {
     miniLeft(ramp(v.color), v.tick(v.domain[0]), v.tick(v.domain[1]));
     miniRight(h.colors(), h.tick(h.domain[0]), h.tick(h.domain[1]));
   };
-  // Pearson correlation between the two maps within a state, on the mapped (log where noted) values
-  const corr = state => {
+  // Pearson correlation between the two maps over every county with both values (log where noted)
+  const corr = () => {
     const v = views[placeTab], h = rights[hitTab], xs = [], ys = [];
     features.forEach((f, j) => {
-      if (f.properties.state !== state || v.values[j] == null || !h.ok(j)) return;
+      if (v.values[j] == null || h.values[j] == null || !h.ok(j)) return;
       xs.push(v.values[j]); ys.push(h.values[j]);
     });
     const mx = d3.mean(xs), my = d3.mean(ys);
@@ -1353,10 +1554,9 @@ function trees(data, features, states, fc, animate) {
     document.querySelector("#place-title").textContent = tt.title;
     left.attr("aria-label", `${tt.title} by county`);
     right.attr("aria-label", Tp(`trees.right.${hitTab}.label`));
-    document.querySelector("#place-r").innerHTML = T(`trees.right.${hitTab}.r`,
-      { mo: signed(corr("Missouri")), il: signed(corr("Illinois")) });
+    document.querySelector("#place-r").innerHTML = T(`trees.right.${hitTab}.r`, { all: signed(corr()) });
     document.querySelector("#trees-note").innerHTML = hitTab === "hit"
-      ? T("trees.note", { mo: sgn(mo.mean), il: sgn(il.mean) }) : T("trees.right.beyond.note");
+      ? T("trees.note") : T("trees.right.beyond.note", { thin: or((data.scope || {}).thin, fmt) });
     Object.entries(keys).forEach(([k, g]) => g.style("display", k === placeTab ? null : "none"));
     Object.entries(rightKeys).forEach(([k, g]) => g.style("display", k === hitTab ? null : "none"));
     paintMini();

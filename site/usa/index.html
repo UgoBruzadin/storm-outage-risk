@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storm Outage Risk</title>
+<!-- DRAFT (site-usa): the USA front page. Not published; wording to be reviewed before it ships. -->
+<meta name="description" content="Will the power go out? An experimental, hourly forecast of storm power outages for every county in the lower 48 states.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="usa.css">
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="./">⚡ Storm Outage Risk</a>
+  <nav>
+    <a href="./" aria-current="page">Now</a>
+    <a href="scorecard.html">Scorecard</a>
+    <a href="replays.html">Storm replays</a>
+    <a href="outlook.html">Outlook</a>
+    <a href="../">How it was built</a>
+  </nav>
+  <button class="theme" type="button" aria-label="Switch light or dark mode"></button>
+</header>
+
+<main>
+  <section>
+    <p class="kicker">Every county in the lower 48 · updated every hour</p>
+    <h1>Will the power go out?</h1>
+    <p class="lead">The chance that a storm knocks out power to at least 5% of a county's customers in the next few
+      hours, from the latest HRRR weather runs, official warnings, and what each county's grid, trees and soil have
+      done in past storms.</p>
+    <div class="search">
+      <input id="q" type="search" placeholder="Your county or ZIP code" autocomplete="off" aria-label="Find a county or ZIP code">
+    </div>
+    <p class="banner" id="banner" hidden></p>
+
+    <div class="live">
+      <div>
+        <svg class="map" id="map" role="img" aria-label="Map of every county's chance of a new power outage in the next hours"></svg>
+        <div class="legend" id="legend"></div>
+        <p class="note">Click a county for its forecast. Zoom with two fingers, or Ctrl + scroll. The window is the 6
+          hours starting 2 hours after the forecast hour.</p>
+      </div>
+      <aside class="card" id="card">
+        <p class="kicker">Highest chances now</p>
+        <ul class="top" id="top"></ul>
+        <p class="note" id="count"></p>
+      </aside>
+    </div>
+  </section>
+
+  <section>
+    <h2>Is it any good?</h2>
+    <p class="lead" id="pitch">Replayed on 2025, a year the model never trained on, with the same alert rule the live feed uses.</p>
+    <div class="tiles" id="tiles"></div>
+    <div class="links">
+      <a href="scorecard.html"><b>The scorecard</b><span>Every alert the rule would have sent in 2025, and how many
+        were followed by an outage, by month and by state. Live alerts are added as they go out.</span></a>
+      <a href="replays.html"><b>Storm replays</b><span>Five 2025 storms hour by hour: the chance building, the
+        warnings, then the outages.</span></a>
+      <a href="outlook.html"><b>The outage outlook</b><span>One map of where alerts are up, to share or embed, and the
+        county alert feeds.</span></a>
+      <a href="../#live"><b>The blind test</b><span>Missouri and Illinois: a model frozen on Nov 1, 2026, forecasting
+        live, scored only on outages that come after.</span></a>
+    </div>
+  </section>
+
+  <p class="disclaimer">Experimental research forecast. Not from your utility or the National Weather Service: don't
+    use it for safety decisions. Outage history: EAGLE-I (Oak Ridge National Laboratory). Weather: NOAA HRRR, NWS
+    warnings, SPC outlooks (via Iowa Environmental Mesonet).</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  USA.theme(document.querySelector(".theme"));
+  const [map, info, L, rec] = await Promise.all([USA.data("map.json"), USA.data("counties.json"), USA.live(),
+    USA.data("record.json").catch(() => null)]);
+  const C = info.counties;
+  USA.banner(document.getElementById("banner"), L);
+
+  const m = USA.drawMap(document.getElementById("map"), map);
+  m.counties.style("fill", f => USA.fill(L.byId.has(f.id) ? L.byId.get(f.id).p : null, L.levels));
+  document.getElementById("legend").innerHTML = USA.legendItems(L.levels)
+    .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("");
+
+  const tip = USA.tip();
+  m.counties.on("pointermove", (e, f) => {
+    const c = C[f.id], v = L.byId.get(f.id);
+    if (!c) return tip.hide();
+    tip.show(e, `<b>${USA.esc(c.n)}, ${c.s}</b><br>${v ? USA.pct(v.p) : "no forecast"}`);
+  }).on("pointerleave", () => tip.hide()).on("click", (e, f) => C[f.id] && show(f.id));
+
+  const cardEl = document.getElementById("card");
+  const listHtml = cardEl.innerHTML;
+  function show(id, zoom) {
+    m.select(id);
+    if (zoom) m.zoomTo(id);
+    cardEl.innerHTML = USA.card(id, C[id], L) +
+      `<p class="note"><a href="#" id="back">← Highest chances now</a></p>`;
+    document.getElementById("back").onclick = e => { e.preventDefault(); m.select(null); m.reset(); list(); history.replaceState(null, "", location.pathname); };
+    history.replaceState(null, "", `?county=${encodeURIComponent(id)}`);
+  }
+  function list() {
+    cardEl.innerHTML = listHtml;
+    const reliable = L.latest.counties.filter(([id]) => C[id] && !C[id].unreliable).sort((a, b) => b[1] - a[1]);
+    document.getElementById("top").innerHTML = reliable.slice(0, 10).map(([id, p]) => {
+      const lv = USA.levelOf(p, L.levels);
+      return `<li data-id="${id}"><span>${USA.esc(C[id].n)}, ${C[id].s}</span><b>${USA.pct(p)}${lv ? ` · ${lv.name}` : ""}</b></li>`;
+    }).join("");
+    document.querySelectorAll("#top li").forEach(li => li.onclick = () => show(li.dataset.id, true));
+    const n = L.levels.map(lv => L.latest.counties.filter(([id, p]) => p >= lv.chance && C[id] && !C[id].unreliable).length);
+    const flagged = Object.values(C).filter(c => c.unreliable).length;
+    document.getElementById("count").innerHTML =
+      `${n[0]} ${n[0] === 1 ? "county" : "counties"} at ${L.levels[0].name} or above, ${n[1]} at ${L.levels[1].name}. ` +
+      `Forecast for ${USA.windowText(L.latest, "America/Chicago")}${L.sample ? "" : `, made ${USA.ago(L.latest.generated_at)}`}. ` +
+      `Not listed: ${flagged} counties whose outage record is unreliable (shown on their county page).`;
+  }
+  list();
+  USA.search(document.getElementById("q"), C, id => show(id, true));
+  const pre = new URLSearchParams(location.search).get("county");
+  if (pre && C[pre]) show(pre, true);
+
+  if (rec) {
+    const [el, hi] = rec.levels;
+    const p = v => `${Math.round(v * 100)}%`;
+    document.getElementById("tiles").innerHTML = `
+      <div class="tile"><div class="v">${el.model.per_county}</div><div class="k">${el.name} alerts a year in a typical county</div>
+        <div class="vs">${hi.model.per_county} at ${hi.name}</div></div>
+      <div class="tile"><div class="v">${p(el.model.hit)}</div><div class="k">of ${el.name} alerts were followed by an outage</div>
+        <div class="vs">warnings + outlook, same number of alert hours: ${p(el.official.hit)}</div></div>
+      <div class="tile"><div class="v">${p(el.model.caught)}</div><div class="k">of ${el.model.outages.toLocaleString()} new outages had an alert first</div>
+        <div class="vs">warnings + outlook: ${p(el.official.caught)}</div></div>
+      <div class="tile"><div class="v">${el.model.warning_h} h</div><div class="k">median warning before the outage began</div>
+        <div class="vs">warnings + outlook: ${el.official.warning_h} h</div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

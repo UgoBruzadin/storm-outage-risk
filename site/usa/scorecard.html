@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outage Alert Scorecard</title>
+<!-- DRAFT (site-usa). Numbers: site/usa/data/record.json (scripts/make_usa_site.py); live alerts: storm-outage-live usa/alerts_log.csv. -->
+<meta name="description" content="Every alert the storm outage forecast sent, and how many were followed by an outage: replayed on 2025, and live.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="usa.css">
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="./">⚡ Storm Outage Risk</a>
+  <nav>
+    <a href="./">Now</a>
+    <a href="scorecard.html" aria-current="page">Scorecard</a>
+    <a href="replays.html">Storm replays</a>
+    <a href="outlook.html">Outlook</a>
+    <a href="../">How it was built</a>
+  </nav>
+  <button class="theme" type="button" aria-label="Switch light or dark mode"></button>
+</header>
+
+<main>
+  <section>
+    <p class="kicker">The scorecard</p>
+    <h1>How often is an alert right?</h1>
+    <p class="lead">An alert is only worth something if you know how often it comes true. This page keeps count: every
+      alert the forecast sends, and whether an outage followed.</p>
+  </section>
+
+  <section>
+    <h2>Live alerts</h2>
+    <p class="lead" id="live-lead">Loading the alert log…</p>
+    <div class="tiles" id="live-tiles"></div>
+    <div class="scroll"><table id="live-table" hidden><thead><tr><th>Forecast hour (UTC)</th><th>County</th><th>Level</th><th class="n">Chance</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">Live alerts are graded once outage reports for those hours are in. EAGLE-I, the outage record the
+      model was trained and tested on, is published months after the fact, so the live column fills in later; until
+      then the 2025 replay below is the record.</p>
+  </section>
+
+  <section>
+    <h2>2025, replayed</h2>
+    <p class="lead">The live model's twin, trained on 2020–2024 only, run on every hour of 2025 with the live alert
+      rule: an alert when a county reaches a level, once per storm. "Warnings + outlook" is what the National Weather
+      Service and the Storm Prediction Center said, given the same number of alert hours, so both get the same
+      budget.</p>
+    <div class="tabs" id="lv-tabs"></div>
+    <div class="tiles" id="tiles"></div>
+
+    <h3 style="margin-top:28px">Month by month: new outages, and how many had an alert first</h3>
+    <svg class="chart" id="months" role="img" aria-label="New outages each month of 2025, with the share alerted by the model and by warnings + outlook"></svg>
+    <div class="legend"><span><i style="background:var(--grid)"></i>new outages</span><span><i style="background:var(--c4)"></i>alerted by the model</span><span><i style="background:var(--accent)"></i>alerted by warnings + outlook</span></div>
+
+    <h3 style="margin-top:28px">State by state (<span class="lv-name"></span> alerts)</h3>
+    <div class="scroll"><table id="states"><thead><tr>
+      <th data-sort="state">State</th><th class="n" data-sort="counties">Counties</th><th class="n" data-sort="alerts">Alerts</th>
+      <th class="n" data-sort="hit">Followed by an outage</th><th class="n" data-sort="outages">New outages</th>
+      <th class="n" data-sort="caught">Alerted first</th><th class="n" data-sort="official_caught">Warnings + outlook</th>
+    </tr></thead><tbody></tbody></table></div>
+    <p class="note">States with under 50 new outages in 2025 are shown, but their shares swing a lot from one storm. A
+      new outage is one reaching 5% of a county's customers after a day with none.</p>
+  </section>
+
+  <p class="disclaimer">Experimental research forecast. Not from your utility or the National Weather Service.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  USA.theme(document.querySelector(".theme"));
+  const [rec, info] = await Promise.all([USA.data("record.json"), USA.data("counties.json")]);
+  const C = info.counties;
+  const p = v => v == null ? "–" : `${Math.round(v * 100)}%`;
+
+  // ----- live -----
+  try {
+    const r = await fetch(`${USA.LIVE}/usa/alerts_log.csv`, { cache: "no-cache" });
+    if (!r.ok) throw new Error(r.status);
+    const rows = d3.csvParse(await r.text());
+    const since = rows.length ? rows[0].decision_hour.slice(0, 10) : null;
+    const now = Date.now(), day = 864e5;
+    const inDays = n => rows.filter(x => now - USA.parseIso(x.decision_hour) < n * day);
+    const by = (rs, lv) => rs.filter(x => x.level === lv).length;
+    document.getElementById("live-lead").textContent = rows.length
+      ? `${rows.length.toLocaleString()} alerts sent since ${since}.` : "No alerts sent yet.";
+    document.getElementById("live-tiles").innerHTML = [["last 24 hours", 1], ["last 7 days", 7], ["last 30 days", 30]]
+      .map(([k, n]) => { const rs = inDays(n); return `<div class="tile"><div class="v">${rs.length}</div><div class="k">alerts, ${k}</div>
+        <div class="vs">${by(rs, "High")} High · ${by(rs, "Elevated")} Elevated</div></div>`; }).join("");
+    const t = document.getElementById("live-table");
+    t.querySelector("tbody").innerHTML = rows.slice(-25).reverse().map(x => {
+      const c = C[x.region];
+      return `<tr><td>${x.decision_hour.replace("T", " ").replace(":00Z", "")}</td><td><a href="${USA.countyUrl(x.region)}">${c ? `${USA.esc(c.n)}, ${c.s}` : x.region}</a></td>
+        <td>${x.level}</td><td class="n">${p(+x.chance)}</td></tr>`; }).join("");
+    t.hidden = !rows.length;
+  } catch (e) {
+    document.getElementById("live-lead").textContent = "The live USA feed hasn't started yet: its alerts will be counted here from its first hour.";
+  }
+
+  // ----- 2025 -----
+  const tabs = document.getElementById("lv-tabs");
+  tabs.innerHTML = rec.levels.map((lv, i) => `<button type="button" aria-pressed="${i === 0}" data-i="${i}">${lv.name} (${p(lv.chance)}+)</button>`).join("");
+  const tiles = i => {
+    const lv = rec.levels[i], m = lv.model, o = lv.official;
+    document.getElementById("tiles").innerHTML = `
+      <div class="tile"><div class="v">${m.per_county}</div><div class="k">alerts a year, average county</div><div class="vs">${m.alerts.toLocaleString()} in all, ${rec.counties.toLocaleString()} counties</div></div>
+      <div class="tile"><div class="v">${p(m.hit)}</div><div class="k">followed by an outage</div><div class="vs">warnings + outlook: ${p(o.hit)}</div></div>
+      <div class="tile"><div class="v">${p(m.caught)}</div><div class="k">of ${m.outages.toLocaleString()} new outages had an alert first</div><div class="vs">warnings + outlook: ${p(o.caught)}</div></div>
+      <div class="tile"><div class="v">${m.warning_h} h</div><div class="k">median warning before an outage</div><div class="vs">warnings + outlook: ${o.warning_h} h</div></div>`;
+    tabs.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.i === i));
+  };
+  tabs.onclick = e => { const b = e.target.closest("button"); if (b) tiles(+b.dataset.i); };
+  tiles(0);
+  document.querySelectorAll(".lv-name").forEach(s => s.textContent = rec.levels[0].name);
+
+  // month chart: a gray bar of new outages, two bars inside it
+  const svg = d3.select("#months"), W = 900, H = 260, M = { t: 10, r: 10, b: 26, l: 44 };
+  svg.attr("viewBox", `0 0 ${W} ${H}`);
+  const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const x = d3.scaleBand(rec.months.map(d => d.month), [M.l, W - M.r]).padding(.18);
+  const y = d3.scaleLinear([0, d3.max(rec.months, d => d.outages)], [H - M.b, M.t]).nice();
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${H - M.b})`).call(d3.axisBottom(x).tickFormat(m => names[m - 1]).tickSizeOuter(0));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${M.l},0)`).call(d3.axisLeft(y).ticks(5).tickSizeOuter(0)).call(g => g.select(".domain").remove());
+  const g = svg.append("g").selectAll("g").data(rec.months).join("g");
+  g.append("rect").attr("x", d => x(d.month)).attr("width", x.bandwidth()).attr("y", d => y(d.outages)).attr("height", d => y(0) - y(d.outages)).style("fill", "var(--grid)");
+  const bw = x.bandwidth() / 2 - 3;
+  g.append("rect").attr("x", d => x(d.month) + 2).attr("width", bw).attr("y", d => y(d.caught)).attr("height", d => y(0) - y(d.caught)).style("fill", "var(--c4)");
+  g.append("rect").attr("x", d => x(d.month) + bw + 4).attr("width", bw).attr("y", d => y(d.official_caught)).attr("height", d => y(0) - y(d.official_caught)).style("fill", "var(--accent)");
+  g.append("title").text(d => `${names[d.month - 1]}: ${d.outages} new outages; model alerted ${d.caught} (${p(d.caught / d.outages)}), warnings + outlook ${d.official_caught} (${p(d.official_caught / d.outages)}). ${d.alerts} alerts, ${d.hits} followed by an outage.`);
+
+  // states
+  let key = "state", dir = 1;
+  const body = document.querySelector("#states tbody");
+  const draw = () => {
+    const rows = rec.states.slice().sort((a, b) => {
+      const va = a[key] ?? -1, vb = b[key] ?? -1;
+      return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * dir;
+    });
+    body.innerHTML = rows.map(s => `<tr${s.outages < 50 ? ' style="color:var(--muted)"' : ""}><td>${s.state}</td><td class="n">${s.counties}</td><td class="n">${s.alerts.toLocaleString()}</td>
+      <td class="n">${p(s.hit)}</td><td class="n">${s.outages.toLocaleString()}</td><td class="n">${p(s.caught)}</td><td class="n">${p(s.official_caught)}</td></tr>`).join("");
+  };
+  document.querySelectorAll("#states th[data-sort]").forEach(th => th.onclick = () => {
+    const k = th.dataset.sort; dir = k === key ? -dir : (k === "state" ? 1 : -1); key = k; draw();
+  });
+  draw();
+})();
+</script>
+</body>
+</html>

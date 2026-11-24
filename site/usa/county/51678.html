@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lexington, VA power outage risk</title>
+<!-- Built by scripts/make_usa_site.py from scripts/usa_county_page.html: edit the template, not this file. -->
+<meta name="description" content="Storm power outage forecast for Lexington, VA, updated every hour, with the county's outage history and how the forecast did there in 2025. Experimental.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="../usa.css">
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="../">⚡ Storm Outage Risk</a>
+  <nav>
+    <a href="../">Now</a>
+    <a href="../scorecard.html">Scorecard</a>
+    <a href="../replays.html">Storm replays</a>
+    <a href="../outlook.html">Outlook</a>
+    <a href="../../">How it was built</a>
+  </nav>
+  <button class="theme" type="button" aria-label="Switch light or dark mode"></button>
+</header>
+
+<main>
+  <section>
+    <p class="kicker">County forecast</p>
+    <h1>Lexington, VA</h1>
+    <p class="banner" id="banner" hidden></p>
+    <div class="live">
+      <div>
+        <svg class="map" id="map" role="img" aria-label="Map of the county and its neighbors, colored by the chance of a new outage"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <aside class="card" id="card"></aside>
+    </div>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>Get this county's alerts</h2>
+      <p>An alert goes out once per storm, when the chance reaches <span id="lv-el"></span>, and again if it reaches
+        <span id="lv-hi"></span>. In 2025 a county averaged <span id="per-year"></span> alerts.</p>
+      <p><a class="btn primary" id="rss" href="#">RSS feed</a> <button class="btn" id="copy" type="button">Copy feed link</button></p>
+      <p class="note">Add the feed to any RSS reader, or to an app that turns feeds into phone notifications. Push
+        notifications straight to your phone are coming.</p>
+      <h3 style="margin-top:22px">Put it on your site</h3>
+      <pre id="embed"></pre>
+    </div>
+    <div>
+      <h2>What knocks out power here</h2>
+      <p class="note" style="margin:0 0 12px">Each bar is where this county ranks among the 3,089 counties
+        (100 = the most).</p>
+      <div class="facts" id="facts"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How the alerts would have done here in 2025</h2>
+    <p class="lead" id="y-lead"></p>
+    <div class="tiles" id="y-tiles"></div>
+    <div class="two">
+      <div>
+        <h3>Each <span class="lv-el-name"></span> alert</h3>
+        <div class="alerts-list scroll"><table><thead><tr><th>Started</th><th class="n">Hours</th><th class="n">Peak</th><th>Outage?</th></tr></thead>
+          <tbody id="y-alerts"></tbody></table></div>
+      </div>
+      <div>
+        <h3>New outages with no alert</h3>
+        <div class="alerts-list"><table><thead><tr><th>Began</th></tr></thead><tbody id="y-missed"></tbody></table></div>
+      </div>
+    </div>
+    <p class="note">From the USA live model's twin trained on 2020–2024 only, so 2025 is a year it never saw. An
+      outage is a new outage reaching 5% of the county's customers after a day with none (EAGLE-I).</p>
+  </section>
+
+  <p class="disclaimer">Experimental research forecast. Not from your utility or the National Weather Service: don't
+    use it for safety decisions.</p>
+</main>
+
+<script id="county" type="application/json">{"id":"51678","n":"Lexington","s":"VA","tz":"America/New_York","cust":16,"facts":{"events":[74.307,96.0],"hours_out":[71.411,98.0],"hit_rate":[0.075,47.0],"canopy":[27.79,51.0],"treed_roads":[0.154,49.0],"old_homes":[0.521,94.0],"saidi":[null,null]},"unreliable":false,"y2025":{"alerts":54,"hits":5,"outages":59,"caught":5,"high":22},"alerts2025":[{"start":"2025-01-05T22Z","hours":15,"peak":0.357,"hit":true},{"start":"2025-01-29T11Z","hours":8,"peak":0.183,"hit":false},{"start":"2025-02-11T12Z","hours":11,"peak":0.261,"hit":false},{"start":"2025-02-12T07Z","hours":28,"peak":0.305,"hit":false},{"start":"2025-02-16T10Z","hours":11,"peak":0.55,"hit":false},{"start":"2025-03-05T08Z","hours":9,"peak":0.382,"hit":false},{"start":"2025-03-16T07Z","hours":12,"peak":0.233,"hit":false},{"start":"2025-04-03T13Z","hours":4,"peak":0.107,"hit":false},{"start":"2025-04-14T20Z","hours":1,"peak":0.134,"hit":false},{"start":"2025-04-15T13Z","hours":4,"peak":0.129,"hit":false},{"start":"2025-04-19T09Z","hours":6,"peak":0.126,"hit":false},{"start":"2025-05-03T15Z","hours":8,"peak":0.18,"hit":false},{"start":"2025-05-13T08Z","hours":2,"peak":0.103,"hit":false},{"start":"2025-05-15T15Z","hours":3,"peak":0.188,"hit":true},{"start":"2025-05-16T19Z","hours":23,"peak":0.309,"hit":false},{"start":"2025-05-28T06Z","hours":7,"peak":0.111,"hit":false},{"start":"2025-05-30T14Z","hours":7,"peak":0.238,"hit":false},{"start":"2025-06-05T11Z","hours":3,"peak":0.104,"hit":false},{"start":"2025-06-06T12Z","hours":3,"peak":0.118,"hit":false},{"start":"2025-06-07T08Z","hours":1,"peak":0.114,"hit":false},{"start":"2025-06-08T08Z","hours":10,"peak":0.177,"hit":false},{"start":"2025-06-09T14Z","hours":7,"peak":0.249,"hit":false},{"start":"2025-06-13T10Z","hours":2,"peak":0.104,"hit":false},{"start":"2025-06-14T07Z","hours":11,"peak":0.146,"hit":false},{"start":"2025-06-15T13Z","hours":4,"peak":0.121,"hit":false},{"start":"2025-06-19T11Z","hours":8,"peak":0.252,"hit":true},{"start":"2025-06-25T13Z","hours":5,"peak":0.118,"hit":false},{"start":"2025-06-26T15Z","hours":9,"peak":0.382,"hit":false},{"start":"2025-06-28T17Z","hours":5,"peak":0.193,"hit":false},{"start":"2025-06-29T12Z","hours":8,"peak":0.227,"hit":false},{"start":"2025-06-30T13Z","hours":5,"peak":0.193,"hit":false},{"start":"2025-07-01T13Z","hours":12,"peak":0.323,"hit":false},{"start":"2025-07-02T07Z","hours":6,"peak":0.136,"hit":false},{"start":"2025-07-07T10Z","hours":1,"peak":0.102,"hit":false},{"start":"2025-07-08T18Z","hours":2,"peak":0.24,"hit":false},{"start":"2025-07-09T12Z","hours":9,"peak":0.438,"hit":true},{"start":"2025-07-12T16Z","hours":4,"peak":0.167,"hit":false},{"start":"2025-07-13T15Z","hours":7,"peak":0.289,"hit":false},{"start":"2025-07-14T17Z","hours":4,"peak":0.218,"hit":false},{"start":"2025-07-18T12Z","hours":4,"peak":0.202,"hit":false},{"start":"2025-07-19T12Z","hours":4,"peak":0.113,"hit":false},{"start":"2025-07-20T09Z","hours":4,"peak":0.115,"hit":false},{"start":"2025-07-23T10Z","hours":1,"peak":0.103,"hit":false},{"start":"2025-07-25T09Z","hours":4,"peak":0.13,"hit":false},{"start":"2025-07-27T10Z","hours":1,"peak":0.101,"hit":false},{"start":"2025-08-14T15Z","hours":4,"peak":0.114,"hit":false},{"start":"2025-08-16T18Z","hours":3,"peak":0.142,"hit":false},{"start":"2025-08-19T17Z","hours":1,"peak":0.1,"hit":false},{"start":"2025-08-20T15Z","hours":3,"peak":0.169,"hit":false},{"start":"2025-09-04T13Z","hours":2,"peak":0.11,"hit":false},{"start":"2025-09-06T12Z","hours":5,"peak":0.115,"hit":false},{"start":"2025-09-27T10Z","hours":4,"peak":0.155,"hit":false},{"start":"2025-12-19T15Z","hours":3,"peak":0.158,"hit":false},{"start":"2025-12-29T10Z","hours":4,"peak":0.26,"hit":true}],"missed2025":["2025-01-04T14Z","2025-01-16T19Z","2025-01-24T17Z","2025-01-27T19Z","2025-02-21T23Z","2025-03-06T02Z","2025-03-18T22Z","2025-03-22T20Z","2025-03-27T22Z","2025-04-09T12Z","2025-04-16T02Z","2025-04-22T16Z","2025-05-05T13Z","2025-05-07T03Z","2025-05-19T13Z","2025-05-22T13Z","2025-06-16T23Z","2025-06-18T08Z","2025-06-23T15Z","2025-06-27T14Z","2025-07-15T18Z","2025-07-21T01Z","2025-07-23T18Z","2025-07-29T14Z","2025-08-09T15Z","2025-08-11T13Z","2025-08-18T13Z","2025-08-25T14Z","2025-08-27T12Z","2025-08-27T14Z","2025-09-08T10Z","2025-09-08T14Z","2025-09-15T14Z","2025-09-22T17Z","2025-09-25T13Z","2025-09-30T14Z","2025-10-07T10Z","2025-10-07T12Z","2025-10-07T15Z","2025-10-13T12Z","2025-10-13T14Z","2025-11-12T21Z","2025-11-17T17Z","2025-11-20T14Z","2025-11-22T21Z","2025-11-24T14Z","2025-11-29T01Z","2025-12-01T14Z","2025-12-03T14Z","2025-12-06T23Z","2025-12-08T14Z","2025-12-09T22Z","2025-12-18T14Z","2025-12-22T14Z"]}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="../usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  USA.theme(document.querySelector(".theme"));
+  const C = JSON.parse(document.getElementById("county").textContent);
+  const id = C.id, tz = C.tz;
+  const [map, info, L, rec] = await Promise.all([USA.data("map.json"), USA.data("counties.json"), USA.live(),
+    USA.data("record.json").catch(() => null)]);
+  USA.banner(document.getElementById("banner"), L);
+  document.getElementById("card").innerHTML = USA.card(id, C, L, { link: false });
+
+  // the map: this county and those around it
+  const me = map.counties.find(c => c.id === id);
+  const b = d3.geoBounds({ type: "Feature", geometry: me.g });
+  const pad = Math.max(1.2, (b[1][0] - b[0][0]) * 1.2);
+  const near = map.counties.filter(c => {
+    const [[x0, y0], [x1, y1]] = d3.geoBounds({ type: "Feature", geometry: c.g });
+    return x1 > b[0][0] - pad && x0 < b[1][0] + pad && y1 > b[0][1] - pad * .7 && y0 < b[1][1] + pad * .7;
+  });
+  const m = USA.drawMap(document.getElementById("map"), map, { width: 640, height: 420,
+    fit: near.map(c => ({ type: "Feature", geometry: c.g })) });
+  m.counties.style("fill", f => USA.fill(L.byId.has(f.id) ? L.byId.get(f.id).p : null, L.levels));
+  m.select(id);
+  document.getElementById("legend").innerHTML = USA.legendItems(L.levels)
+    .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("");
+  const tip = USA.tip();
+  m.counties.on("pointermove", (e, f) => {
+    const c = info.counties[f.id], v = L.byId.get(f.id);
+    if (!c) return tip.hide();
+    tip.show(e, `<b>${USA.esc(c.n)}, ${c.s}</b><br>${v ? USA.pct(v.p) : "no forecast"}`);
+  }).on("pointerleave", () => tip.hide()).on("click", (e, f) => {
+    if (info.counties[f.id] && f.id !== id) location.href = USA.countyUrl(f.id);
+  });
+
+  // alerts
+  const [el, hi] = L.levels;
+  document.getElementById("lv-el").textContent = `${USA.pct(el.chance)} (${el.name})`;
+  document.getElementById("lv-hi").textContent = `${USA.pct(hi.chance)} (${hi.name})`;
+  document.querySelectorAll(".lv-el-name").forEach(s => s.textContent = el.name);
+  document.getElementById("per-year").textContent = rec ? rec.levels[0].model.per_county : "11.5";
+  const feed = USA.feedUrl(id);
+  document.getElementById("rss").href = feed;
+  document.getElementById("copy").onclick = async e => {
+    try { await navigator.clipboard.writeText(feed); e.target.textContent = "Copied"; }
+    catch (err) { prompt("Feed link", feed); }
+  };
+  const embed = `${USA.ROOT}embed.html?county=${encodeURIComponent(id)}`;
+  document.getElementById("embed").textContent =
+    `<iframe src="${new URL(embed, location.href).href}" width="340" height="340" style="border:0" title="${C.n}, ${C.s} outage risk"></iframe>`;
+
+  // facts
+  const labels = Object.fromEntries(info.facts.map(([k, label]) => [k, label]));
+  const fmt = (k, v) => v == null ? "–" : ["hit_rate", "treed_roads", "old_homes"].includes(k) ? `${Math.round(v * 100)}%`
+    : k === "canopy" ? `${Math.round(v)}%` : k === "saidi" ? `${Math.round(v)} min` : v.toFixed(1);
+  document.getElementById("facts").innerHTML = Object.entries(C.facts).map(([k, [v, p]]) => `
+    <div class="fact"><span>${USA.esc(labels[k])}: <b class="num">${fmt(k, v)}</b></span>
+      <span class="bar-p"><i style="width:${p ?? 0}%"></i></span><span class="pc">${p == null ? "" : Math.round(p)}</span></div>`).join("") +
+    (C.unreliable ? `<p class="flag" style="margin-top:12px"><strong>Outage record unreliable.</strong> The outage record
+      here tracks only ${C.cust.toLocaleString()} customers, and shows an outage (1% of them or more) in more than 1 in
+      5 calm 6-hour periods, so its history numbers and its forecast both run high in any weather. Its alerts are
+      shown, but read them with that in mind.</p>` : "");
+
+  // 2025
+  const y = C.y2025;
+  const when = s => USA.parseIso(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", timeZone: tz });
+  if (!y) {
+    document.getElementById("y-lead").textContent = "No 2025 forecasts for this county (no outage record to score them against).";
+  } else {
+    document.getElementById("y-lead").textContent = y.alerts
+      ? `${y.alerts} ${el.name} alerts (${C.alerts2025.filter(a => a.peak >= hi.chance).length} of them reached ${hi.name}); ${y.hits} ${y.hits === 1 ? "was" : "were"} followed by an outage. ` +
+        `Of ${y.outages} new outages, ${y.caught} had an alert first.`
+      : `No ${el.name} alerts in 2025. ${y.outages} new outages, none with an alert.`;
+    document.getElementById("y-tiles").innerHTML = `
+      <div class="tile"><div class="v">${y.alerts}</div><div class="k">${el.name} alerts</div></div>
+      <div class="tile"><div class="v">${y.alerts ? Math.round(100 * y.hits / y.alerts) + "%" : "–"}</div><div class="k">followed by an outage</div></div>
+      <div class="tile"><div class="v">${y.outages}</div><div class="k">new outages</div></div>
+      <div class="tile"><div class="v">${y.outages ? Math.round(100 * y.caught / y.outages) + "%" : "–"}</div><div class="k">had an alert first</div></div>`;
+  }
+  document.getElementById("y-alerts").innerHTML = C.alerts2025.map(a =>
+    `<tr><td>${when(a.start)}</td><td class="n">${a.hours}</td><td class="n">${USA.pct(a.peak)}</td><td>${a.hit ? '<span class="hit">yes</span>' : "no"}</td></tr>`
+  ).join("") || `<tr><td colspan="4">None</td></tr>`;
+  document.getElementById("y-missed").innerHTML = C.missed2025.map(t => `<tr><td>${when(t)}</td></tr>`).join("")
+    || `<tr><td>None</td></tr>`;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storm Replays</title>
+<!-- DRAFT (site-usa). Data: site/usa/data/replays.json (scripts/make_usa_site.py). -->
+<meta name="description" content="Five 2025 storms hour by hour: the forecast's chance of a power outage in each county, the official warnings, then the outages.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="usa.css">
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="./">⚡ Storm Outage Risk</a>
+  <nav>
+    <a href="./">Now</a>
+    <a href="scorecard.html">Scorecard</a>
+    <a href="replays.html" aria-current="page">Storm replays</a>
+    <a href="outlook.html">Outlook</a>
+    <a href="../">How it was built</a>
+  </nav>
+  <button class="theme" type="button" aria-label="Switch light or dark mode"></button>
+</header>
+
+<main>
+  <section>
+    <p class="kicker">Storm replays · 2025</p>
+    <h1>Watch it see the storm coming</h1>
+    <p class="lead">Each hour, the color is the chance the forecast gave every county of a new outage in the hours
+      ahead. Outlined counties are where 5% or more of customers were out at that hour. Fills should come
+      before outlines.</p>
+    <div class="tabs" id="storms"></div>
+    <div class="player">
+      <button class="btn" id="play" type="button">▶ Play</button>
+      <input type="range" id="t" min="0" max="0" value="0" aria-label="Hour of the storm">
+      <span class="clock" id="clock"></span>
+      <label class="note" style="margin:0"><input type="checkbox" id="warn"> official warnings</label>
+    </div>
+    <svg class="map" id="map" role="img" aria-label="Map of the storm hour by hour"></svg>
+    <div class="legend" id="legend"></div>
+    <div class="tiles" id="stats"></div>
+    <p class="note">The forecasts are the USA live model's twin trained on 2020–2024, run as the live feed runs:
+      on the five HRRR weather runs issued 2–6 hours before each hour, with the official warnings and outlook of
+      that hour. 2025 is a year it never saw. Outage reports: EAGLE-I.</p>
+  </section>
+  <p class="disclaimer">Experimental research forecast. Not from your utility or the National Weather Service.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  USA.theme(document.querySelector(".theme"));
+  const [map, R] = await Promise.all([USA.data("map.json"), USA.data("replays.json")]);
+  const levels = [{ name: "Elevated", chance: R.level }, { name: "High", chance: 0.20 }];
+  const m = USA.drawMap(document.getElementById("map"), map);
+  document.getElementById("legend").innerHTML = USA.legendItems(levels)
+    .map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("") +
+    `<span><i class="ring"></i>5%+ of customers out</span><span><i class="hatch"></i>warning in effect</span>`;
+  const ids = map.counties.map(c => c.id);
+  const outLayer = m.overlay.append("g"), warnLayer = m.overlay.append("g");
+  const T = document.getElementById("t"), clock = document.getElementById("clock"), play = document.getElementById("play");
+  const showWarn = document.getElementById("warn");
+  let storm, timer = null;
+
+  function frame(i) {
+    const f = storm.frames[i];
+    const p = new Map(f.p);
+    m.counties.style("fill", (d, j) => USA.fill(p.has(j) ? p.get(j) / 100 : 0, levels));
+    outLayer.selectAll("path").data(f.out.map(j => m.features[j])).join("path").attr("class", "out").attr("d", m.path)
+      .style("stroke-width", 1.1 / d3.zoomTransform(m.svg.node()).k);
+    warnLayer.selectAll("path").data(showWarn.checked ? f.warn.map(j => m.features[j]) : []).join("path")
+      .attr("class", "warn").attr("d", m.path);
+    const d = USA.parseIso(f.h);
+    clock.textContent = d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", timeZone: "America/Chicago", timeZoneName: "short" });
+    T.value = i;
+  }
+  function load(k) {
+    storm = R.storms[k];
+    stop();
+    T.max = storm.frames.length - 1;
+    document.querySelectorAll("#storms button").forEach((b, i) => b.setAttribute("aria-pressed", i === k));
+    const pc = v => `${Math.round(v * 100)}%`;
+    document.getElementById("stats").innerHTML = `
+      <div class="tile"><div class="v">${storm.outages}</div><div class="k">new outages during the storm</div></div>
+      <div class="tile"><div class="v">${pc(storm.caught / storm.outages)}</div><div class="k">had an alert (${pc(R.level)}+) first</div><div class="vs">warnings + outlook, same budget: ${pc(storm.official_caught / storm.outages)}</div></div>
+      <div class="tile"><div class="v">${storm.warning_h == null ? "–" : storm.warning_h + " h"}</div><div class="k">median warning before the outage</div></div>
+      <div class="tile"><div class="v">${storm.peak_out.toLocaleString()}</div><div class="k">customers out nationwide at the storm&rsquo;s worst hour</div></div>`;
+    frame(0);
+  }
+  function stop() { clearInterval(timer); timer = null; play.textContent = "▶ Play"; }
+  play.onclick = () => {
+    if (timer) return stop();
+    if (+T.value >= +T.max) frame(0);
+    play.textContent = "❚❚ Pause";
+    timer = setInterval(() => { if (+T.value >= +T.max) return stop(); frame(+T.value + 1); }, 450);
+  };
+  T.oninput = () => { stop(); frame(+T.value); };
+  showWarn.onchange = () => frame(+T.value);
+  document.getElementById("storms").innerHTML = R.storms.map((s, i) => `<button type="button" data-i="${i}">${USA.esc(s.title)}</button>`).join("");
+  document.getElementById("storms").onclick = e => { const b = e.target.closest("button"); if (b) load(+b.dataset.i); };
+  load(0);
+})();
+</script>
+</body>
+</html>

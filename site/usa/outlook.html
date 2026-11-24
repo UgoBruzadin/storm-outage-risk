@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outage Outlook</title>
+<!-- DRAFT (site-usa). The image is storm-outage-live usa/outlook.svg, drawn every hour by outlook/make.py there. -->
+<meta name="description" content="Where storm power outage alerts are up right now: one map for the lower 48, updated every hour, to share or embed.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<link rel="stylesheet" href="usa.css">
+</head>
+<body>
+<header class="bar">
+  <a class="home" href="./">⚡ Storm Outage Risk</a>
+  <nav>
+    <a href="./">Now</a>
+    <a href="scorecard.html">Scorecard</a>
+    <a href="replays.html">Storm replays</a>
+    <a href="outlook.html" aria-current="page">Outlook</a>
+    <a href="../">How it was built</a>
+  </nav>
+  <button class="theme" type="button" aria-label="Switch light or dark mode"></button>
+</header>
+
+<main>
+  <section>
+    <p class="kicker">The outage outlook</p>
+    <h1 id="title">Where alerts are up</h1>
+    <p class="lead" id="lead"></p>
+    <p class="banner" id="banner" hidden></p>
+    <svg class="map" id="map" role="img" aria-label="Counties with an outage alert up"></svg>
+    <div class="legend" id="legend"></div>
+    <div class="scroll" style="margin-top:18px"><table id="states"><thead><tr><th>State</th><th class="n">High</th><th class="n">Elevated</th><th>Counties</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>Share it</h2>
+      <p>The same map is drawn as an image every hour, after each forecast, at a link that doesn't change:</p>
+      <pre id="img-link"></pre>
+      <p><a class="btn" id="img" href="#">Open the image</a></p>
+      <p class="note">For local news, emergency managers or a club newsletter: link or embed the image, and it
+        stays current.</p>
+    </div>
+    <div>
+      <h2>Get alerts</h2>
+      <p>Every county has its own alert feed, on its county page. Search for yours on the <a href="./">front page</a>.</p>
+      <p class="note">An alert goes out once per storm, when a county reaches a level, and again if it reaches a
+        higher one. The <a href="scorecard.html">scorecard</a> shows how often they came true.</p>
+    </div>
+  </section>
+  <p class="disclaimer">Experimental research forecast. Not from your utility or the National Weather Service: don't
+    use it for safety decisions.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  USA.theme(document.querySelector(".theme"));
+  const [map, info, L] = await Promise.all([USA.data("map.json"), USA.data("counties.json"), USA.live()]);
+  const C = info.counties;
+  USA.banner(document.getElementById("banner"), L);
+  const [el, hi] = L.levels;
+  const lvOf = (id, p) => C[id] && !C[id].unreliable ? USA.levelOf(p, L.levels) : null;
+  const m = USA.drawMap(document.getElementById("map"), map);
+  m.counties.style("fill", f => {
+    const v = L.byId.get(f.id), lv = v && lvOf(f.id, v.p);
+    return !lv ? "var(--idle)" : lv === hi ? "var(--c4)" : "var(--c3)";
+  }).on("click", (e, f) => C[f.id] && (location.href = USA.countyUrl(f.id)));
+  const tip = USA.tip();
+  m.counties.on("pointermove", (e, f) => { const c = C[f.id], v = L.byId.get(f.id);
+    if (!c) return tip.hide(); tip.show(e, `<b>${USA.esc(c.n)}, ${c.s}</b><br>${v ? USA.pct(v.p) : "no forecast"}`); })
+    .on("pointerleave", () => tip.hide());
+  document.getElementById("legend").innerHTML =
+    `<span><i style="background:var(--c3)"></i>${el.name}: ${USA.pct(el.chance)}+</span><span><i style="background:var(--c4)"></i>${hi.name}: ${USA.pct(hi.chance)}+</span>` +
+    `<span><i style="background:var(--idle)"></i>no alert</span>`;
+
+  const up = L.latest.counties.map(([id, p]) => ({ id, p, lv: lvOf(id, p) })).filter(r => r.lv);
+  const nHi = up.filter(r => r.lv === hi).length;
+  document.getElementById("title").textContent = up.length
+    ? `${up.length} ${up.length === 1 ? "county" : "counties"} on alert` : "No counties on alert";
+  document.getElementById("lead").textContent =
+    `${nHi} at ${hi.name}, ${up.length - nHi} at ${el.name}, for new outages ${USA.windowText(L.latest, "America/Chicago")}. ` +
+    (L.sample ? "" : `Made ${USA.ago(L.latest.generated_at)}.`);
+  const byState = d3.groups(up, r => C[r.id].s).sort((a, b) => b[1].length - a[1].length);
+  document.querySelector("#states tbody").innerHTML = byState.map(([s, rs]) => `<tr><td>${s}</td>
+    <td class="n">${rs.filter(r => r.lv === hi).length}</td><td class="n">${rs.filter(r => r.lv === el).length}</td>
+    <td>${rs.sort((a, b) => b.p - a.p).map(r => `<a href="${USA.countyUrl(r.id)}">${USA.esc(C[r.id].n)}</a>`).join(", ")}</td></tr>`).join("")
+    || `<tr><td colspan="4">None this hour.</td></tr>`;
+  const img = `https://ugobruzadin.github.io/storm-outage-live/usa/outlook.svg`;
+  document.getElementById("img-link").textContent = img;
+  document.getElementById("img").href = img;
+  fetch(img, { method: "HEAD", cache: "no-cache" }).then(r => { if (!r.ok) throw 0; }).catch(() => {
+    document.getElementById("img").replaceWith(Object.assign(document.createElement("p"),
+      { className: "note", textContent: "The image isn't published yet: it starts with the hourly USA feed." }));
+  });
+})();
+</script>
+</body>
+</html>

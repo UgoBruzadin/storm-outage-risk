@@ -6,7 +6,7 @@
   canopy-map.jpg      average tree canopy per region (USFS / NLCD 2021)
   canopy-scatter.jpg  canopy vs storm hit rate (2020–2025 scorecard), one dot per region
   value.jpg           what staging crews on each forecast was worth in 2025 (ml/value_hourly.py)
-  storm.mp4           the March 2025 storm hour by hour, for social posts
+  storm.mp4           the May 16-17 2025 storm hour by hour, for social posts
   site/data/story.json  everything the story page (site/index.html) draws: shapes, storm, results
 
 Reads data/app/ (pixi run export-app, then python -m ml.export_hourly), ml/results/ and the warehouse
@@ -30,9 +30,10 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import shapely
 from matplotlib.colors import LinearSegmentedColormap
 
-from ml.data import DB, ROOT  # noqa: E402  (STORM_ROOT: the smoke tree)
+from ml.data import DB, ROOT, STATE_ABBR  # noqa: E402  (STORM_ROOT: the smoke tree)
 from ml.moving_window import FINAL_RUN  # noqa: E402
 
 OUT = ROOT / "site" / "assets"
@@ -222,7 +223,12 @@ def results():
     save(fig, "results.jpg")
 
 
-STORM_HOURS = pd.date_range("2025-03-14 18:00", "2025-03-15 21:00", freq="h")   # the story page's storm, UTC
+# the story page's storm, UTC: May 16-17 2025 across the South and Midwest, as in the site prototype
+# (the MO + IL page used 2025-03-14 18:00 to 2025-03-15 21:00)
+STORM_HOURS = pd.date_range("2025-05-16 16:00", "2025-05-17 22:00", freq="h")
+STORM_SCALE = 1000      # storm chances stored as whole thousandths: a third of the size of 3-decimal floats
+SIMPLIFY = 0.02         # county shapes, degrees (0.01 for two states; 3,108 counties need coarser shapes)
+MIN_STATE_OUTAGES = 50  # a state with fewer new outages in 2025 is listed as "too few to judge", with no ratio
 THRESHOLD = 5
 LADDER_LABELS = {"Warnings + outlook": "NWS warnings + SPC outlook alone",
                  "No forecasts": "Model, weather observed so far",
@@ -401,7 +407,160 @@ def lines_data(order):
             "road_treed": nums(roads.road_treed_share, 3),
             "coop": nums(coop.util_share_coop, 3),
             "beyond": nums(np.log2(frag.ratio_after_size), 3),
-            "tracked": [None if pd.isna(v) else bool(v) for v in frag.tracked]}
+            "tracked": [None if pd.isna(v) else bool(v) for v in frag.tracked],
+            "road_trees_by_state": road_trees_by_state(order, roads.road_treed_share, np.log2(frag.ratio_after_size),
+                                                       frag.tracked)}
+
+
+ROAD_TREES_MIN = 8             # counties a state needs for its road-trees correlation
+
+
+def road_trees_by_state(order, treed, beyond, tracked):
+    """Do counties with more road under trees have more outages than the weather and their size predict, state by
+    state? Spearman's correlation over the well-covered counties, with its p-value; `clear` = positive after a
+    Bonferroni correction for the number of states tested. The trees slide quotes the count."""
+    from scipy.stats import spearmanr
+    df = pd.DataFrame({"state": [STATE_NAMES.get(f[:2]) for f in order], "x": treed.to_numpy(),
+                       "y": beyond.to_numpy(), "ok": tracked.fillna(False).to_numpy(dtype=bool)})
+    df = df[df.ok & np.isfinite(df.x) & np.isfinite(df.y)]
+    rows = {}
+    for state, g in df.groupby("state"):
+        if len(g) >= ROAD_TREES_MIN:
+            rho, p = spearmanr(g.x, g.y)
+            rows[state] = {"r": round(float(rho), 2), "p": float(p), "n": len(g)}
+    tested = len(rows)
+    for v in rows.values():
+        v["clear"] = bool(v["r"] > 0 and v["p"] < 0.05 / tested)
+        v["positive"] = bool(v["r"] > 0 and v["p"] < 0.05)
+        v["negative"] = bool(v["r"] < 0 and v["p"] < 0.05)
+        v["p"] = round(v["p"], 4)
+    rho, p = spearmanr(df.x, df.y)
+    return {"states": rows, "tested": tested, "positive": sum(v["positive"] for v in rows.values()),
+            "clear": sum(v["clear"] for v in rows.values()), "negative": sum(v["negative"] for v in rows.values()),
+            "national": round(float(rho), 2), "counties": len(df), "min": ROAD_TREES_MIN}
+
+def num(v, digits=3):
+    """A float for story.json, rounded; None for a missing value (NaN isn't valid JSON)."""
+    return None if v is None or pd.isna(v) else round(float(v), digits)
+
+
+def usa_data(meta, order):
+    """The USA page's own numbers: scope, E55's choices and its one-time 2025 test, the live USA model, state by
+    state, and the coverage test. Each block is skipped, with a warning, when its file or row is missing, and the
+    page then shows that block's TODO line instead of a number.
+
+      scope           data/app/meta_hourly.json, ml/results/place_fragility.csv (tracked: any-out share >= 5%)
+      e55             ml/results/usa_final_2025.csv (ml/usa_final_test.py), row "new model" = E55's model, seed 0
+      live_usa        ml/results/live_usa_2025.csv (ml/train_live_usa.py)
+      baselines       ml/results/usa_ablation_verdicts.csv, stage "baselines" (E55 step 0, 2024)
+      choices         the same file, steps 1-3
+      states_results  ml/results/midwest_2025.csv, the rows trained on every state ("all N")
+      coverage        ml/results/coverage_2025.csv
+      build_up        ml/results/moving_window_2025.csv at the headline lead: each rung of inputs, weather so far only
+    """
+    out = {}
+
+    def block(name, fn):
+        try:
+            out[name] = fn()
+        except (FileNotFoundError, KeyError, IndexError) as e:
+            print(f"story.json: {name} left out ({type(e).__name__}: {e})")
+
+    def scope():
+        frag = pd.read_csv(RESULTS / "place_fragility.csv", dtype={"region_fips": str})
+        return {"regions": len(order), "with_outages": len(frag), "thin": int((~frag.tracked.astype(bool)).sum()),
+                "new_outages": int(meta["n_new_outages"]), "decisions": int(meta["n_decisions"]),
+                "base_rate": num(meta["event_rate"], 4), "alert_level": num(meta["alert_level"], 4),
+                "states_min": MIN_STATE_OUTAGES}
+
+    def e55():
+        d = pd.read_csv(RESULTS / "usa_final_2025.csv").set_index("model")
+        new, prev, off = d.loc["new model"], d.loc["current headline"], d.loc["warnings + outlook"]
+        seeds = d.loc["new model, 3 seeds"]
+        vs_off, vs_prev = "ratio_vs_warnings + outlook", "ratio_vs_current headline"
+        return {"value": num(new.onset_pr_auc), "lo": num(new.onset_pr_auc_lo), "hi": num(new.onset_pr_auc_hi),
+                "ratio": num(new[vs_off], 2), "ratio_lo": num(new[vs_off + "_lo"], 2),
+                "ratio_hi": num(new[vs_off + "_hi"], 2),
+                "vs_previous": num(new[vs_prev], 2), "vs_previous_lo": num(new[vs_prev + "_lo"], 2),
+                "vs_previous_hi": num(new[vs_prev + "_hi"], 2),
+                "better_than_previous": num(new["better_than_current headline"]),
+                "previous": {"value": num(prev.onset_pr_auc), "ratio": num(prev[vs_off], 2)},
+                "official": num(off.onset_pr_auc, 4),
+                # per decision-hour: share of alerted hours followed by a new outage, share of such hours alerted
+                "precision": num(new.precision_at_share), "recall_hours": num(new.recall_at_share),
+                "best_f1": num(new.best_f1),
+                "decisions": int(new.n_decisions), "positive_hours": int(new.n_outages),
+                "seeds3": {"value": num(seeds.onset_pr_auc), "ratio": num(seeds[vs_off], 2)}}
+
+    def live_usa():
+        d = pd.read_csv(RESULTS / "live_usa_2025.csv").set_index("model")
+        live, full = d.loc["live USA model (held out)"], d.loc["E55 model (with outage data)"]
+        prev = d.loc["current headline (with outage data)"]
+        return {"value": num(live.onset_pr_auc), "lo": num(live.onset_pr_auc_lo), "hi": num(live.onset_pr_auc_hi),
+                "ratio": num(live.ratio_vs_official, 2), "ratio_lo": num(live.ratio_vs_official_lo, 2),
+                "ratio_hi": num(live.ratio_vs_official_hi, 2),
+                "keeps": num(full.live_vs_this), "keeps_lo": num(full.live_vs_this_lo),
+                "keeps_hi": num(full.live_vs_this_hi), "vs_previous": num(prev.live_vs_this, 2),
+                "precision": num(live.precision_at_share), "recall_hours": num(live.recall_at_share)}
+
+    verdicts = RESULTS / "usa_ablation_verdicts.csv"
+
+    def baselines():
+        b = pd.read_csv(verdicts).query("stage == 'baselines'")
+        ref = float(b.reference_pr_auc.iloc[0])
+        return {"reference": num(ref, 4),
+                "rows": [{"key": r.arm, "value": num(r.pr_auc, 4), "share": num(r.pr_auc / ref),
+                          "share_lo": num(1 + r.gain_lo), "share_hi": num(1 + r.gain_hi)}
+                         for r in b.sort_values("pr_auc").itertuples()]}
+
+    def choices():
+        c = pd.read_csv(verdicts).query("stage != 'baselines'").copy()
+        c["kept"] = c.kept.astype(str).str.lower() == "true"
+        best = c[(c.stage == "size") & c.kept].pr_auc.idxmax()          # E55 step 1 keeps the best that passes
+        return [{"stage": r.stage, "key": r.arm, "value": num(r.pr_auc, 4), "gain": num(r.gain),
+                 "gain_lo": num(r.gain_lo), "gain_hi": num(r.gain_hi), "kept": bool(r.kept),
+                 "chosen": bool(i == best) or (r.stage == "combine" and bool(r.kept)),
+                 "held_out": num(r.held_out_gain), "seeds_better": int(r.seeds_better), "seeds": int(r.seeds)}
+                for i, r in c.iterrows()]
+
+    def states_results():
+        m = pd.read_csv(RESULTS / "midwest_2025.csv")
+        every = m.trained_on[m.trained_on.str.startswith("all ")].iloc[0]
+        names = {STATE_ABBR[f]: STATE_NAMES[f] for f in STATE_NAMES if f in STATE_ABBR}
+        rows = []
+        for r in m[m.trained_on == every].itertuples():
+            rows.append({"key": r.scored_on, "name": names.get(r.scored_on), "group": r.scored_on not in names,
+                         "counties": int(r.counties), "new": int(r.new_outages),
+                         "judged": bool(r.new_outages >= MIN_STATE_OUTAGES),
+                         "ratio": num(r.ratio, 2), "lo": num(r.ratio_lo, 2), "hi": num(r.ratio_hi, 2),
+                         "caught": num(r.model_caught), "official_caught": num(r.official_caught),
+                         "better": num(r.better_share)})
+        # states the first, two-state model never trained on (the "travels" test)
+        other = m[(m.trained_on == "MO+IL") & m.scored_on.str.startswith("the other")]
+        transfer = None if other.empty else {"key": other.scored_on.iloc[0], "ratio": num(other.ratio.iloc[0], 2),
+                                             "lo": num(other.ratio_lo.iloc[0], 2), "hi": num(other.ratio_hi.iloc[0], 2)}
+        return {"trained_on": every, "min": MIN_STATE_OUTAGES, "rows": rows, "transfer": transfer}
+
+    def coverage():
+        c = pd.read_csv(RESULTS / "coverage_2025.csv")
+        return [{"scored_on": r.scored_on, "trained_on": r.trained_on, "counties_trained": int(r.counties_trained),
+                 "counties_scored": int(r.counties_scored), "new": int(r.new_outages), "ratio": num(r.ratio, 2),
+                 "lo": num(r.ratio_lo, 2), "hi": num(r.ratio_hi, 2)} for r in c.itertuples()]
+
+    def build_up():
+        w = pd.read_csv(RESULTS / "moving_window_2025.csv")
+        w = w[w.lead_hours == meta["lead_hours"]]
+        if w.empty:
+            raise KeyError(f"no lead {meta['lead_hours']} rows yet")
+        return [{"key": r.run, "value": num(r.onset_pr_auc), "caught": num(r.caught), "final": r.run == FINAL_RUN}
+                for r in w.itertuples()]
+
+    for name, fn in [("scope", scope), ("e55", e55), ("live_usa", live_usa), ("baselines", baselines),
+                     ("choices", choices), ("states_results", states_results), ("coverage", coverage),
+                     ("build_up", build_up)]:
+        block(name, fn)
+    return out
+
 
 def story_data(gdf):
     """One JSON for the story page (site/index.html): county shapes (lon/lat, simplified), the March 2025 storm
@@ -409,14 +568,28 @@ def story_data(gdf):
     shapes = gpd.read_parquet(ROOT / "data" / "raw" / "geo" / "regions_study.parquet")
     # state outlines from the full-detail shapes: dissolving simplified counties leaves slivers
     # along shared borders, which then draw as stray lines
-    outlines = shapes.dissolve("state").geometry.simplify(0.01, preserve_topology=True)
-    shapes["geometry"] = shapes.geometry.simplify(0.01, preserve_topology=True)
+    outlines = shapes.dissolve("state").geometry.simplify(SIMPLIFY, preserve_topology=True)
+    shapes["geometry"] = shapes.geometry.simplify(SIMPLIFY, preserve_topology=True)
 
     def rounded(geom):
+        # d3 wants outer rings clockwise (the reverse of GeoJSON's rule); a counter-clockwise ring reads as the
+        # whole globe minus the county, and the map zooms out to fit it
+        geom = shapely.orient_polygons(geom, exterior_cw=True)
         g = json.loads(gpd.GeoSeries([geom]).to_json())["features"][0]["geometry"]
         def walk(c):
             return [walk(x) for x in c] if isinstance(c[0], list) else [round(c[0], 3), round(c[1], 3)]
         g["coordinates"] = walk(g["coordinates"])
+        # rounding can collapse a sliver to no area or flip its winding: drop rings under ~1 km², and wind the
+        # rest as d3 wants (outer rings clockwise, holes counter-clockwise)
+        polys = [g["coordinates"]] if g["type"] == "Polygon" else g["coordinates"]
+        kept = []
+        for poly in polys:
+            rings = [r for r in poly if abs(ring_area(r)) >= 1e-4]
+            if not rings or rings[0] is not poly[0]:
+                continue
+            kept.append([r if (ring_area(r) < 0) == (i == 0) else r[::-1] for i, r in enumerate(rings)])
+        g = {"type": "MultiPolygon", "coordinates": kept} if len(kept) != 1 else \
+            {"type": "Polygon", "coordinates": kept[0]}
         return g
 
     order = shapes.region_fips.tolist()
@@ -455,14 +628,13 @@ def story_data(gdf):
         e = ens[ens.block_start == t - pd.Timedelta(hours=lead)].set_index("region_fips").reindex(order)
         worst = pct.loc[t: t + pd.Timedelta(hours=5)].max()
         now = out.loc[t]
-        r3 = lambda v: None if pd.isna(v) else round(float(v), 3)          # noqa: E731
+        per_mille = lambda v: None if pd.isna(v) else int(round(float(v) * STORM_SCALE))   # noqa: E731
         storm.append({
             "start": t.isoformat() + "Z",
-            "prob": [r3(v) for v in e.p_mean], "low": [r3(v) for v in e.p_low], "high": [r3(v) for v in e.p_high],
+            "prob": [per_mille(v) for v in e.p_mean], "low": [per_mille(v) for v in e.p_low],
+            "high": [per_mille(v) for v in e.p_high],
             "pct": [None if pd.isna(v) else round(float(v), 1) for v in worst],
             "out": {name: int(now[now.index.str.startswith(code)].sum()) for code, name in STATE_NAMES.items()},
-            "out_mo": int(now[now.index.str.startswith("29")].sum()),        # the current page reads these two
-            "out_il": int(now[now.index.str.startswith("17")].sum()),
         })
 
     def scores(name):
@@ -487,7 +659,7 @@ def story_data(gdf):
 
     data = {
         "counties": counties, "states": states,
-        "lead": lead, "storm": storm,
+        "lead": lead, "storm": storm, "storm_scale": STORM_SCALE,
         "heartbeat": [{"start": r.block_start.isoformat() + "Z", "n": int(r.n_snapshots)}
                       for r in heartbeat.itertuples()],
         "pipeline": {"hours": int(n_hours), "counties": len(order), "tests": len(tests)},
@@ -530,6 +702,7 @@ def story_data(gdf):
         "place": place_data(canopy),
         "lines": lines_data(order),
         "holds": holds(meta),
+        **usa_data(meta, order),
         "value": {
             "forecasts": [{"key": col, "label": label, "ours": col == "headline",
                            "scenarios": [round(float(v) / 1e6, 1) for v in dollars[col]]}
@@ -539,8 +712,24 @@ def story_data(gdf):
     }
     out = STORY
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(data, separators=(",", ":")))
+    out.write_text(json.dumps(no_nan(data), separators=(",", ":"), allow_nan=False))
     return out
+
+
+def ring_area(r):
+    """Signed area of a lon/lat ring in degrees² (negative = clockwise)."""
+    return sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(r, r[1:])) / 2
+
+
+def no_nan(x):
+    """NaN and infinity as null: the browser's JSON.parse rejects them, and the whole page fails to draw."""
+    if isinstance(x, dict):
+        return {k: no_nan(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [no_nan(v) for v in x]
+    if isinstance(x, float) and not np.isfinite(x):
+        return None
+    return x
 
 
 class StormFrame:
@@ -552,9 +741,10 @@ class StormFrame:
         frames = story["storm"]
         self.lead = story["lead"]
         self.when = [pd.Timestamp(f["start"]) for f in frames]
-        self.prob = np.array([[np.nan if v is None else v for v in f["prob"]] for f in frames], dtype=float)
+        scale = story.get("storm_scale", 1)
+        self.prob = np.array([[np.nan if v is None else v / scale for v in f["prob"]] for f in frames], dtype=float)
         self.pct = np.array([[np.nan if v is None else v for v in f["pct"]] for f in frames], dtype=float)
-        self.out = [f.get("out") or {"Missouri": f["out_mo"], "Illinois": f["out_il"]} for f in frames]
+        self.out = [f["out"] for f in frames]
         self.vmax_p, self.vmax_o = 0.4, 25.0          # outages above 25% share the darkest color
         self.peak = int(np.nanargmax(np.nansum(self.prob, axis=1)))       # the hour with the most risk ahead
 
@@ -603,7 +793,9 @@ class StormFrame:
         decided = ct - pd.Timedelta(hours=self.lead)
         self.subtitle.set_text(f"{ct:%-d %B, %-I %p}–{ct + pd.Timedelta(hours=6):%-I %p} CT, as seen at "
                                f"{decided:%-I %p} from the forecasts available then. A storm it never trained on.")
-        self.totals.set_text("Customers out: " + " · ".join(f"{s} {n:,}" for s, n in self.out[step].items()))
+        top = sorted(self.out[step].items(), key=lambda kv: -kv[1])[:3]          # 49 states: the three most out
+        self.totals.set_text(f"Customers out: {sum(self.out[step].values()):,} · most in "
+                             + " · ".join(f"{s} {n:,}" for s, n in top))
 
 
 def storm_clip(gdf, story, fps=30, hold=0.45, tween=0.25):

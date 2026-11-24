@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>County Outage Risk</title>
+<!-- A small card for other sites: embed.html?county=<id>, in an iframe (the county pages show the snippet). -->
+<link rel="stylesheet" href="usa.css">
+<style>
+  body { background: var(--surface); }
+  .card { border: 0; border-radius: 0; padding: 14px; }
+  .big { font-size: 2.4rem; }
+  .src { font-size: .75rem; color: var(--muted); margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<div class="card" id="card"><p class="note">Loading…</p></div>
+<script src="usa.js"></script>
+<script>
+"use strict";
+(async () => {
+  const id = new URLSearchParams(location.search).get("county");
+  const [info, L] = await Promise.all([USA.data("counties.json"), USA.live()]);
+  const c = info.counties[id];
+  const el = document.getElementById("card");
+  if (!c) { el.innerHTML = `<p class="note">Unknown county.</p>`; return; }
+  el.innerHTML = USA.card(id, c, L, { link: false }).replace(/<div class="actions">[\s\S]*<\/div>\s*$/, "") +
+    `<p class="src">${L.sample ? "Sample forecast · " : ""}<a href="${USA.countyUrl(id)}" target="_blank" rel="noopener">Storm Outage Risk</a>,
+    an experimental research forecast. Not from your utility or the NWS.</p>`;
+})();
+</script>
+</body>
+</html>
