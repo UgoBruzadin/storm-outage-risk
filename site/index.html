@@ -52,12 +52,6 @@ a { color: var(--accent); }
   border-bottom: 1px solid var(--line); font-size: .9rem; }
 .bar a { text-decoration: none; font-weight: 600; }
 .bar-right { display: flex; align-items: center; gap: 12px; }
-/* the state picker: results and maps for one state (or Missouri + Illinois); the whole country by default */
-.pick { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
-.pick select { font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
-  border-radius: 6px; padding: 4px 6px; max-width: 11rem; }
-.st.picked text { font-weight: 700; }
-.st.picked rect { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
 .theme { font: 1rem/1 system-ui, sans-serif; width: 32px; height: 32px; padding: 0; cursor: pointer; color: var(--ink);
   background: transparent; border: 1px solid var(--line); border-radius: 999px; }
 .bar .home { color: var(--ink); }
@@ -121,7 +115,7 @@ strong { color: var(--ink); }
 .map h3 { font-size: 1rem; margin: 0 0 6px; }
 .map svg { max-height: 44svh; width: auto; max-width: 100%; margin: 0 auto; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
-/* maps zoom to a state (the picker, or the storm map's buttons): keep the counties around it inside the frame */
+/* the storm map zooms (its buttons): keep the counties around it inside the frame */
 #map-pred, #map-acc, #map-place, #map-hit, #map-live { overflow: hidden; }
 .county { stroke: var(--surface); stroke-width: .25; vector-effect: non-scaling-stroke; }
 #map-live .county { stroke-width: .5; }
@@ -270,13 +264,11 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   .card .note { display: none; }
 }
 @media (max-width: 480px) {       /* keep the top bar on one line on phones */
-  .pick > span { display: none; }
   .bar { padding: 12px; font-size: .78rem; }
   .bar-right { gap: 6px; }
   .bar a { white-space: nowrap; }
   .bar .home { display: none; }                         /* "← Live forecast" is the way home on phones */
   .bar a[data-t="nav.portfolio"] { display: none; }   /* still linked at the end of the page */
-  .pick select { max-width: 5.6rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .src, .table-card, .card-body { transition: none; }
@@ -290,8 +282,6 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <a class="home" href="usa/" data-t="nav.home"></a>
   <span class="bar-right">
     <a href="usa/" data-t="nav.app"></a>
-    <label class="pick"><span data-t="pick.label"></span>
-      <select id="state-pick" aria-label="Show results for a state"></select></label>
     <a href="https://ugobruzadin.github.io/portfolio/" data-t="nav.portfolio"></a>
     <a href="writeup/" data-t="nav.writeup"></a>
     <button class="theme" type="button"></button>
@@ -382,8 +372,7 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <p class="kicker" data-t="ladder.kicker"></p>
   <h2 id="ladder-title"></h2>
   <svg id="ladder-chart" role="img" aria-label="How many times better than warnings and outlook alone, with 95% ranges, for each version"></svg>
-  <p class="lead" id="ladder-state"></p>
-  <p class="note" id="ladder-previous"></p>
+    <p class="note" id="ladder-previous"></p>
   <p class="note" id="ladder-note"></p>
 </section>
 
@@ -498,7 +487,8 @@ svg { display: block; width: 100%; height: auto; overflow: visible; }
   <h2 data-t="end.title"></h2>
   <div class="next"></div>
   <div class="links">
-    <a class="btn primary" href="https://storm-outage-risk.streamlit.app" data-t="end.dashboard"></a>
+    <a class="btn primary" href="usa/" data-t="end.app"></a>
+    <a class="btn" href="https://storm-outage-risk.streamlit.app" data-t="end.dashboard"></a>
     <a class="btn" href="writeup/" data-t="end.writeup"></a>
     <a class="btn" href="https://github.com/UgoBruzadin/storm-outage-risk" data-t="end.code"></a>
     <a class="btn" href="https://ugobruzadin.github.io/portfolio/" data-t="end.portfolio"></a>
@@ -673,47 +663,12 @@ addEventListener("scroll", () => {
   progress.style.width = (100 * h.scrollTop / (h.scrollHeight - h.clientHeight)) + "%";
 }, { passive: true });
 
-// the state picker: ?state=MO or ?state=MO,IL. The storm, county and trees maps zoom to the pick, the result,
-// state and trees slides quote its numbers, and the state list marks it; nothing picked = the whole country
-const BY_ABBR = Object.fromEntries(Object.entries(ABBR).map(([name, a]) => [a, name]));
-let PICK = [];
-function readPick() {
-  const q = new URLSearchParams(location.search).get("state");
-  PICK = q ? [...new Set(q.toUpperCase().split(/[\s,+]+/).map(a => BY_ABBR[a]).filter(Boolean))] : [];
-}
-readPick();
-const isMoIl = () => PICK.length === 2 && PICK.includes("Missouri") && PICK.includes("Illinois");
-const pickName = () => (isMoIl() ? Tp("pick.moil") : PICK.join(" + "));
-// the counties to fit a map to: the picked states', or every county
-const pickFit = (features, fc) => (PICK.length
-  ? { type: "FeatureCollection", features: features.filter(f => PICK.includes(f.properties.state)) } : fc);
-// the picked states' row in story.json's states_results (Missouri + Illinois has its own row)
-function pickResult(data) {
-  const rows = (data.states_results || {}).rows || [];
-  if (isMoIl()) return rows.find(r => r.key === "MO+IL");
-  return PICK.length === 1 ? rows.find(r => r.name === PICK[0]) : null;
-}
-function pickMenu(data, onPick) {
-  const sel = document.querySelector("#state-pick");
-  const names = [...new Set(data.counties.map(c => c.state))].filter(n => ABBR[n]).sort();
-  const opts = [["", Tp("pick.all")], ["MO,IL", Tp("pick.moil")], ...names.map(n => [ABBR[n], n])];
-  sel.innerHTML = opts.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join("");
-  sel.value = isMoIl() ? "MO,IL" : PICK.length === 1 ? ABBR[PICK[0]] : "";
-  sel.addEventListener("change", () => {
-    const url = new URL(location.href);
-    if (sel.value) url.searchParams.set("state", sel.value); else url.searchParams.delete("state");
-    history.replaceState(null, "", url);
-    readPick();
-    onPick();
-  });
-}
-
 // a chart's drawing width: its container's, at least 320
 const widthOf = sel => Math.max(320, Math.round(document.querySelector(sel).getBoundingClientRect().width || 900));
 const ratioText = d => `${d.ratio.toFixed(1)}× (${d.ratio_lo.toFixed(1)}–${d.ratio_hi.toFixed(1)}×)`;
 
 Promise.all([
-  d3.json("data/story.json?v=2026-11-19-usa"),       // bump the version with every new story.json
+  d3.json("data/story.json?v=2026-11-25-usa"),       // bump the version with every new story.json
   fetch("text.yaml", { cache: "no-cache" }).then(r => r.text()).then(t => jsyaml.load(t)),
 ]).then(([data, text]) => {
   TEXT = text;
@@ -724,7 +679,7 @@ Promise.all([
   const states = data.states.map(s => ({ type: "Feature", properties: s, geometry: s.geometry }));
   const fc = { type: "FeatureCollection", features };
   liveNow(data, features, states);
-  const stormFocus = storm(data, features, states, fc);
+  storm(data, features, states, fc);
   pipeline(data);
   // charts drawn at their real width (text stays legible on phones); redrawn, finished, on resize
   const charts = [
@@ -742,10 +697,7 @@ Promise.all([
     ["#map-place", animate => trees(data, features, states, fc, animate)],
   ];
   charts.forEach(([, draw]) => draw(true));
-  // a new pick redraws every chart, finished, and moves the storm map
   const redraw = () => charts.forEach(([sel, draw]) => { d3.select(sel).selectAll("*").remove(); draw(false); });
-  pickMenu(data, () => { redraw(); stormFocus(true); });
-  stormFocus(false);
   let lastWidth = innerWidth;
   addEventListener("resize", () => {
     if (Math.abs(innerWidth - lastWidth) < 40) return;
@@ -942,21 +894,9 @@ function storm(data, features, states, fc) {
   }
   button.addEventListener("click", play);
   repaint.push(() => show(i, false));
-  // zoom to the picked states (the whole country when none)
-  const projection = d3.geoConicEqualArea().parallels([29.5, 45.5]).rotate([96, 0]).fitSize([W, mapH], fc);
-  function focus(animate) {
-    let tr = d3.zoomIdentity;
-    if (PICK.length) {
-      const [[x0, y0], [x1, y1]] = d3.geoPath(projection).bounds(pickFit(features, fc));
-      const k = Math.max(1, Math.min(16, 0.9 / Math.max((x1 - x0) / W, (y1 - y0) / mapH)));
-      tr = d3.zoomIdentity.translate(W / 2, mapH / 2).scale(k).translate(-(x0 + x1) / 2, -(y0 + y1) / 2);
-    }
-    (animate && !REDUCE ? svg.transition().duration(600) : svg).call(zoom.transform, tr);
-  }
-  if (REDUCE) { show(d3.maxIndex(data.storm, total), false); return focus; }
+  if (REDUCE) { show(d3.maxIndex(data.storm, total), false); return; }
   show(0, false);
   onEnter(document.querySelector("#storm"), play);
-  return focus;
 }
 
 function pipeline(data) {
@@ -1113,14 +1053,6 @@ function ladder(data, animate) {
   document.querySelector("#ladder-previous").innerHTML = T("ladder.previous", { vs_prev: or(e.vs_previous, v => v.toFixed(2)),
     vs_lo: or(e.vs_previous_lo, v => v.toFixed(2)), vs_hi: or(e.vs_previous_hi, v => v.toFixed(2)),
     better: or(e.better_than_previous, pct), reach: pct(ours.value / ceiling.value) });
-  const pr = pickResult(data), stateLine = document.querySelector("#ladder-state");
-  stateLine.innerHTML = !PICK.length ? ""
-    : !pr ? T("ladder.state_none", { name: pickName() })
-    : !pr.judged ? T("ladder.state_few", { name: pickName(), new: fmt(pr.new), min: data.states_results.min })
-    : T("ladder.state", { name: pickName(), ratio: pr.ratio.toFixed(1), lo: or(pr.lo, v => v.toFixed(1)),
-                          hi: or(pr.hi, v => v.toFixed(1)), new: fmt(pr.new), caught: pct(pr.caught),
-                          official: pct(pr.official_caught) });
-  stateLine.style.display = PICK.length ? "" : "none";
   const label = d => TEXT.ladder.labels[d.key] || d.label;
   const W = widthOf("#ladder-chart"), narrow = W < 600, rowH = narrow ? 62 : 56, left = narrow ? 0 : 300, top = 30;
   const svg = d3.select("#ladder-chart").attr("viewBox", `0 0 ${W} ${top + rows.length * rowH + 10}`);
@@ -1325,7 +1257,7 @@ function accuracy(data, features, states, fc, animate) {
   document.querySelector("#where-lead").innerHTML = T("where.lead", { caught: pct(d3.sum(acc.caught) / d3.sum(acc.new)),
     min: acc.min_events, thin: or(sc.thin, fmt), counties: or(sc.with_outages, fmt) });
   hatch(svg, "hatch");
-  const counties = countyMap(svg, features, states, pickFit(features, fc), W, H - 10);
+  const counties = countyMap(svg, features, states, fc, W, H - 10);
   const color = () => d3.scaleSequential(d3.interpolateRgbBasis(ramp("blue"))).domain([0, 1]);
   const fill = (d, j) => (judged[j] ? color()(share[j]) : "url(#hatch)");
   counties.attr("fill", still ? fill : "var(--surface)").attr("opacity", still ? 1 : 0);
@@ -1427,7 +1359,7 @@ function statesChart(data, animate) {
     if (c === 0) g.append("text").attr("class", "label muted").attr("x", 0).attr("y", top - 14).style("font-size", "12px")
       .text(Tp("states.axis"));
   }
-  const g = svg.selectAll("g.st").data(rows).join("g").attr("class", d => "st" + (PICK.includes(d.name) ? " picked" : ""))
+  const g = svg.selectAll("g.st").data(rows).join("g").attr("class", "st")
     .attr("transform", (d, k) => `translate(${Math.floor(k / per) * colW},${top + (k % per) * rowH})`)
     .attr("opacity", still ? 1 : 0);
   g.append("rect").attr("width", colW - 8).attr("height", rowH).attr("fill", "transparent");
@@ -1457,17 +1389,12 @@ function trees(data, features, states, fc, animate) {
   const effects = Object.values(c.model || {}).filter(e => e.seeds).map(e => e.mean);
   const roads = (data.choices || []).find(r => r.key === "roads + street canopy");
   const rt = ln.road_trees_by_state || {};
-  const one = PICK.length === 1 && rt.states ? rt.states[PICK[0]] : null;
   document.querySelector("#trees-lead").innerHTML = T("trees.lead", {
     roads: roads ? signedPct(roads.gain) : pending(),
     held: roads && have(roads.held_out) ? signedPct(roads.held_out) : pending(),
     canopy_lo: effects.length ? signedPct(d3.min(effects)) : pending(),
     canopy_hi: effects.length ? signedPct(d3.max(effects)) : pending(),
-    positive: or(rt.positive, fmt), tested: or(rt.tested, fmt), clear: or(rt.clear, fmt) })
-    + (!PICK.length ? "" : " " + (one
-      ? T(one.positive ? "trees.state_yes" : one.negative ? "trees.state_neg" : "trees.state_no",
-          { name: PICK[0], r: signed(one.r), n: one.n })
-      : PICK.length === 1 ? T("trees.state_few", { name: PICK[0], min: rt.min }) : ""));
+    positive: or(rt.positive, fmt), tested: or(rt.tested, fmt), clear: or(rt.clear, fmt) });
   const thousands = d => (d < 6 ? `${10 ** (d - 3)}k` : "1M");
   const meters = d => (d >= 1000 ? `${+(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`);
   // density, customers and road per customer span orders of magnitude: mapped by their logarithm, shown in plain numbers
@@ -1510,7 +1437,7 @@ function trees(data, features, states, fc, animate) {
     const v = rights[hitTab], j = index.get(d);
     return v.ok(j) ? scale(v.colors(), v.domain)(v.values[j]) : "url(#hatch-thin)";
   };
-  const fit = pickFit(features, fc);
+  const fit = fc;
   const placed = countyMap(left, features, states, fit, 460, 290), hit = countyMap(right, features, states, fit, 460, 290);
   placed.attr("fill", fillPlace);
   hit.attr("fill", fillHit);

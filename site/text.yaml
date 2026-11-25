@@ -155,14 +155,6 @@ ladder:
     The model was re-chosen on the whole country (next section). On 2025 it scores {vs_prev}× the previous model
     ({vs_lo}–{vs_hi}×), higher in {better} of the resamples. With real forecasts it already gets {reach} of the way to
     knowing the weather in advance.
-  # the picked state (or Missouri + Illinois): {name}; {ratio}, {lo}, {hi}: vs warnings + outlook; {new}: new
-  # outages; {caught}, {official}: shares caught, each alerting on the state's riskiest 0.75% of county-hours
-  state: >-
-    **{name}:** {ratio}× warnings + outlook ({lo}–{hi}×), on {new} new outages. Alerting on its riskiest 0.75% of
-    county-hours, the model caught {caught} of them, warnings + outlook {official}.
-  # {min}: new outages a state needs to be judged
-  state_few: "**{name}** had {new} new outages in 2025, under the {min} needed to judge a state."
-  state_none: "**{name}** has no results yet."
   labels:                               # the bars, top to bottom
     No forecasts: Model, weather observed so far
     With HRRR forecasts (newest run): Model + latest HRRR forecast
@@ -377,12 +369,6 @@ trees:
     tree-lined road have more outages than the weather predicts in {positive} of {tested} states ({clear} clearly),
     mostly in the Northeast, the Mid-Atlantic, the Southeast and California, but not in the Plains or the Mountain
     West.
-  # the picked state: {name}; {r}: its correlation; {n}: well-covered counties
-  state_yes: "In **{name}** they do: correlation {r} over {n} counties."
-  state_no: "In **{name}**, no clear link: correlation {r} over {n} counties, too weak to rule out chance."
-  state_neg: "In **{name}** the link runs the other way: correlation {r} over {n} counties."
-  # {min}: well-covered counties a state needs
-  state_few: "**{name}** has too few well-covered counties to tell (under {min})."
   # {all}: correlation of the selected map with the storm hit rate, every county
   note: >-
     Hit rate covers 2020–2025. Correlations compare all counties, with a log scale for housing density, customers and
@@ -455,10 +441,6 @@ trees:
       legend: share of customers (EIA-861, 2015–2019)
       tip: co-op customers
 
-pick:                                   # the state picker in the top bar
-  label: "Show:"
-  all: Whole country
-  moil: Missouri + Illinois
 
 live:
   menu: Blind test                     # the name in the side dots' tooltip
@@ -520,13 +502,13 @@ end:
         out, we'll see if the live model holds up.
     - title: A live feed for the country
       text: >-
-        The whole-country live model is trained. Next: hourly HRRR pulls for every county and a public feed, under a
-        new model tag, while the two-state test stays frozen.
+        The whole-country model forecasts every county each hour from the latest HRRR runs, under its own model tag,
+        while the two-state test stays frozen. The scorecard counts each of its alerts as it goes out.
     - title: A map for anyone
       text: >-
-        A public county map and phone page: each county's chance for now and the next 6 hours, plain Low / Elevated /
-        High levels, opt-in "my power is out" reports, and a list for utilities. Each piece is tested the same way
-        before it ships.
+        Search a county or ZIP code for its chance right now, what's raising it, and how the alerts did there in 2025,
+        then follow its alert feed. Next: notifications straight to your phone.
+  app: Open the live forecast
   dashboard: Open the dashboard
   writeup: Read the full write-up
   code: Code on GitHub
