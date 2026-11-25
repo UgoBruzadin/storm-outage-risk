@@ -514,6 +514,6 @@ end:
   code: Code on GitHub
   portfolio: See my other projects
   credits: >-
-    Ugo Bruzadin Nunes, PhD · Data: DOE / ORNL EAGLE-I, NOAA HRRR (AWS archive; Open-Meteo for the live forecast), NOAA Storm Events, NWS and SPC via
+    Ugo Bruzadin Nunes, PhD · Data: DOE / ORNL EAGLE-I, NOAA HRRR (AWS archive; Open-Meteo for the Missouri + Illinois blind test), NOAA Storm Events, NWS and SPC via
     the Iowa Environmental Mesonet, USFS / NLCD Tree Canopy, U.S. Census Bureau (ACS, TIGER roads), USDA NRCS SSURGO,
     FEMA National Flood Hazard Layer, EIA-861.
