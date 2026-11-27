@@ -346,15 +346,21 @@ def train(kind, rows, sizes, base, grid, scale, graph, seed, epochs, val=None, f
 # ---------- scoring a year ----------
 
 def score_year(year, cols, prep, nets, grid, scale, graph):
-    """Each arm and seed's chance for every decision of `year` (window weather averaged over the HRRR versions)."""
+    """Each arm and seed's chance for every decision of `year` (window weather averaged over the HRRR versions).
+    Each state's rows are transformed once per version and shared by every model."""
     parts = []
     for rows, versions in nt.scored_rows(year):
         out = rows[["region_fips", "block_start", "y"]].copy()
-        base = rows[["region_fips", "block_start"]].reset_index(drop=True)
-        for (kind, s), net in nets.items():
-            out[f"{kind}|seed{s}"] = nt.run_mean(rows, versions, cols, lambda x, net=net: predict(
-                net, Rows(x.reset_index(drop=True).assign(region_fips=base.region_fips, block_start=base.block_start),
-                          prep, graph), grid, scale, graph))
+        keys = rows[["region_fips", "block_start"]].reset_index(drop=True)
+        sums = {k: np.zeros(len(rows)) for k in nets}
+        for v in versions:
+            x = ft.with_version(rows, cols, v).reset_index(drop=True).assign(
+                region_fips=keys.region_fips, block_start=keys.block_start)
+            r = Rows(x, prep, graph)
+            for k, net in nets.items():
+                sums[k] += predict(net, r, grid, scale, graph)
+        for (kind, s), total in sums.items():
+            out[f"{kind}|seed{s}"] = total / len(versions)
         parts.append(out)
         print(f"{year}: {len(out):,} decisions scored", flush=True)
     return pd.concat(parts, ignore_index=True)
