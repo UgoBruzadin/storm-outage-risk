@@ -808,6 +808,23 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **It overfits fast.** The best score comes after 2 passes over the data, so the network gets little out of the 13 M training rows that the trees don't already take.
   - **What's left to try** is structure the trees can't express, not a different learner on the same columns: E57b's learned spreading between counties.
 
+### E57b. Graph networks over neighbouring counties (plan, fixed before any result)
+- **Question:** The neighbour and upwind inputs are hand-made: the strongest gust, CAPE and rain, worst outage and warning share within 100 km and upwind. Can a network learn how storms and outages spread between counties instead, and which kind of graph layer does it best?
+- **Setup:** `ml/gnn_counties.py` (PyTorch, `nn` pixi environment; no graph library, the layers are written out). Same rows, label, sampling, seeds and scoring as E57a.
+  - **The graph:** each county links to its neighbours within 100 km and its upwind counties within 200 km (`intermediate.int_study__region_neighbors`, up to 71 links). Edge inputs: distance, bearing (sine and cosine), near and upwind flags.
+  - **What a neighbour sends:** its 14 known-by-then inputs at the decision hour, from every county, not only the sampled ones: gust, 10 m and 850 hPa wind, shear, CAPE, rain (total and worst hour), outage share now and worst over the past 24 hours, the four warnings and the SPC wind and tornado probabilities. Heavy-tailed ones log-scaled, all standardised on 2020–2023. These are the hand-made inputs' sources plus a few more, so the comparison is learned against hand-made aggregation.
+  - **The county's own inputs:** E57a's, minus the 10 hand-made neighbour inputs, into a 512-256 trunk; the neighbour summary (64 numbers) is joined to it, then 128, then the chance.
+  - **Arms**, each with 3 seeds:
+    - *none:* the same network with no neighbour summary.
+    - *mean* (GraphSAGE-mean): a small network turns each neighbour's inputs and edge into a message; messages averaged.
+    - *max-pool* (GraphSAGE-pool): the same messages, the largest of each number kept.
+    - *attention* (GATv2 with edge inputs, 4 heads): each message weighted by a score from the county's own state, the neighbour's and the edge.
+    - *gated* (GatedGCN-style): each message scaled by a 0–1 gate from the county's state, the neighbour's and the edge, summed.
+  - **Training:** as E57a (weighted cross-entropy, AdamW, batch 8,192, dropout 0.2, county dropped to unknown for 10% of rows), with a cosine schedule over 6 epochs instead of 20, since E57a peaked after 2. The number of epochs is picked per arm on the 2024 sample, as E57a.
+- **The rule:** on every 2024 decision (newest HRRR run), each graph arm against *none* (does learned spreading help at all?), against E57a's network with the hand-made inputs (does it beat hand-made?) and against E55's XGBoost (E57a's cached chances, same rows). E55's rule: kept if the gain of the seed-mean chances has a 95% storm-day range above zero and at least 2 of 3 seeds are better. The best graph arm is also averaged with XGBoost.
+- **Then:** only if a graph arm beats the hand-made network on 2024, it is refitted on 2020–2024 and scored once on 2025 (five-run mean), as E57a.
+- **Left for later:** neighbours' forecast window weather (the storm on its way), learned edges beyond 200 km, two hops.
+
 ---
 
 ## Open experiments
