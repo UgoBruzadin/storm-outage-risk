@@ -214,11 +214,13 @@ class Summary(nn.Module):
         super().__init__()
         self.kind, self.heads = kind, heads
         self.msg = nn.Sequential(nn.Linear(d_in, d), nn.SiLU(), nn.Linear(d, d))
+        # a linear layer on [own, message] written as own-part + message-part, so the county's own state is never
+        # copied to every link (same function, far less GPU memory)
         if kind == "attention":
-            self.att_w = nn.Linear(d_own + d, d)
+            self.att_own, self.att_msg = nn.Linear(d_own, d), nn.Linear(d, d, bias=False)
             self.att_a = nn.Parameter(torch.randn(heads, d // heads) * 0.1)
         if kind == "gated":
-            self.gate = nn.Linear(d_own + d, d)
+            self.gate_own, self.gate_msg = nn.Linear(d_own, d), nn.Linear(d, d, bias=False)
         self.norm = nn.LayerNorm(d)
 
     def forward(self, own, nb, mask):
@@ -232,14 +234,13 @@ class Summary(nn.Module):
             out = torch.where(mask.any(1, keepdim=True), out, torch.zeros_like(out))
         elif self.kind == "attention":
             b, k, d = m.shape
-            z = torch.cat([own.unsqueeze(1).expand(b, k, own.shape[1]), m], -1)
-            e = nn.functional.leaky_relu(self.att_w(z), 0.2).view(b, k, self.heads, d // self.heads)
+            z = self.att_own(own).unsqueeze(1) + self.att_msg(m)
+            e = nn.functional.leaky_relu(z, 0.2).view(b, k, self.heads, d // self.heads)
             score = (e * self.att_a).sum(-1).masked_fill(~mask.unsqueeze(-1), -1e4)     # [B, K, H]
             alpha = torch.softmax(score, dim=1) * mask.unsqueeze(-1)
             out = (alpha.unsqueeze(-1) * m.view(b, k, self.heads, d // self.heads)).sum(1).reshape(b, d)
         else:                                                    # gated
-            b, k, _ = m.shape
-            g = torch.sigmoid(self.gate(torch.cat([own.unsqueeze(1).expand(b, k, own.shape[1]), m], -1)))
+            g = torch.sigmoid(self.gate_own(own).unsqueeze(1) + self.gate_msg(m))
             out = (g * m * maskf).sum(1) / count.sqrt()
         return self.norm(out)
 
