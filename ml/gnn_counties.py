@@ -29,6 +29,7 @@ The network (E57a's, with the neighbour summary joined in)
   test    only if a graph arm beats the hand-made network on 2024: refitted on 2020-2024, scored once on 2025
 
 Usage: STORM_ROOT=<main checkout> pixi run -e nn python -m ml.gnn_counties select [--arms ...] | test [--smoke]
+  test   reads ml/results/gnn_2024.csv and chosen_epochs.json; models under <STORM_ROOT>/data/cache/gnn/test/
 Writes ml/results/gnn_2024.csv (+ gnn_2024_epochs.csv), gnn_2025.csv; grid, models and chances under
 <STORM_ROOT>/data/cache/gnn/ (a stopped run reuses fitted models).
 """
@@ -136,7 +137,8 @@ def build_grid(graph, db=data.DB):
 class GridScale:
     """log1p for heavy tails, then mean / std from the training years; missing -> 0 plus a flag."""
 
-    def fit(self, grid, years, rng=np.random.default_rng(0)):
+    def fit(self, grid, years, rng=None):
+        rng = rng or np.random.default_rng(0)
         lo = hour_index(pd.Timestamp(f"{years[0]}-01-01"))
         hi = hour_index(pd.Timestamp(f"{years[-1] + 1}-01-01"))
         sample = np.asarray(grid[np.sort(rng.integers(lo, hi, 2000))], np.float32).reshape(-1, len(GRID))
@@ -399,14 +401,20 @@ def judge(pred, arms, seeds, year, references):
 
 # ---------- stages ----------
 
-def setup(years):
+def device_grid(raw, scale, graph, first, last):
+    """The grid for years first..last on the GPU (the numpy memmap on a CPU)."""
+    if DEVICE != "cuda":
+        return raw
+    return DeviceGrid(raw, scale, graph, hour_index(pd.Timestamp(f"{first}-01-01")),
+                      min(len(raw), hour_index(pd.Timestamp(f"{last + 1}-01-01"))))
+
+
+def setup(years, extra=1):
+    """extra: years after the training years kept on the GPU too (select: 2024 for validation and scoring)."""
     graph = Graph()
     raw = build_grid(graph)
     scale = GridScale().fit(raw, years)
-    grid = raw
-    if DEVICE == "cuda":                       # training years and the year after (validation and scoring)
-        grid = DeviceGrid(raw, scale, graph, hour_index(pd.Timestamp(f"{years[0]}-01-01")),
-                          min(len(raw), hour_index(pd.Timestamp(f"{years[-1] + 2}-01-01"))))
+    grid = device_grid(raw, scale, graph, years[0], years[-1] + extra)
     cols = own_features()
     t0 = time.time()
     train_df = ft.train_rows(years)
@@ -419,7 +427,8 @@ def setup(years):
     return graph, grid, scale, cols, prep, rows, base
 
 
-def validation_rows(year, cols, prep, graph, rng=np.random.default_rng(0)):
+def validation_rows(year, cols, prep, graph, rng=None):
+    rng = rng or np.random.default_rng(0)
     parts = []
     for rows, versions in nt.scored_rows(year):
         keep = (rows.y.to_numpy() == 1) | (rng.random(len(rows)) < nt.VAL_NEG)
@@ -438,7 +447,8 @@ def select(arms):
     val = validation_rows(2024, cols, prep, graph)
     print(f"2024 sample: {len(val):,} rows", flush=True)
     curves_path = RESULTS / ("gnn_2024_epochs_smoke.csv" if data.SMOKE else "gnn_2024_epochs.csv")
-    curves = pd.read_csv(curves_path) if curves_path.exists() else pd.DataFrame(columns=["arm", "seed", "epoch", "pr_auc"])
+    curves = (pd.read_csv(curves_path) if curves_path.exists()
+              else pd.DataFrame(columns=["arm", "seed", "epoch", "pr_auc"]))
     nets = {}
     for kind in arms:
         for s in seeds:
@@ -483,9 +493,67 @@ def select(arms):
                                                  index=False)
 
 
+def test():
+    """The plan's last step: the arms that beat the hand-made network on 2024 (plus none, and 2024's average with
+    XGBoost), refitted on 2020-2024 for the epochs chosen on 2024 and scored once on every 2025 decision with the
+    five-run mean. References: E57a's network and E55's XGBoost, refitted the same way (E57a's cached 2025 chances)."""
+    seeds, years = list(SEEDS), [2020, 2021, 2022, 2023, 2024]
+    chosen = json.loads((OUT / "chosen_epochs.json").read_text())
+    if data.SMOKE:
+        arms, blend = list(chosen), None
+    else:
+        sel = pd.read_csv(RESULTS / "gnn_2024.csv")
+        kept = sel[sel.vs_handmade_kept.fillna(False).astype(bool)].arm.tolist()
+        blend = next((a for a in kept if a.endswith(" + XGBoost")), None)
+        arms = ["none"] + [a for a in kept if a in ARMS and a != "none"]
+        if len(arms) == 1:
+            print("no graph arm beat the hand-made network on 2024: nothing to test", flush=True)
+            return
+    print(f"testing {arms}" + (f" and {blend}" if blend else "") + f"; epochs {chosen}", flush=True)
+    folder = OUT / "test"
+    folder.mkdir(parents=True, exist_ok=True)
+    graph, grid, scale, cols, prep, rows, base = setup(years, extra=0)      # 2020-2024 on the GPU for training
+    nets = {}
+    for kind in arms:
+        for s in seeds:
+            net = GraphNet(kind, d_nb=2 * len(GRID) + 5, **prep.sizes).to(DEVICE)
+            path = folder / f"{kind}_seed{s}_epoch{chosen[kind]}.pt"
+            if path.exists():
+                print(f"{kind} seed {s}: already trained", flush=True)
+                net.load_state_dict(torch.load(path))
+            else:
+                t0 = time.time()
+                net, _ = train(kind, rows, prep.sizes, base, grid, scale, graph, s, chosen[kind], folder=folder)
+                print(f"{kind} seed {s}: {chosen[kind]} epochs ({time.time() - t0:.0f}s)", flush=True)
+            nets[(kind, s)] = net
+    del rows, grid
+    if DEVICE == "cuda":
+        torch.cuda.empty_cache()
+    grid = device_grid(build_grid(graph), scale, graph, ft.TEST_YEAR, ft.TEST_YEAR)    # 2025 only, for scoring
+    pred = score_year(ft.TEST_YEAR, cols, prep, nets, grid, scale, graph)
+    refs = ["none"]
+    if not data.SMOKE:
+        old = pd.read_parquet(nt.OUT / "pred_2025.parquet").rename(
+            columns=lambda c: c.replace("network|", f"{HANDMADE}|") if c.startswith("network|") else c)
+        keep = ["region_fips", "block_start"] + [c for c in old.columns if c.startswith((HANDMADE, XGB))]
+        n = len(pred)
+        pred = pred.merge(old[keep], on=["region_fips", "block_start"], how="inner", validate="1:1")
+        print(f"2025: {len(pred):,} of {n:,} decisions also scored by E57a", flush=True)
+        refs = ["none", HANDMADE, XGB]
+        if blend:
+            best = blend.removesuffix(" + XGBoost")
+            for s in seeds:
+                pred[f"{blend}|seed{s}"] = (pred[f"{best}|seed{s}"] + pred[f"{XGB}|seed{s}"]) / 2
+            arms = arms + [blend]
+    pred.to_parquet(OUT / "pred_2025.parquet", index=False)
+    out = judge(pred, arms, seeds, ft.TEST_YEAR, refs)
+    out["epochs"] = out.arm.map(lambda a: chosen.get(a.removesuffix(" + XGBoost")))
+    out.to_csv(RESULTS / ("gnn_2025_smoke.csv" if data.SMOKE else "gnn_2025.csv"), index=False)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("stage", choices=["select"])
+    parser.add_argument("stage", choices=["select", "test"])
     parser.add_argument("--arms", nargs="+", choices=ARMS, default=ARMS)
     parser.add_argument("--smoke", action="store_true", help="two states, 1 epoch, 1 seed (data/smoke/root)")
     args = parser.parse_args()
@@ -493,7 +561,7 @@ def main():
     print(f"device {DEVICE}; {len(own_features())} own inputs, {len(GRID)} neighbour inputs; root {data.ROOT}",
           flush=True)
     arms = args.arms if "none" in args.arms else ["none"] + args.arms
-    select(arms)
+    select(arms) if args.stage == "select" else test()
 
 
 if __name__ == "__main__":
