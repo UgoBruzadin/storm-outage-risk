@@ -77,9 +77,9 @@
   },
   "at_headline_share": {
     "Warnings + outlook": {
-      "caught": 0.10724706253450043,
-      "precision": 0.0800800982473971,
-      "episodes": 20090
+      "caught": 0.12640958914912073,
+      "precision": 0.07323522891617139,
+      "episodes": 42120
     },
     "No forecasts": {
       "caught": 0.2318823436637489,

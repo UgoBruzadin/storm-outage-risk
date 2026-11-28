@@ -16,7 +16,7 @@ import pandas as pd
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
 from ml.forecast_test import EQUAL_SHARE, LEAD, TRAIN_YEARS, WINDOW, states_2025, train_rows, window_from_forecast
-from ml.metrics import score
+from ml.metrics import score, top_share
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, onset_hours
 from ml.place_extra import NAMES, five_run_mean
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
@@ -78,7 +78,7 @@ def main():
                 s = p[f"{k}|{tname}"].to_numpy()
                 aucs[k] = pr_auc_resamples(p.y, s, row_day, counts)
                 r[f"{k}_pr_auc"] = score(p.y, s)["pr_auc"]
-                flagged = pd.Series(s > np.quantile(s, 1 - EQUAL_SHARE), index=p.index)
+                flagged = pd.Series(top_share(s, EQUAL_SHARE), index=p.index)
                 hit = np.array(caught_flags(p, flagged, o, LEAD), dtype=float)
                 r[f"{k}_caught"], r[f"{k}_precision"] = hit.mean(), p.y[flagged].mean()
             r["ratio"] = r["mod_pr_auc"] / r["off_pr_auc"]

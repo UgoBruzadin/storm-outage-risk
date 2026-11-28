@@ -32,6 +32,7 @@ from ml import data, models
 from ml import forecast_test as ft
 from ml import moving_window as mw
 from ml.export_hourly import HEADLINE, HEADLINE_SHARE, MODELS, predictions
+from ml.metrics import top_share
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, onset_hours
 from ml.value_hourly import outages
 
@@ -50,8 +51,7 @@ def con():
 
 
 def flagged_at_share(p, share=HEADLINE_SHARE):
-    p = np.asarray(p)
-    return p > np.quantile(p, 1 - share)
+    return top_share(p, share)
 
 
 def official(train, test):

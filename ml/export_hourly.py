@@ -32,6 +32,7 @@ import pandas as pd
 from sklearn.metrics import average_precision_score
 
 from ml import data
+from ml.metrics import top_share
 from ml.moving_window import THRESHOLD_PCT, caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day
 from ml.value import MIXES, RESTORATION_CUT, STAGING_COST
@@ -69,7 +70,7 @@ def alert_curves(pred, onsets):
     for label, col in MODELS.items():
         p = pred[col].to_numpy()
         for share in SHARES:
-            flagged = pd.Series(p > np.quantile(p, 1 - share), index=pred.index)
+            flagged = pd.Series(top_share(p, share), index=pred.index)
             r = {"model": label, "alert_share": share, "actual_share": flagged.mean(),
                  "caught": np.mean(caught_flags(pred, flagged, onsets, LEAD)),
                  "precision": pred.y[flagged].mean(), "episodes": episodes(pred, flagged)}
@@ -82,7 +83,7 @@ def alert_curves(pred, onsets):
 
 def county(pred, onsets):
     p = pred[MODELS[HEADLINE]]
-    flagged = pd.Series(p > np.quantile(p, 1 - HEADLINE_SHARE), index=pred.index)
+    flagged = pd.Series(top_share(p, HEADLINE_SHARE), index=pred.index)
     on = onsets.assign(caught=caught_flags(pred, flagged, onsets, LEAD))
     by = on.groupby("region_fips").agg(new_outages=("caught", "size"), caught=("caught", "sum"))
     rows = pred.assign(p=p).groupby("region_fips").agg(expected=("p", "sum"), actual=("y", "sum"),
@@ -99,7 +100,7 @@ def storm_days(pred, onsets):
     on = onsets.copy()
     for label in (HEADLINE, "Warnings + outlook"):
         p = pred[MODELS[label]]
-        flagged = pd.Series(p > np.quantile(p, 1 - HEADLINE_SHARE), index=pred.index)
+        flagged = pd.Series(top_share(p, HEADLINE_SHARE), index=pred.index)
         on[label] = caught_flags(pred, flagged, onsets, LEAD)
     on["day"] = storm_day(on.hour)
     con = duckdb.connect(str(data.DB), read_only=True)

@@ -46,7 +46,7 @@ from ml.forecast_ensemble import RUN_AGES
 from ml.forecast_test import LEAD, TEST_YEAR, TRAIN_YEARS, window_from_forecast, window_from_hourly
 from ml.forecast_test import WINDOW as ALL_WINDOW
 from ml.forecast_test import WINDOW_V1 as WINDOW
-from ml.metrics import score
+from ml.metrics import score, top_share
 
 # a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
 from ml.moving_window import FEATURES_V1 as FEATURES
@@ -228,7 +228,7 @@ def main():
     rows = []
     for n, c in cols.items():
         p = out[c].to_numpy()
-        flagged = pd.Series(p > np.quantile(p, 1 - ALERT_SHARE), index=out.index)
+        flagged = pd.Series(top_share(p, ALERT_SHARE), index=out.index)
         alerts = out.loc[flagged]
         r = {"forecast": n, "pr_auc": score(out.y, p)["pr_auc"]}
         r["pr_auc_lo"], r["pr_auc_hi"] = interval(auc[n])

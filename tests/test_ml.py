@@ -423,3 +423,13 @@ def test_static_inputs_refuse_a_duplicated_county(tmp_path, monkeypatch):
     rows, db = _static_fixture(tmp_path, monkeypatch, duplicate=True)
     with pytest.raises(pd.errors.MergeError):
         data.add_static(rows.copy(), db=db)
+
+
+def test_top_share_alerts_on_exactly_the_share_even_with_ties():
+    """A baseline with few distinct scores must alert on as many rows as the model it's compared with."""
+    from ml.metrics import top_share
+    p = np.r_[np.full(900, 0.01), np.full(100, 0.2)]          # 10% tied at the top, 90% tied below
+    for share in (0.05, 0.1, 0.15):
+        assert top_share(p, share).sum() == round(share * len(p))
+    assert top_share(p, 0.15)[900:].all()                      # every top-score row before any lower one
+    assert (top_share(p, 0.05) == top_share(p, 0.05)).all()   # seeded: the same rows every run

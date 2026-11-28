@@ -20,7 +20,7 @@ import pandas as pd
 from ml import data, models
 from ml.forecast_ensemble import RUN_AGES
 from ml.forecast_test import EQUAL_SHARE, LEAD, TRAIN_YEARS, WINDOW, states_2025, train_rows, window_from_forecast
-from ml.metrics import score
+from ml.metrics import score, top_share
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
 from ml.place_extra import NAMES, five_run_mean
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
@@ -96,7 +96,7 @@ def main():
                 s = p[f"{k} ({name})"].to_numpy()
                 tag = "official" if k == OFFICIAL else "model"
                 r[f"{tag}_pr_auc"] = score(p.y, s)["pr_auc"]
-                flagged = pd.Series(s > np.quantile(s, 1 - EQUAL_SHARE), index=p.index)
+                flagged = pd.Series(top_share(s, EQUAL_SHARE), index=p.index)
                 hit = np.array(caught_flags(p, flagged, o, LEAD), dtype=float)
                 r[f"{tag}_caught"], r[f"{tag}_precision"] = hit.mean(), p.y[flagged].mean()
                 r[f"{tag}_caught_lo"], r[f"{tag}_caught_hi"] = interval(

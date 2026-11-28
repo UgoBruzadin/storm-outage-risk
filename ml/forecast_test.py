@@ -35,7 +35,7 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from ml import data, models
-from ml.metrics import score, weighted_quantile
+from ml.metrics import score, top_share, weighted_quantile
 from ml.moving_window import FEATURES, PARAMS, THRESHOLD_PCT, caught_flags, episodes, onset_hours
 from ml.uncertainty import day_weights, interval, pr_auc_resamples, storm_day, weighted_mean_resamples
 
@@ -410,8 +410,8 @@ def evaluate(pred, levels):
             if n != ref:
                 r[f"diff_vs_{ref}_lo"], r[f"diff_vs_{ref}_hi"] = interval(auc[n] - auc[ref])
                 r[f"ratio_vs_{ref}_lo"], r[f"ratio_vs_{ref}_hi"] = interval(auc[n] / auc[ref])
-        for kind, cut in (("frozen", levels[n]), ("equal_share", np.quantile(p, 1 - EQUAL_SHARE))):
-            flagged = pd.Series(p > cut, index=pred.index)
+        for kind, rule in (("frozen", p > levels[n]), ("equal_share", top_share(p, EQUAL_SHARE))):
+            flagged = pd.Series(rule, index=pred.index)
             hit = np.array(caught_flags(pred, flagged, onsets, LEAD), dtype=float)
             r[f"{kind}_alert_share"] = flagged.mean()
             r[f"{kind}_precision"] = pred.y[flagged].mean()

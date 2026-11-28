@@ -23,7 +23,7 @@ from ml.forecast_test import (
     predict_five_runs,
     train_rows,
 )
-from ml.metrics import score
+from ml.metrics import score, top_share
 
 # a record of an experiment on the Missouri + Illinois recipe: pinned to it (moving_window.FEATURES_V1)
 from ml.moving_window import FEATURES_V1 as FEATURES
@@ -65,7 +65,7 @@ def main():
                 r[f"ratio_vs_{ref}"] = r["onset_pr_auc"] / score(pred.y, pred[ref])["pr_auc"]
                 r[f"ratio_vs_{ref}_lo"], r[f"ratio_vs_{ref}_hi"] = interval(auc[n] / auc[ref])
                 r[f"better_vs_{ref}"] = float(np.mean(auc[n] > auc[ref]))
-        flagged = pd.Series(p > np.quantile(p, 1 - EQUAL_SHARE), index=pred.index)
+        flagged = pd.Series(top_share(p, EQUAL_SHARE), index=pred.index)
         hit = np.array(caught_flags(pred, flagged, onsets, LEAD), dtype=float)
         r["alert_share"], r["precision"] = flagged.mean(), pred.y[flagged].mean()
         r["precision_lo"], r["precision_hi"] = interval(

@@ -15,6 +15,18 @@ import numpy as np
 from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
 
 
+def top_share(p, share, seed=0):
+    """Alert on exactly the `share` riskiest rows (round(share * n), at least 1), ties broken at random (seeded).
+    `p > quantile` would drop every row tied at the cut-off: a baseline with few distinct scores (warnings +
+    outlook) then alerts on fewer rows than the model it's compared with (0.65% instead of 0.75% on 2025)."""
+    p = np.asarray(p, dtype=float)
+    k = max(1, int(round(share * len(p))))
+    order = np.lexsort((np.random.default_rng(seed).random(len(p)), -p))
+    alert = np.zeros(len(p), dtype=bool)
+    alert[order[:k]] = True
+    return alert
+
+
 def score(y, p, top=0.01):
     y, p = np.asarray(y), np.clip(np.asarray(p, dtype=float), 1e-6, 1 - 1e-6)
     if len(y) == 0 or y.min() == y.max():
@@ -26,10 +38,7 @@ def score(y, p, top=0.01):
                 "n_test": int(len(y)), "n_events": int(y.sum())}
     # exactly the top `top` share of blocks; ties broken at random (seeded), so a model
     # that gives everyone the same probability doesn't "alert" on every block
-    k = max(1, int(round(top * len(p))))
-    order = np.lexsort((np.random.default_rng(0).random(len(p)), -p))
-    alert = np.zeros(len(p), dtype=bool)
-    alert[order[:k]] = True
+    alert = top_share(p, top)
     event_rate = y.mean()
     pr_auc = average_precision_score(y, p)
     flagged = p >= 0.5

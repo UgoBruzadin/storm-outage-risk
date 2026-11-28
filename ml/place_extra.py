@@ -37,7 +37,7 @@ from ml.forecast_test import (
 from ml.forecast_test import (
     TRAIN_YEARS as TEST_TRAIN_YEARS,
 )
-from ml.metrics import score
+from ml.metrics import score, top_share
 from ml.moving_window import FEATURES_V1 as FEATURES
 from ml.moving_window import PARAMS_V1 as PARAMS
 from ml.moving_window import caught_flags, episodes, onset_hours
@@ -199,7 +199,7 @@ def test():
                 r[f"better_vs_{ref}"] = float(np.mean(auc[n] > auc[ref]))
         if n in seed_scores:
             r["seed_scores_1_4"] = " ".join(f"{s:.4f}" for s in seed_scores[n])
-        flagged = pd.Series(p > np.quantile(p, 1 - EQUAL_SHARE), index=pred.index)
+        flagged = pd.Series(top_share(p, EQUAL_SHARE), index=pred.index)
         hit = np.array(caught_flags(pred, flagged, onsets, LEAD), dtype=float)
         r["alert_share"], r["precision"] = flagged.mean(), pred.y[flagged].mean()
         r["caught"] = hit.mean()
