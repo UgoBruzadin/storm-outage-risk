@@ -1115,17 +1115,12 @@ function holdsUp(data, animate) {
   document.querySelector("#holds-lead").innerHTML = T(`holds.tabs.${holdsTab}.lead`,
     { thin: or((data.scope || {}).thin, fmt) });
   document.querySelector("#holds-note").innerHTML = T(`holds.tabs.${holdsTab}.note`);
-  const times = v => `${v.toFixed(1)}×`, share = v => `${Math.round(v * 100)}%`;
+  const times = v => `${v.toFixed(1)}×`;
   let rows, keys, baseline = 1, fmtV = times;
   if (holdsTab === "years") {
     keys = [[tt.key_without, light], [tt.key_with, "var(--accent)"]];
     rows = h.years.map(y => ({ label: String(y.year), bars: [{ v: y.without, c: light },
       ...(y.with ? [{ v: y.with, c: "var(--accent)", strong: true }] : [])] }));
-  } else if (holdsTab === "storms") {
-    keys = [[tt.key_model, "var(--accent)"], [tt.key_official, "var(--other)"]];
-    baseline = null; fmtV = share;
-    rows = h.storms.map(r => ({ label: tt.labels[r.key], sub: Tp("holds.tabs.storms.count", { n: fmt(r.n) }),
-      bars: [{ v: r.model, c: "var(--accent)", strong: true }, { v: r.official, c: "var(--other)" }] }));
   } else if (holdsTab === "counties") {
     keys = []; fmtV = v => `${v.toFixed(2)}×`;
     rows = [{ label: tt.seen, bars: [{ v: h.counties.seen, c: light }] },

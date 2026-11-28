@@ -718,7 +718,7 @@ def story_data(gdf):
 
 def ring_area(r):
     """Signed area of a lon/lat ring in degrees² (negative = clockwise)."""
-    return sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(r, r[1:])) / 2
+    return sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(r, r[1:], strict=False)) / 2
 
 
 def no_nan(x):
