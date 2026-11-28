@@ -808,7 +808,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **It overfits fast.** The best score comes after 2 passes over the data, so the network gets little out of the 13 M training rows that the trees don't already take.
   - **What's left to try** is structure the trees can't express, not a different learner on the same columns: E57b's learned spreading between counties.
 
-### E57b. Graph networks over neighbouring counties (plan fixed before any result; 2024 done, 2025 not yet run)
+### E57b. Graph networks over neighbouring counties (plan fixed before any result)
 - **Question:** The neighbour and upwind inputs are hand-made: the strongest gust, CAPE and rain, worst outage and warning share within 100 km and upwind. Can a network learn how storms and outages spread between counties instead, and which kind of graph layer does it best?
 - **Setup:** `ml/gnn_counties.py` (PyTorch, `nn` pixi environment; no graph library, the layers are written out). Same rows, label, sampling, seeds and scoring as E57a.
   - **The graph:** each county links to its neighbours within 100 km and its upwind counties within 200 km (`intermediate.int_study__region_neighbors`, up to 71 links). Edge inputs: distance, bearing (sine and cosine), near and upwind flags.
@@ -824,25 +824,6 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **The rule:** on every 2024 decision (newest HRRR run), each graph arm against *none* (does learned spreading help at all?), against E57a's network with the hand-made inputs (does it beat hand-made?) and against E55's XGBoost (E57a's cached chances, same rows). E55's rule: kept if the gain of the seed-mean chances has a 95% storm-day range above zero and at least 2 of 3 seeds are better. The best graph arm is also averaged with XGBoost.
 - **Then:** only if a graph arm beats the hand-made network on 2024, it is refitted on 2020–2024 and scored once on 2025 (five-run mean), as E57a.
 - **Left for later:** neighbours' forecast window weather (the storm on its way), learned edges beyond 200 km, two hops.
-- **Result, 2024** (PR-AUC, mean of 3 seeds' chances, every 2024 decision, newest HRRR run; `ml/results/gnn_2024.csv`, `gnn_2024_epochs.csv`). Epochs picked on the 2024 sample: none 3, mean 5, max-pool 5, attention 3, gated 5 (of 6).
-
-  | Arm | PR-AUC | vs none | vs E57a hand-made | vs E55 XGBoost |
-  |---|---|---|---|---|
-  | none | 0.1149 | | +0.2% (−0.6 to +1.1%) | −0.6% (−2.9 to +1.0%) |
-  | mean | 0.1157 | +0.8% (−0.2 to +2.1%) | +0.9% (−0.2 to +2.4%) | +0.2% (−2.0 to +2.0%) |
-  | max-pool | 0.1163 | **+1.2% (0.2–3.0%), 3 of 3, kept** | **+1.4% (0.4–3.0%), 3 of 3, kept** | +0.6% (−1.3 to +2.3%) |
-  | **attention** | **0.1165** | **+1.5% (0.7–2.5%), 3 of 3, kept** | **+1.6% (0.8–2.8%), 3 of 3, kept** | +0.8% (−1.4 to +2.7%) |
-  | gated | 0.1160 | +1.0% (−0.2 to +2.7%) | +1.2% (−0.0 to +3.0%) | +0.4% (−1.6 to +2.2%) |
-  | attention + XGBoost | 0.1196 | +4.2% (3.0–5.9%) | +4.4% (3.2–6.1%) | **+3.5% (2.5–4.6%), 3 of 3, kept** |
-  | E57a network (hand-made neighbours) | 0.1146 | −0.2% (−1.1 to +0.6%) | | −0.8% (−3.0 to +0.9%) |
-  | E55 XGBoost | 0.1156 | | | |
-
-- **Meaning (2024 only):**
-  - **Learned spreading beats hand-made.** Attention and max-pool pass E55's rule against both no neighbours and E57a's hand-made inputs; mean and gated are close but their ranges touch zero. The hand-made inputs add nothing to a network (E57a vs none: −0.2%).
-  - **Attention is best, by a small, steady margin:** +1.5% over none and +1.6% over hand-made, every seed.
-  - **Alone, no graph network beats XGBoost** (attention +0.8%, range across zero). **Averaged with XGBoost**, attention gains +3.5%, every seed and every resample: more than E57a's average on 2024 (+2.8%).
-  - **Not yet trusted:** E57a's average also passed on 2024 and gained nothing on 2025, partly because epochs were picked on a 2024 sample, as here. The plan's 2025 test (attention refitted on 2020–2024, scored once with the five-run mean, alone and averaged with XGBoost) is next.
-- **Run** (2026-11-26 to 27, one GPU): 3,089 counties, 93,866 links; 10.6 M training rows (2020–2023, 548,544 positives), standing for 101.5 M. An epoch took about 1 minute with no neighbours and 5–7 minutes with a graph layer. Epochs picked on the 2024 sample: none 3, mean 5, max-pool 5, attention 3, gated 5.
 - **Result on 2024** (PR-AUC of the seed-mean chances, every 2024 decision, newest HRRR run; gains with 95% storm-day ranges; `ml/results/gnn_2024.csv`, `gnn_2024_epochs.csv`):
 
   | Arm | PR-AUC (range) | vs hand-made neighbours | vs none | vs E55 XGBoost | Kept against |
@@ -860,7 +841,25 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **Learned spreading beats the hand-made neighbour inputs, by a little.** Attention and max-pool gain about 1.5% over both no neighbours and the hand-made inputs, with ranges above zero. The hand-made inputs add almost nothing to this network (none vs hand-made: +0.2%).
   - **No graph network beats XGBoost on its own.** The best, attention, is +0.8% with a range across zero.
   - **Attention averaged with XGBoost is the one candidate.** +3.5% on 2024, every resample and seed. But E57a's average passed the same way on 2024 (+2.8%) and was −0.1% on 2025, and here too the epochs were picked on a 2024 sample. A lead, not a result, until 2025.
-  - **The plan's rule now calls for the 2025 test**: attention and max-pool beat the hand-made network. Not yet run (`gnn_counties.py test`; expect several hours).
+  - **The plan's rule called for the 2025 test**: attention and max-pool beat the hand-made network.
+- **Result on 2025, scored once** (refitted on 2020–2024 with the epochs picked on 2024; every 2025 decision, five-run mean; `ml/results/gnn_2025.csv`):
+
+  | Arm | PR-AUC (range) | vs hand-made neighbours | vs none | vs E55 XGBoost | Kept against |
+  |---|---|---|---|---|---|
+  | None | 0.0974 (0.083–0.112) | +1.1% (−0.5 to +2.8%) | | −5.4% (−8.8 to −2.5%) | |
+  | Max-pool | 0.1008 (0.085–0.116) | **+4.7% (2.6–6.9%)** | **+3.5% (2.0–5.3%)** | −2.1% (−4.9 to +0.6%) | hand-made, none |
+  | Attention | 0.1006 (0.085–0.116) | **+4.5% (2.3–6.7%)** | **+3.3% (1.7–5.2%)** | −2.3% (−4.8 to +0.3%) | hand-made, none |
+  | **Attention + XGBoost** (averaged) | **0.1047 (0.089–0.120)** | +8.8% (6.3–11.7%) | +7.5% (5.3–10.8%) | **+1.7% (0.5–2.9%), 3 of 3 seeds** | all three |
+  | E57a network (hand-made neighbours) | 0.0963 (0.082–0.111) | | −1.1% (−2.7 to +0.5%) | −6.5% (−9.6 to −3.9%) | |
+  | E55 XGBoost | 0.1030 (0.087–0.119) | +6.9% (4.0–10.7%) | +5.7% (2.6–9.7%) | | |
+
+  Every kept comparison was better on all 3 seeds. Mean and gated were not refitted (they passed nothing on 2024).
+
+- **Meaning (2025):**
+  - **Learned spreading holds, and grows.** Attention and max-pool beat the hand-made inputs by about 4.5% on the untouched year, three times their 2024 margin, every seed and every resample. The hand-made inputs still add nothing to a network (E57a vs none: −1.1%).
+  - **Trees still win alone.** No graph network beats XGBoost on 2025 (about −2%), as on 2024.
+  - **Attention + XGBoost passes on both years:** +3.5% on 2024, +1.7% on 2025, every seed. It is the first network result to survive 2025 (E57a's average: −0.1%). It is a candidate for the headline, not the headline: the gain is small, it needs a live version (no outage data, E55's live recipe) and the 2026 blind test.
+  - **Max-pool and attention tie on 2025.** Attention was the one averaged because it scored best on 2024; there's no reason to prefer it beyond that.
 
 ---
 
