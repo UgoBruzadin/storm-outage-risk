@@ -21,7 +21,7 @@ from ml import data
 from ml.forecast_test import window_from_forecast
 
 STATIC = Path(__file__).parent / "static"
-STATES = {"IL": "17", "MO": "29"}
+STATES = {abbr: fips for fips, abbr in data.STATE_ABBR.items()}       # "MO" -> "29", every study state
 CATEGORICAL = {"TSTM": 1, "MRGL": 2, "SLGT": 3, "ENH": 4, "MDT": 5, "HIGH": 6}
 OUTAGE_INPUTS = ["pct_out_now", "max_pct_out_prev_24h", "near_pct_out_max", "up_pct_out_max"]
 
@@ -71,10 +71,10 @@ def weather_6h(hw, hours):
     return pd.concat(parts).rename_axis("hour").reset_index()
 
 
-def warnings_1h(rows, hours):
+def warnings_1h(rows, hours, static=STATIC):
     """IEM warning rows (ugc, phenomena, significance, utc_issue, utc_expire) -> warnings in force at each hour:
     a warning counts for an hour that starts strictly inside (issue, expire)."""
-    zones = pd.read_parquet(STATIC / "zones.parquet")
+    zones = pd.read_parquet(static / "zones.parquet")
     w = rows[rows.significance == "W"].copy()
     w["issue"], w["expire"] = pd.to_datetime(w.utc_issue), pd.to_datetime(w.utc_expire)
     w = w[w.expire > w.issue]
@@ -137,9 +137,9 @@ def outlooks_1h(table, hours):
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=["region_fips", "hour"])
 
 
-def neighbors(base):
+def neighbors(base, static=STATIC):
     """base: region_fips, hour, gust_max_ms, cape_max_jkg, precip_sum_mm, warn (svr or tor) -> near_* / up_*."""
-    pairs = pd.read_parquet(STATIC / "neighbors.parquet")
+    pairs = pd.read_parquet(static / "neighbors.parquet")
     sources = {"gust_max_ms": ("gust_max_ms", "max"), "cape_max_jkg": ("cape_max_jkg", "max"),
                "precip_max_mm": ("precip_sum_mm", "max"), "warn_share": ("warn", "mean")}
     out = base[["region_fips", "hour"]].copy()
@@ -151,14 +151,16 @@ def neighbors(base):
     return out
 
 
-def model_rows(hw, warning_rows, outlook_table_, hours, forecast_runs=None, run_ages=(2, 3, 4, 5, 6)):
+def model_rows(hw, warning_rows, outlook_table_, hours, forecast_runs=None, run_ages=(2, 3, 4, 5, 6), static=STATIC,
+               precip_72h=None):
     """Every region at every decision hour in `hours`, with the live model's inputs. forecast_runs: HRRR point
     forecasts (ingest.fetch_hrrr_forecast.fetch_run rows); each run age adds the window columns as
-    `<column>|<age>` (forecast_test.WINDOW)."""
+    `<column>|<age>` (forecast_test.WINDOW). static: the exported tables (static/ for MO + IL, static_usa/).
+    precip_72h: region_fips, hour, precip_prev_72h_mm (the USA model); unknown when not given."""
     hours = pd.DatetimeIndex(hours)
-    regions = pd.read_parquet(STATIC / "regions.parquet")
+    regions = pd.read_parquet(static / "regions.parquet")
     df = weather_6h(hw, hours)
-    warn = warnings_1h(warning_rows, hours)
+    warn = warnings_1h(warning_rows, hours, static)
     df = df.merge(warn, on=["region_fips", "hour"], how="left") if len(warn) else df.assign(
         warn_svr=False, warn_tor=False, warn_wind=False, warn_winter=False)
     for c in ["warn_svr", "warn_tor", "warn_wind", "warn_winter"]:
@@ -166,11 +168,14 @@ def model_rows(hw, warning_rows, outlook_table_, hours, forecast_runs=None, run_
     df = df.merge(outlooks_1h(outlook_table_, hours), on=["region_fips", "hour"], how="left")
     base = df[["region_fips", "hour", "gust_max_ms", "cape_max_jkg", "precip_sum_mm"]].assign(
         warn=(df.warn_svr | df.warn_tor).astype(float))
-    df = df.merge(neighbors(base), on=["region_fips", "hour"], how="left")
+    df = df.merge(neighbors(base, static), on=["region_fips", "hour"], how="left")
     df = df.merge(regions[["region_fips", "customers", "housing_per_km2", "share_homes_pre1960",
                            "median_year_built", "canopy_mean_pct", "canopy_dense_share"]], on="region_fips")
     df["month"], df["block_hour_utc"] = df.hour.dt.month, df.hour.dt.hour
-    df["precip_prev_72h_mm"] = np.nan                     # add_derived uses it; not a live model input
+    if precip_72h is None:
+        df["precip_prev_72h_mm"] = np.nan                 # add_derived uses it; not an MO + IL live model input
+    else:
+        df = df.merge(precip_72h, on=["region_fips", "hour"], how="left")
     df = data.add_derived(df.rename(columns={"hour": "block_start"}))
     if forecast_runs is not None:
         f = forecast_runs.copy()
