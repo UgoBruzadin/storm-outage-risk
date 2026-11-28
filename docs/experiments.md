@@ -808,7 +808,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
   - **It overfits fast.** The best score comes after 2 passes over the data, so the network gets little out of the 13 M training rows that the trees don't already take.
   - **What's left to try** is structure the trees can't express, not a different learner on the same columns: E57b's learned spreading between counties.
 
-### E57b. Graph networks over neighbouring counties (plan, fixed before any result)
+### E57b. Graph networks over neighbouring counties (plan fixed before any result; 2024 done, 2025 not yet run)
 - **Question:** The neighbour and upwind inputs are hand-made: the strongest gust, CAPE and rain, worst outage and warning share within 100 km and upwind. Can a network learn how storms and outages spread between counties instead, and which kind of graph layer does it best?
 - **Setup:** `ml/gnn_counties.py` (PyTorch, `nn` pixi environment; no graph library, the layers are written out). Same rows, label, sampling, seeds and scoring as E57a.
   - **The graph:** each county links to its neighbours within 100 km and its upwind counties within 200 km (`intermediate.int_study__region_neighbors`, up to 71 links). Edge inputs: distance, bearing (sine and cosine), near and upwind flags.
@@ -824,6 +824,25 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 - **The rule:** on every 2024 decision (newest HRRR run), each graph arm against *none* (does learned spreading help at all?), against E57a's network with the hand-made inputs (does it beat hand-made?) and against E55's XGBoost (E57a's cached chances, same rows). E55's rule: kept if the gain of the seed-mean chances has a 95% storm-day range above zero and at least 2 of 3 seeds are better. The best graph arm is also averaged with XGBoost.
 - **Then:** only if a graph arm beats the hand-made network on 2024, it is refitted on 2020–2024 and scored once on 2025 (five-run mean), as E57a.
 - **Left for later:** neighbours' forecast window weather (the storm on its way), learned edges beyond 200 km, two hops.
+- **Run** (2026-11-26 to 27, one GPU): 3,089 counties, 93,866 links; 10.6 M training rows (2020–2023, 548,544 positives), standing for 101.5 M. An epoch took about 1 minute with no neighbours and 5–7 minutes with a graph layer. Epochs picked on the 2024 sample: none 3, mean 5, max-pool 5, attention 3, gated 5.
+- **Result on 2024** (PR-AUC of the seed-mean chances, every 2024 decision, newest HRRR run; gains with 95% storm-day ranges; `ml/results/gnn_2024.csv`, `gnn_2024_epochs.csv`):
+
+  | Arm | PR-AUC (range) | vs hand-made neighbours | vs none | vs E55 XGBoost | Kept against |
+  |---|---|---|---|---|---|
+  | None | 0.1149 (0.087–0.147) | +0.2% (−0.6 to +1.1%) | | −0.6% (−2.9 to +1.0%) | |
+  | Mean | 0.1157 (0.088–0.147) | +0.9% (−0.2 to +2.4%) | +0.8% (−0.2 to +2.1%) | +0.2% (−2.0 to +2.0%) | nothing |
+  | Max-pool | 0.1163 (0.089–0.148) | +1.4% (0.4–3.0%) | +1.2% (0.2–3.0%) | +0.6% (−1.3 to +2.3%) | hand-made, none |
+  | **Attention** | 0.1165 (0.088–0.149) | **+1.6% (0.8–2.8%)** | **+1.5% (0.7–2.5%)** | +0.8% (−1.4 to +2.7%) | hand-made, none |
+  | Gated | 0.1160 (0.088–0.147) | +1.2% (−0.02 to +3.0%) | +1.0% (−0.2 to +2.7%) | +0.4% (−1.6 to +2.2%) | nothing |
+  | **Attention + XGBoost** (averaged) | 0.1196 (0.092–0.151) | +4.4% (3.2–6.1%) | +4.2% (3.0–5.9%) | **+3.5% (2.5–4.6%), 3 of 3 seeds** | all three |
+  | E57a network (hand-made neighbours) | 0.1146 (0.087–0.146) | | −0.2% | −0.8% (−3.0 to +0.9%) | |
+  | E55 XGBoost | 0.1156 (0.089–0.146) | +0.8% | +0.6% | | |
+
+- **Meaning:**
+  - **Learned spreading beats the hand-made neighbour inputs, by a little.** Attention and max-pool gain about 1.5% over both no neighbours and the hand-made inputs, with ranges above zero. The hand-made inputs add almost nothing to this network (none vs hand-made: +0.2%).
+  - **No graph network beats XGBoost on its own.** The best, attention, is +0.8% with a range across zero.
+  - **Attention averaged with XGBoost is the one candidate.** +3.5% on 2024, every resample and seed. But E57a's average passed the same way on 2024 (+2.8%) and was −0.1% on 2025, and here too the epochs were picked on a 2024 sample. A lead, not a result, until 2025.
+  - **The plan's rule now calls for the 2025 test**: attention and max-pool beat the hand-made network. Not yet run (`gnn_counties.py test`; expect several hours).
 
 ---
 
@@ -840,7 +859,7 @@ Eleven quick analyses reusing the saved 2025 predictions, the forecast archive a
 | Roads and trees on five states | E52: canopy now lowers the score in Missouri; E49 found the link along roads in MO + IL only | Rerun E49 before rewriting the Trees slide |
 | The whole country | E53–E54: seven states is the memory limit for the full code | Weather is on disk for all 3,108 counties; needs the SQL-side sampling and chunked neighbours from E54, and about 50 GB of disk for the warehouse |
 | Restoration time | Next, after E51. Predict how long an outage will last once it starts (a utility's estimated time of restoration); E25 shows outages often hover around the threshold while crews work | A different target and label: hours until the county is back under 1% |
-| **E57b. A graph network over neighbouring counties** (exploratory) | The neighbour and upwind inputs are hand-made; a graph network could learn how storms and outages spread between counties | Each hour is a graph: 3,108 counties, edges to counties within 100 km with distance, bearing and the wind's angle to that bearing. Node inputs = E57a's (`ml/nn_tabular.py`) without the hand-made neighbour inputs. 2–3 rounds of attention message passing (GATv2 with edge features), then a per-county chance; only onset-eligible counties count in the loss. Training hours: every hour with an outage somewhere plus 10% of quiet hours, weighted. Compared with E57a's MLP without neighbour inputs (does learned spreading beat none?) and with them (does it beat hand-made?). Needs PyTorch Geometric in the gpu environment and ~25 GB of hourly tensors on disk |
+| **E57b on 2025** | Attention and max-pool beat the hand-made neighbour inputs on 2024; attention + XGBoost beat XGBoost by 3.5% | `ml/gnn_counties.py test`: refit on 2020–2024, score once on 2025 with the five-run mean. E57a's average passed 2024 and failed 2025, so expect less |
 | **E56. Public reports as a live outage signal** (after E55) | A live forecast has no current outage data, worth about 7% of the score (E43), and a "Now" view needs it. People's reports are also the only route below county level | First: how often each source's reports match EAGLE-I's 2025 outages (county, hour), how early they come, and which counties they miss (cities vs rural). Then, only for a source that carries signal, as a live input. Reports are self-selected: a signal and a check, never the label |
 | ↳ NWS Local Storm Reports | Public domain, already read from IEM for floods (E46): "power lines down", "trees on lines", with place and time | Cheapest; start here |
 | ↳ mPING (NOAA NSSL / University of Oklahoma) | Crowdsourced weather reports, wind damage included | Research API; needs a key the user requests |
