@@ -13,10 +13,10 @@ In the buttons box, a **bold** link is the blue one. Text inside ``` fences is c
 The link preview (title, description) is in the <head> of site/writeup/index.html.
 -->
 
-<!-- DRAFT for the whole-country site (branch site-usa). Numbers marked TODO(rerun) come from files the running
-pipeline rewrites with E55's recipe; refresh each from the file named beside it before publishing.
-Numbers from ml/results/usa_final_2025.csv, live_usa_2025.csv and usa_ablation_verdicts.csv are final (not in the
-pipeline). Plan and open decisions: docs/site-usa-plan.md. -->
+<!-- DRAFT for the whole-country site. Every number is from the E55 rerun (Nov 15): data/app/meta_hourly.json and
+ml/results/ (usa_final_2025, significance_2025, midwest_2025, coverage_2025, extra_*, forecast_ensemble_bins_2025,
+canopy_by_state). Numbers still from the two-state model say so where they appear. Plan and open decisions:
+docs/site-usa-plan.md. -->
 
 ::: hero
 # ⚡ Storm Outage Risk
@@ -31,7 +31,7 @@ When a storm moves through, which US counties will lose power in the next few ho
 :::
 ::: stats
 - **3,108** county regions in the lower 48 and DC, every hour, 2020–2025
-- **4.7×** better than NWS warnings and SPC outlooks alone at ranking new outages two hours ahead, 2025 (95% range 4.2–5.3×)
+- **4.7×** the score of NWS warnings and SPC outlooks alone at ranking new outages two hours ahead (PR-AUC, 2025; 95% range 4.2–5.3×)
 - **16.6%** of alerted county-hours were followed by a new outage, against 0.6% of all county-hours
 - **25,362** new outages in 2025, the test year
 
@@ -43,7 +43,7 @@ When a storm moves through, which US counties will lose power in the next few ho
 
 **What I built.** A model that, every hour, estimates for every county the chance that at least 5% of its customers lose power in the six hours starting two hours later. It uses only what is known at that moment: the weather so far, the last five HRRR weather forecasts, the warnings and outlooks in force, outages so far in the county and its neighbours, the county's outage history, and what the place is like (trees along roads, homes, soil, flood zones, utility). 110 inputs, one XGBoost model for the whole country.
 
-**How well it works.** The model was chosen on 2024 and scored once on 2025, a year it never trained on. It ranks new outages 4.7× better than official warnings and outlooks alone (95% range 4.2–5.3×), and 1.18× the previous model (1.14–1.22×), better in every storm-day resample. Alerting on the riskiest 0.75% of county-hours, 16.6% of alerted hours were followed by a new outage, and they covered 20.9% of the county-hours that were. It is not weather with thresholds: on 2024, the best gust rule I could build reaches 57% of the score of the model before these changes.
+**How well it works.** Every setting and input was chosen on 2024. The final model was then trained on 2020–2024 and scored on 2025, a year it never trained on. At ranking new outages it scores 0.102 PR-AUC, 4.7× the 0.022 of official warnings and outlooks alone (95% range 4.2–5.3×), and 1.18× the previous model (1.14–1.22×). Give both the same alert budget, the riskiest 0.75% of county-hours, and the model catches 28% of 2025's new outages in time, against 13% for the official forecasts. About one alert in six is followed by a new outage. It is not weather with thresholds: on 2024, the best gust rule I could build reaches 57% of the model's score. One caveat on 2025: one input was first tried on 2025 data, so the clean test is the live forecast, graded once EAGLE-I releases 2026's outage data.
 
 **Live now, and what isn't.** The live forecast is still the frozen Missouri + Illinois blind test, graded when EAGLE-I releases 2026. A whole-country version without current outage data (which a live job can't get) scores 4.5× warnings + outlook on 2025 (4.0–5.1×), keeping 96% of the full model's score. Its live feed isn't built yet.
 
@@ -59,11 +59,11 @@ When a storm moves through, which US counties will lose power in the next few ho
 - [How sure is it?](#sure)
 - [What it learned](#findings)
 - [How it compares](#compare)
-- [What it would be worth](#value)
+- [What it could be worth: a scenario](#value)
 - [Pitfalls, with code](#pitfalls)
 - [How it's built](#built)
 - [Limitations](#limits)
-- [The app](#app)
+- [The app (planned)](#app)
 
 :::
 :::
@@ -112,22 +112,48 @@ So the model was rebuilt on an hourly table (15 million county-hours for two sta
 
 ## Results: two hours ahead {#results}
 
-Scores are **PR-AUC** on new outages: how well real outages rank ahead of false alarms. Guessing at random scores the share of decisions followed by a new outage, about 0.006 for the country. That share differs by region, so compare regions by the ratio to warnings + outlook, not by the raw score. Trained on 2020–2024; settings and inputs chosen on 2024 ([Choosing the model](#choosing)); 2025 scored once.
+Five numbers describe a forecast like this one, and they answer different questions:
+
+::: table-wrap
+| Number | The question it answers | Headline, 2025 |
+|----|----|----|
+| **PR-AUC** | Over every county-hour, how well does it rank the ones followed by a new outage ahead of the rest? | 0.102 (random guessing: 0.006) |
+| **Precision** | Of the county-hours it alerts on, how many are followed by a new outage? | 16.6% |
+| **Outage hours alerted** | Of the county-hours followed by a new outage, how many did it alert on? | 20.9% |
+| **Outages caught** | Of the new outages, how many had at least one alert in time before they started? | 28.5% |
+| **Calibration** | When it says 3%, does an outage follow about 3% of the time? | [How sure is each prediction?](#sure) |
+
+:::
+The last two kinds of recall differ because one outage falls inside up to six decisions' windows (pitfall 15). PR-AUC depends on how common outages are, so a ratio to warnings + outlook on the same hours is easier to compare across regions and years than the raw score. "4.7×" means 4.7 times the official forecasts' PR-AUC, not 4.7 times as accurate.
+
+**What each year was used for.**
+
+::: table-wrap
+| Years | Role |
+|----|----|
+| 2020–2023 | Training, while choosing the model |
+| 2024 | Choosing: every setting and input was decided on 2024 ([Choosing the model](#choosing)) |
+| 2020–2024 | Training the final model |
+| 2025 | Retrospective test, scored once. Not pristine: one input (how long and how widely the wind blows) was first tried on Missouri + Illinois 2025, and earlier versions of the model were also scored on it |
+| 2026 | Blind test: forecasts saved live before the weather, graded when EAGLE-I releases 2026 (two states so far, frozen model `live-v1.1`) |
+
+:::
 
 ::: table-wrap
 | New ≥ 5% outages, 2 hours ahead, 2025, lower 48 | PR-AUC (95% range) | vs. warnings + outlook |
 |----|----|----|
 | NWS warnings + SPC outlook alone | 0.022 (0.018–0.026) | 1× |
-| Model, weather observed so far | 0.064 (0.056–0.073) | 3.0× `TODO(rerun)` |
-| Model + latest HRRR forecast | 0.096 (0.080–0.111) | 4.4× `TODO(rerun)` |
+| Model, weather observed so far | 0.064 (0.055–0.074) | 3.0× (2.7–3.3×) |
+| Model + latest HRRR forecast | 0.096 (0.079–0.113) | 4.4× (3.9–5.0×) |
 | Model + last five HRRR forecasts | **0.102 (0.085–0.120)** | **4.7× (4.2–5.3×)** |
-| Ceiling: knowing the window's weather | 0.115 (0.098–0.131) | 5.3× `TODO(rerun)` |
+| Ceiling: knowing the window's weather | 0.115 (0.097–0.132) | 5.3× (4.8–5.9×) |
 
 :::
-> 25,261,021 decisions (every county-hour of 2025 whose county had no outage in the 24 hours before the window), 25,362 new outages. One outage falls inside up to six decisions' windows, so 150,122 decisions are followed by one: that is not the number of outages. XGBoost, 1,600 trees of depth 8, minimum child weight 100, 110 inputs. Five-run row: `ml/results/usa_final_2025.csv` (seed 0). Other rows: `ml/results/forecast_test_2025.csv`, rerun on E55's recipe; their ratios and ranges come from `data/app/ladder.parquet` once the pipeline finishes `TODO(rerun)`.
+> 25,261,021 decisions (every county-hour of 2025 whose county had no outage in the 24 hours before the window), 25,362 new outages. One outage falls inside up to six decisions' windows, so 150,122 decisions are followed by one: that is not the number of outages. XGBoost, 1,600 trees of depth 8, minimum child weight 100, 110 inputs. `data/app/meta_hourly.json` (`ladder`); the five-run row matches `ml/results/usa_final_2025.csv` (seed 0).
 
 - **Real forecasts recover most of what perfect knowledge would add.** From 0.064 with the weather so far to 0.102 with five forecast runs, against 0.115 with the actual weather.
-- **Averaging the last five runs beats the newest run alone** (0.102 against 0.096). Each run places the storm a little differently; the average is steadier. Paired test: `significance_2025.csv` `TODO(rerun)`.
+- **Averaging the last five runs beats the newest run alone** (0.102 against 0.096). Each run places the storm a little differently; the average is steadier. It wins in all 1,000 storm-day resamples (p = 0.001, `significance_2025.csv`).
+- **Knowing the weather would still help.** The ceiling beats the five-run model in every resample (p = 0.001). On two states that gap wasn't significant; with 18 times the outages, it is. Better forecasts would still pay off.
 - **Weather that has already happened fades within hours.** With the weather so far only, the final inputs score 0.088 at 0 hours ahead, 0.064 at 2 and 0.051 at 6, against 0.027, 0.022 and 0.017 for warnings + outlook (`moving_window_2025.csv`).
 - **Each group of inputs adds something, two hours ahead, weather so far only:** weather + place + recent outages 0.037; + warnings and outlook 0.055; + neighbours 0.058 (the two-state model's inputs); + history, place, roads, location and the bigger model 0.064.
 - **The previous model** (the two-state recipe, depth 4, 800 trees) scored 0.087 on the same 2025 test, 4.0× warnings + outlook. The new one is 1.18× that (1.14–1.22×), higher in every one of 1,000 storm-day resamples.
@@ -137,15 +163,19 @@ Scores are **PR-AUC** on new outages: how well real outages rank ahead of false 
 Every version alerts on the same share of county-hours, its own riskiest 0.75%, so the comparison is fair.
 
 ::: table-wrap
-| Alerts on 0.75% of county-hours, 2025 | Alerted hours followed by a new outage | Outage hours alerted | New outages caught | Alert spells |
+| Alerts on 0.75% of county-hours, 2025 | Precision: alerted hours followed by a new outage | Outage hours alerted | New outages caught | Alert spells |
 |----|----|----|----|----|
-| Warnings + outlook alone | 7.2% | 9.1% | `TODO(rerun)` | `TODO(rerun)` |
-| Previous model, five runs | 15.1% | 19.1% | `TODO(rerun)` | `TODO(rerun)` |
-| **Model, five runs** | **16.6%** | **20.9%** | `TODO(rerun)` | `TODO(rerun)` |
+| Warnings + outlook alone | 7.2% | 9.1% | 12.6% | not comparable |
+| Model, weather observed so far | 12.4% | – | 23.2% | 40,178 |
+| Previous model, five runs | 15.1% | 19.1% | – | – |
+| Model + latest HRRR forecast | 15.9% | – | 30.8% | 65,454 |
+| **Model, five runs** | **16.6%** | **20.9%** | **28.5%** | **41,914** |
 | Live USA model (no outage inputs) | 16.2% | 20.4% | – | – |
 
 :::
-> Two kinds of recall, both honest, answering different questions. *Outage hours alerted* counts decisions: of the 150,122 county-hours followed by a new outage, the share alerted (`usa_final_2025.csv`, `recall_at_share`). *New outages caught* counts outages: of the 25,362, the share with at least one alert in time before they started (`data/app/meta_hourly.json`, `at_headline_share`) `TODO(rerun)`. Base rate: 0.6% of county-hours are followed by a new outage. An alert spell is a run of consecutive alerted hours in one county, roughly one crew call-out.
+> *Outage hours alerted* counts decisions: of the 150,122 county-hours followed by a new outage, the share alerted (`usa_final_2025.csv`, `recall_at_share`). *New outages caught* counts outages: of the 25,362, the share with at least one alert in time before they started (`data/app/meta_hourly.json`, `at_headline_share`). Precision for the rows without decision recall is also from `meta_hourly.json`. Base rate: 0.6% of county-hours are followed by a new outage. An alert spell is a run of consecutive alerted hours in one county, roughly one crew call-out. Every version alerts on exactly 0.75% of county-hours; where many hours share the cut-off score (warnings + outlook give the same score to every county-hour with the same warnings and outlook level), the tied hours are chosen at random, which scatters its alerts, so its spell count isn't comparable. – : not computed for that version.
+
+- **The newest run alone catches a little more, but flickers.** It catches 30.8% against 28.5%, with 65,454 alert spells against 41,914: each new run moves the storm, so alerts switch on and off. Averaging five runs gives steadier alerts that are right more often.
 
 Most alerts are still false alarms, and most outages get no alert. The model says where to look first, not what will happen.
 
@@ -212,64 +242,118 @@ Each state is scored on its own county-hours of 2025, by the model trained on ev
 ::: table-wrap
 | State | Counties | New outages 2025 | vs. warnings + outlook (95% range) | Caught: model / official |
 |----|----|----|----|----|
-| `TODO(rerun)`: one row per state from `ml/results/midwest_2025.csv`, rows with `trained_on` = `all 48`, sorted by ratio | | | | |
+| New Hampshire | 10 | 58 | 11.7× (5.9–20.7×) | 34% / 0% |
+| Nebraska | 91 | 201 | 9.7× (5.8–12.7×) | 40% / 19% |
+| Colorado | 60 | 350 | 8.6× (5.6–11.0×) | 21% / 4% |
+| Massachusetts | 14 | 53 | 7.5× (3.3–15.4×) | 26% / 9% |
+| Maine | 16 | 166 | 7.2× (4.1–9.2×) | 26% / 4% |
+| Florida | 67 | 290 | 7.1× (3.4–9.5×) | 20% / 8% |
+| New Mexico | 33 | 210 | 6.6× (4.8–8.3×) | 23% / 1% |
+| New Jersey | 21 | 59 | 6.6× (2.3–53.9×) | 44% / 10% |
+| Oregon | 36 | 217 | 6.4× (3.8–8.0×) | 26% / 8% |
+| Wisconsin | 72 | 342 | 5.7× (3.8–7.8×) | 38% / 14% |
+| Kansas | 104 | 448 | 5.5× (3.1–8.1×) | 34% / 14% |
+| New York | 62 | 370 | 5.1× (3.0–8.2×) | 30% / 4% |
+| Iowa | 99 | 499 | 5.0× (2.7–7.9×) | 37% / 18% |
+| Mississippi | 81 | 931 | 4.9× (4.0–6.0×) | 33% / 3% |
+| Idaho | 43 | 508 | 4.9× (2.9–5.8×) | 21% / 5% |
+| Nevada | 15 | 137 | 4.9× (3.2–7.7×) | 17% / 1% |
+| South Carolina | 46 | 247 | 4.7× (2.6–8.2×) | 24% / 5% |
+| North Carolina | 94 | 1,778 | 4.5× (3.7–5.5×) | 19% / 3% |
+| Vermont | 14 | 119 | 4.5× (2.6–7.6×) | 26% / 8% |
+| Michigan | 83 | 709 | 4.5× (2.3–8.0×) | 36% / 10% |
+| Washington | 35 | 212 | 4.5× (2.4–15.3×) | 25% / 8% |
+| Texas | 254 | 3,614 | 4.4× (3.8–5.2×) | 24% / 7% |
+| California | 57 | 491 | 4.3× (3.3–5.5×) | 18% / 3% |
+| Virginia | 129 | 1,631 | 4.2× (2.7–6.1×) | 26% / 5% |
+| South Dakota | 66 | 376 | 4.2× (2.3–5.9×) | 19% / 7% |
+| Minnesota | 87 | 363 | 4.2× (2.5–6.5×) | 29% / 10% |
+| Tennessee | 88 | 652 | 4.1× (3.2–5.1×) | 24% / 6% |
+| Alabama | 67 | 597 | 4.0× (3.2–5.3×) | 42% / 4% |
+| Oklahoma | 77 | 680 | 3.9× (2.8–5.6×) | 31% / 6% |
+| Pennsylvania | 67 | 453 | 3.8× (2.4–10.4×) | 33% / 10% |
+| Georgia | 158 | 1,372 | 3.5× (2.6–4.1×) | 26% / 9% |
+| Montana | 53 | 329 | 3.5× (2.1–8.0×) | 22% / 12% |
+| Arkansas | 75 | 823 | 3.4× (2.6–4.7×) | 23% / 6% |
+| Wyoming | 20 | 132 | 3.3× (2.2–4.7×) | 18% / 7% |
+| Louisiana | 64 | 714 | 3.3× (2.7–4.2×) | 23% / 11% |
+| Kentucky | 119 | 1,302 | 3.2× (2.4–4.1×) | 25% / 6% |
+| Arizona | 15 | 80 | 3.2× (1.2–8.9×) | 24% / 2% |
+| West Virginia | 55 | 897 | 3.2× (2.3–4.5×) | 19% / 5% |
+| Ohio | 88 | 427 | 3.0× (2.0–4.7×) | 31% / 15% |
+| Missouri | 114 | 925 | 3.0× (2.3–5.0×) | 31% / 15% |
+| Utah | 26 | 231 | 2.9× (2.4–3.7×) | 8% / 2% |
+| Indiana | 92 | 476 | 2.9× (2.4–3.8×) | 39% / 10% |
+| Illinois | 102 | 511 | 2.8× (2.1–3.9×) | 32% / 11% |
+| North Dakota | 51 | 250 | 2.7× (2.2–4.2×) | 26% / 15% |
+| Maryland | 24 | 111 | 1.7× (1.2–5.4×) | 35% / 17% |
 
 :::
-> **Too few to judge (under 50 new outages in 2025): District of Columbia (1 new outage), Delaware (3), Rhode Island (17).** Listed, not ranked: one or three outages make any ratio noise. Massachusetts (53), New Hampshire (58) and New Jersey (59) pass the cut but have very wide ranges. **Connecticut has no results:** EAGLE-I reports its old counties, the warehouse uses its 9 new planning regions; a crosswalk is needed. New-outage counts don't depend on the model; ratios do, and are `TODO(rerun)`.
+> **Too few to judge (under 50 new outages in 2025): District of Columbia (1 new outage), Delaware (3), Rhode Island (17).** Listed, not ranked: one or three outages make any ratio noise. Massachusetts (53), New Hampshire (58) and New Jersey (59) pass the cut but have very wide ranges. **Connecticut has no results:** EAGLE-I reports its old counties, the warehouse uses its 9 new planning regions; a crosswalk is needed. `ml/results/midwest_2025.csv`, rows trained on `all 48`.
 
-- **The model travels.** The first model, trained on Missouri and Illinois only, still beat warnings + outlook in the other states, which it never saw: `TODO(rerun)` (`midwest_2025.csv`, `scored_on` = `the other 46`, `trained_on` = `MO+IL`).
-- **The West is weakest.** In the previous run, Utah, Wyoming, Montana and Arizona had the lowest ratios: sparse counties, few outages, wide ranges. Check after the rerun `TODO(rerun)`.
+- **It beats the official forecasts in every judged state.** All 45 states' ranges sit above 1×; the median state is 4.3×. Maryland is lowest, at 1.7× (1.2–5.4×).
+- **The states where it started are among the hardest.** Missouri and Illinois together score 3.0× (2.4–4.4×), against 4.9× (4.4–5.5×) for the other 46. Their official forecasts already catch more (15% and 11% of new outages, against 3–5% in many Southern and Western states), which may leave less room to beat them.
+- **The model travels.** The first model, trained on Missouri and Illinois only, scored 2.8× (2.6–3.1×) in the other 46 states, which it never saw. Trained on every state, the same states reach 4.9×.
 
 ### Counties the outage data barely covers
 
-EAGLE-I's coverage varies by utility. In 419 of the 3,089 counties with outage records, someone was out in under 5% of hours, which usually means the tracker misses most of the county's customers, not that its power never fails (`place_fragility.csv`, `tracked`). Training without them changes the ratio little (`coverage_2025.csv`) `TODO(rerun)`. 19 of the 3,108 regions have no outage rows at all, Connecticut's 9 among them.
+EAGLE-I's coverage varies by utility. In 419 of the 3,089 counties with outage records, someone was out in under 5% of hours, which usually means the tracker misses most of the county's customers, not that its power never fails (`place_fragility.csv`, `tracked`). Training without them doesn't help: 4.66× without the counties under 5%, 4.60× without those under 8%, against 4.72× with every county (`coverage_2025.csv`). Scored only on the 2,497 well-covered counties, the model is still 4.2× (3.8–4.7×), so the thin counties aren't what drives the result. 19 of the 3,108 regions have no outage rows at all, Connecticut's 9 among them.
 
 ## How sure is it? {#sure}
 
-::: note
-**Two-state numbers.** The ranges, tests and calibration below are from the published Missouri + Illinois model. The whole-country versions come from `ml/results/significance_2025.csv`, `forecast_ensemble_bins_2025.csv` and `data/app/calibration.parquet` after the rerun `TODO(rerun)`. The audit (last part) was rerun for the new inputs: 72-hour rain, history (and that it ends before the decision's year), the place files and the five wind-duration inputs, recomputed from the raw tables for 20,000 2025 decisions (`ml/results/audit_timing.csv`).
+"How sure" means three different things here, and each has its own check:
+
+::: table-wrap
+| Kind of uncertainty | The question | How it's measured |
+|----|----|----|
+| **The score** | Would another year's storms give a different score? | Resampling 2025's storm days; paired tests between models |
+| **The weather forecast** | How much do the HRRR runs disagree about the window's weather? | The lowest and highest of the five runs' probabilities |
+| **The probability** | When the model says 3%, does an outage follow about 3% of the time? | Grouping predictions and counting what happened (calibration) |
 
 :::
+The five-run range answers the second question only. It is not a 95% interval on the chance of an outage.
 
 ### How sure is the score?
 
-One year's score depends on a handful of big storm days. Resampling 2025's storm days (12 UTC to 12 UTC, so an evening storm isn't cut at midnight) a thousand times gives the ranges above: any single score is uncertain, 0.094 could plausibly be anywhere from 0.054 to 0.143. But every version wins and loses on the same days, so the comparisons are much tighter: with forecasts, 2.4× the official forecasts, never less than 2.0× in 95% of resamples. Claims on these pages are phrased as comparisons for that reason. Resampling hours instead of days would have given ranges several times too narrow (pitfall 13).
+One year's score depends on a handful of big storm days. Resampling 2025's storm days (12 UTC to 12 UTC, so an evening storm isn't cut at midnight) a thousand times gives the ranges above: the headline 0.102 could plausibly be anywhere from 0.085 to 0.120. But every version wins and loses on the same days, so the comparisons are tighter: with forecasts, 4.7× the official forecasts, and above 4.2× in 95% of resamples. Claims on these pages are phrased as comparisons for that reason. Resampling hours instead of days would have given ranges several times too narrow (pitfall 13). These ranges cover which storms hit 2025, not how different another year could be; the other years are in [Does it hold up?](#findings).
 
 Overlapping ranges don't mean "not significant", so the differences were tested directly, two ways, each paired over 2025's 366 storm days: the share of 1,000 resamples in which one model beats the other, and a permutation test that swaps the two models' predictions on randomly chosen storm days 1,000 times.
 
 ::: table-wrap
-| Comparison, 2 hours ahead | Better in resamples | p (permutation) |
+| Comparison, 2 hours ahead, 2025 | Better in resamples | p (permutation) |
 |----|----|----|
 | Model, weather so far vs. warnings + outlook | 100% | 0.001 |
 | Model + last five HRRR forecasts vs. warnings + outlook | 100% | 0.001 |
 | With forecasts vs. without | 100% | 0.001 |
 | Last five runs vs. the newest run | 100% | 0.001 |
-| Ceiling vs. last five runs | 93% | 0.08 |
+| Ceiling vs. last five runs | 100% | 0.001 |
 
 :::
-> 0.001 is the smallest p 1,000 permutations can show. Code: `ml/significance.py`.
+> 0.001 is the smallest p 1,000 permutations can show. On Missouri + Illinois the ceiling's edge wasn't significant (93% of resamples, p = 0.08). Code: `ml/significance.py`; results `ml/results/significance_2025.csv`.
 
 ### How sure is each prediction?
 
-The runs issued 2, 3, 4, 5 and 6 hours before a decision all forecast the same window, each with its own errors. Feeding each through the model gives five probabilities: the average is the prediction, the lowest and highest are its range. Grouped by prediction, outages followed about as often as predicted, inside the range every time:
+The runs issued 2, 3, 4, 5 and 6 hours before a decision all forecast the same window, each with its own errors. Feeding each through the model gives five probabilities: the average is the prediction, the lowest and highest are its range. Grouped by prediction, 2025, whole country:
 
 ::: table-wrap
 | Predicted chance | County-hours | Average range | An outage followed |
 |------------------|--------------|---------------|--------------------|
-| 0.2%             | 1,397,044    | 0.17–0.21%    | 0.19%              |
-| 0.7%             | 203,739      | 0.6–0.8%      | 0.65%              |
-| 1.4%             | 70,780       | 1.0–1.9%      | 1.5%               |
-| 3.0%             | 35,370       | 1.9–5.0%      | 3.0%               |
-| 7.0%             | 11,383       | 3.8–12.2%     | 6.5%               |
-| 13.9%            | 6,044        | 7.7–23.2%     | 13.1%              |
-| 31.8%            | 3,333        | 21.4–43.9%    | 26.0%              |
+| 0.17%            | 18,830,751   | 0.15–0.19%    | 0.17%              |
+| 0.7%             | 3,401,243    | 0.6–0.8%      | 0.70%              |
+| 1.4%             | 1,680,845    | 1.1–1.8%      | 1.3%               |
+| 3.0%             | 893,595      | 2.1–4.4%      | 2.7%               |
+| 6.9%             | 256,528      | 4.2–10.9%     | 5.8%               |
+| 13.8%            | 123,184      | 8.1–21.6%     | 10.9%              |
+| 34.7%            | 74,875       | 23.4–46.6%    | 25.0%              |
 
 :::
-Only the riskiest group runs high (31.8% predicted, 26.0% happened): the model learned from the weather that actually happened and takes the forecasts a little too literally. The range carries information too: among low-risk hours, a wide range (one run shows a storm) was followed by twice as many outages as a narrow one. It is still not a 95% interval: this checks groups of county-hours, and shows how much the forecast runs disagree, not how sure any one prediction is.
+> `ml/results/forecast_ensemble_bins_2025.csv`. Calibrated on 2024: `calibration_forecasts_2025.csv`.
+
+Up to about 3%, outages followed as often as predicted. Above that the chances run high, and the riskiest group most (34.7% predicted, 25.0% happened). The model was trained on the weather that actually happened, then fed forecasts, so it takes the forecasts a little too literally. A correction fitted on 2024 forecasts fixes most of it: the riskiest group becomes 32.8% predicted, 31.1% happened. Every observed share still falls inside its group's range. The range carries information too: among the lowest-risk hours, a wide range (one run shows a storm) was followed by 2.6 times as many outages as a narrow one.
 
 ### Did anything see the future?
 
-After the first version's mistake, the pipeline was audited before publishing ([docs/audit.md](https://github.com/UgoBruzadin/storm-outage-risk/blob/main/docs/audit.md)):
+After the first version's mistake, the pipeline was audited before publishing, and again for the whole country's new inputs (72-hour rain, outage history and that it ends before the decision's year, the place files, the five wind-duration inputs; `ml/results/audit_timing.csv`) ([docs/audit.md](https://github.com/UgoBruzadin/storm-outage-risk/blob/main/docs/audit.md)):
 
 - For 20,000 random decisions, every input and the label recomputed from the raw tables with explicit time filters matched what the model was given, 100%. All 2,226 warning flags in 2025 had a warning issued before the hour and still in force.
 - Scoring the raw gust and warning signals at offsets from 12 hours before to 12 hours after the decision, skill peaks exactly over the predicted window: the sources agree on the clock.
@@ -279,14 +363,14 @@ After the first version's mistake, the pipeline was audited before publishing ([
 ## What it learned {#findings}
 
 ::: note
-This chapter still quotes the two-state model where it says Missouri or Illinois. The whole-country versions of "Does it hold up?" come from `ml/results/extra_years.csv`, `extra_storm_types.csv` and `extra_counties.csv` `TODO(rerun)`. "Counties it never saw" means counties held out of training; the model still sees their own outage history as an input. The history inputs drift upward over the years because EAGLE-I tracks more utilities each year.
+This chapter mixes two scopes, and each bullet says which. "Counties it never trained on" means counties held out of training; the model still sees their own outage history and place data as inputs, so this tests whether what it learned elsewhere transfers to a county, not whether it can forecast a county it knows nothing about. The history inputs drift upward over the years because EAGLE-I tracks more utilities each year.
 
 :::
 
 - **More years of storms helped more than any feature.** Training on 2020–2024 instead of 2024 alone lifted every score by 17–28% on the same 2025 test. Adding 2018–2019 as well, once the counties EAGLE-I wasn't tracking those years were dropped, changed nothing.
 - **On two states, history didn't help; on the country it does.** On Missouri + Illinois, time since a county's last outage, rain in the previous 72 hours, and each county's outage record over three years all added nothing or hurt on the validation year, over five seeds. On the whole country the outage record passes (+2.3% on 2024, +16% on held-out counties).
 - **Place helps for known counties, not new ones.** County size, housing and canopy add 25–34% on the next year but almost nothing on unseen counties: the model learns which counties are fragile more than why.
-- **Tree canopy is a small, real effect, just not where the map suggests.** Removing it lowers the score by about 3% overall, with every seed. Tested state by state, it improves the model in Illinois (+3.0%, 3 of 3 seeds) and barely in Missouri (+0.4%), the opposite of the county correlation below. Still an association, not a cause.
+- **On two states, tree canopy made the forecast a little better, just not where the map suggests.** Removing it lowered the score by about 3%, with every seed. State by state, it improved the model in Illinois (+3.0%, 3 of 3 seeds) and barely in Missouri (+0.4%), the opposite of the county correlation below. That is a gain in forecast skill, not evidence that trees cause outages.
 - **Bigger was worse on two states, better on the country.** On Missouri + Illinois, deeper trees or more of them overfit this rare an event, by up to 22%. With nearly 18 times the outages, depth 8 and 1,600 trees gain 15%.
 
 ### Does it hold up?
@@ -294,11 +378,16 @@ This chapter still quotes the two-state model where it says Missouri or Illinois
 2025 could have been a lucky year, or the model could be good at one kind of storm or a few familiar counties. Each
 was tested (`ml/extra_analyses.py`; results in `ml/results/extra_<name>.csv`):
 
-- **Every year.** Trained on 2020 to the year before and tested on each of 2022–2025, the model without forecasts beat warnings + outlook every year: 1.8×, 1.7×, 2.1× and 1.6×. With HRRR forecasts, 2.8× on June–December 2024, the part of that year with all five runs, and 2.4× on 2025.
-- **Every kind of storm.** Alerting on the riskiest 0.75% of county-hours, it caught 41% of thunderstorm outages (official forecasts: 29%), 36% of winter and ice outages (2%), and 10% of outages from wind and rain without storm energy (4%). That last group is a third of all new outages and the clearest place to improve.
+**Whole country:**
+
+- **Every year.** Trained on 2020 to the year before and tested on each of 2022–2025, the model without forecasts beat warnings + outlook every year: 2.9×, 2.7×, 3.5× and 3.0×. With HRRR forecasts, 6.6× on 2024 and 4.7× on 2025 (`extra_years.csv`).
+- **Every kind of storm.** Alerting on the riskiest 0.75% of county-hours, it caught 37% of thunderstorm outages (official forecasts: 17%), 28% of winter and ice outages (10%), and 18% of outages from wind and rain without storm energy (3%). That last group is 41% of all new outages, gets no severe-thunderstorm or tornado warning by definition, and is where the model adds the most over the official forecasts (`extra_storm_types.csv`).
+- **Counties it never trained on.** With a fifth of the counties held out of training each time, the model without forecasts still beat the official forecasts on them: 2.6×, against 3.0× on counties it trained on (`extra_counties.csv`).
+
+**Missouri + Illinois only, two-state model (not yet rerun for the country):**
+
 - **Every time of day.** The edge is largest at night (3.6×) and in the morning (3.5×), when few warnings are out, and smallest in the afternoon (1.6×).
 - **Bigger outages are caught more often:** 49% of those affecting over 5,000 customers, against 33% for the official forecasts.
-- **Counties it never saw.** With a fifth of the counties held out of training each time, it still beat the official forecasts on them by 1.45×, against 1.6× on counties it trained on.
 - **Other outage sizes and lead times.** The same holds for outages of ≥ 1% and ≥ 10% of customers, and with forecasts at every lead from 0 to 6 hours (2.2–2.3×).
 - **An alert level set in advance.** Fixed at the top 0.75% of 2024's hours, the alert level gives the same 2025 result: alerts on 0.77% of hours, 14.8% real, 29.9% caught.
 
@@ -306,7 +395,11 @@ was tested (`ml/extra_analyses.py`; results in `ml/results/extra_<name>.csv`):
 
 I expected tree-heavy counties to fail more often in storms, and in Missouri they do. But Missouri's most wooded counties are the Ozarks, also remote, hilly and sparsely served, and the model already sees that through housing, density and county size. Given the tree data, it barely improves in Missouri (+0.4%) and improves a little in Illinois (+3.0%), where the few wooded river counties stand out from the farmland around them. Code: `ml/canopy_by_state.py`.
 
-**On the whole country,** roads and the share of them under trees earn a place as model inputs (+1.3% on 2024, 0.7–2.0%, on top of everything else; E55), while county-wide canopy helps in some states and hurts in others (`canopy_by_state.csv`) `TODO(rerun)`. The two-state finding follows.
+**On the whole country,** roads and the share of them under trees earn a place as model inputs (+1.3% on 2024, 0.7–2.0%, on top of everything else; E55), while county-wide canopy, added on top, helps in 24 of 48 states and hurts in the rest, from −8.3% (District of Columbia) to +3.3% (New Hampshire), with no consistent direction (`canopy_by_state.csv`, pooled model, mean over three seeds).
+
+Do counties with more tree-lined road have more outages than the weather and their size predict? In 24 of the 45 states with at least 8 well-covered counties, yes (Spearman, p < 0.05), and in 12 after a Bonferroni correction for testing every state: California, Florida, Georgia, Indiana, Kentucky, Minnesota, Mississippi, New York, Pennsylvania, Texas, Virginia and West Virginia. No state shows the opposite. There's no clean regional pattern: Idaho, Montana and Kansas are among the positive states, while Alabama, the Carolinas and Tennessee aren't (`story.json`, `lines.road_trees_by_state`, from `scripts/make_site_figures.py`). The two-state finding follows.
+
+Two different questions hide in "do trees matter?". One is whether wooded counties have more outages: a correlation, answered by the maps below. The other is whether knowing about trees improves the forecast once everything else is known: answered by adding or removing the input and scoring the next year. A feature can pass one test and fail the other. Neither shows that trees *cause* outages; that would need data on the lines themselves.
 
 **Roads and the trees along them explain more.** Distribution lines mostly follow roads, and no public map of the lines exists, so I counted each county's public road per customer (Census TIGER) and the share of it under dense canopy. Against each county's new outages over what the weather alone predicts, they explain about a third of what county size leaves unexplained, and once they're known, county-wide canopy and co-op share add nothing. Illinois has few roads under dense canopy, which may be why its trees barely show. Code: `ml/place_fragility.py` (E49).
 
@@ -367,10 +460,10 @@ Compared on the first, 6-hour version of the model, where its setup fits. The re
 
 The closest operational work is the University of Connecticut and Eversource outage prediction model, running since 2015: machine-learning ensembles over high-resolution weather forecasts, vegetation, land cover and infrastructure, predicting outage counts up to three days ahead (Cerrai et al., 2019, *IEEE Access*; Watson et al., 2020, *The Journal of Engineering*), extended to communities across the Eastern U.S. (Taylor et al., 2023, *Energy Reports*). Earlier work modeled hurricane outages with generalized additive models and random forests (Han, Guikema & Quiring, 2009, *Risk Analysis*, and later work by Nateghi and colleagues). Those studies predict outage counts for a single utility's territory, mostly for named storms, with utility data this project doesn't have, so their scores aren't comparable. What this project adds is a public-data, multi-utility, county-level version for everyday convective and winter storms, evaluated on a future year and on new outages only.
 
-## What it would be worth {#value}
+## What it could be worth: a scenario {#value}
 
 ::: note
-The estimate below is for Missouri and Illinois. The whole-country estimate comes from `ml/results/value_hourly_2025.csv` and `value_forecasts_2025.csv` after the rerun `TODO(rerun)`; at that scale it runs to hundreds of millions of dollars, and the staging assumptions were sized for two states' utilities. Whether to keep this chapter is an open decision.
+**A scenario, not measured savings.** This chapter combines published outage costs with two assumptions nobody has measured here: how much a staged crew shortens an outage, and what staging costs. The model's forecasts don't establish either. Read the dollars as "what it could be worth if those assumptions hold", not as a return on investment. **Missouri and Illinois only.** The assumptions were sized for two states' utilities, so the whole-country version isn't quoted.
 
 :::
 
@@ -717,10 +810,10 @@ Python, SQL, DuckDB, dbt, pixi, scikit-learn, XGBoost, MLflow, geopandas, raster
 ### Limitations {#limits}
 
 ::: note
-**2025 has been used once.** Every choice was made on 2024, and 2025 was scored once, but one input (wind duration and spread) was first tried on Missouri + Illinois 2025. The clean test is the 2026 blind test. **The live test covers two states.** The frozen live forecast is the two-state model on Missouri and Illinois; the whole-country live model is trained but has no live feed, and no live forecast has been graded yet (EAGLE-I's 2026 data comes out about a year later). **Uneven outage data.** 419 of 3,089 counties are barely covered by EAGLE-I, 19 regions have no outage rows, Connecticut has no results, and states with under 50 new outages in 2025 (DC, Delaware, Rhode Island) can't be judged. **History drifts** upward as the tracker adds utilities (pitfall 16). **Strongest winds.** At gusts of 35 m/s or more, official warnings do better than the model. **Trained on actual weather.** The forecast version is scored on forecasts but learned from what happened, so its highest probabilities may run high (the whole-country calibration is `TODO(rerun)`). **Archive timestamps.** The model uses each hour's weather and outage counts as soon as the hour ends; in practice HRRR analyses arrive about an hour late (the forecast runs already allow two hours). **One weather point per county**, and EAGLE-I coverage that is patchy before 2020.
+**2025 has been used once.** Every choice was made on 2024, and 2025 was scored once, but one input (wind duration and spread) was first tried on Missouri + Illinois 2025. The clean test is the 2026 blind test. **The live test covers two states.** The frozen live forecast is the two-state model on Missouri and Illinois; the whole-country live model is trained but has no live feed, and no live forecast has been graded yet (EAGLE-I's 2026 data comes out about a year later). **Uneven outage data.** 419 of 3,089 counties are barely covered by EAGLE-I, 19 regions have no outage rows, Connecticut has no results, and states with under 50 new outages in 2025 (DC, Delaware, Rhode Island) can't be judged. **History drifts** upward as the tracker adds utilities (pitfall 16). **Strongest winds.** At gusts of 35 m/s or more, official warnings do better than the model. **Trained on actual weather.** The forecast version is scored on forecasts but learned from what happened, so its chances above about 3% run high (34.7% predicted, 25.0% happened in the riskiest group); a correction fitted on 2024 fixes most of it. **Archive timestamps.** The model uses each hour's weather and outage counts as soon as the hour ends; in practice HRRR analyses arrive about an hour late (the forecast runs already allow two hours). **One weather point per county**, and EAGLE-I coverage that is patchy before 2020.
 
 :::
-## The app {#app}
+## The app (planned) {#app}
 
 The next step is a public county outage-risk map. It isn't built. The plan, from a clickable prototype:
 
@@ -732,10 +825,6 @@ The next step is a public county outage-risk map. It isn't built. The plan, from
 - **Defers to warnings.** In the strongest winds the app says official warnings do better, and links to them.
 
 Before it ships: a live feed for the whole country under a new model tag (the two-state blind test stays frozen), a backend for shared reports with a moderation policy, Connecticut's county crosswalk, and the level cut-offs checked on 2025.
-
-Data: U.S. DOE / Oak Ridge National Laboratory EAGLE-I power outage data ([doi:10.13139/ORNLNCCS/1975202](https://doi.org/10.13139/ORNLNCCS/1975202)); NOAA HRRR via [Open-Meteo](https://open-meteo.com) and the University of Utah HRRR archive on AWS; NOAA NCEI Storm Events; NWS warnings and SPC outlooks via the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu); USFS / NLCD Tree Canopy Cover; U.S. Census Bureau ACS, TIGER boundaries and roads; EIA-861 utilities. Map tiles © OpenStreetMap contributors, © CARTO.
-
-Ugo Bruzadin Nunes · [github.com/UgoBruzadin/storm-outage-risk](https://github.com/UgoBruzadin/storm-outage-risk) · MIT License
 
 ::: footer
 Data: U.S. DOE / Oak Ridge National Laboratory EAGLE-I power outage data ([doi:10.13139/ORNLNCCS/1975202](https://doi.org/10.13139/ORNLNCCS/1975202)); NOAA HRRR via [Open-Meteo](https://open-meteo.com) and the University of Utah HRRR archive on AWS; NOAA NCEI Storm Events; NWS warnings and SPC outlooks via the [Iowa Environmental Mesonet](https://mesonet.agron.iastate.edu); USFS / NLCD Tree Canopy Cover; U.S. Census Bureau ACS, TIGER boundaries and roads; EIA-861 utilities. Map tiles © OpenStreetMap contributors, © CARTO.

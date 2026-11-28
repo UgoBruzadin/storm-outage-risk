@@ -132,8 +132,8 @@ traps:
 ladder:
   menu: The result
   kicker: The result · 2025, a year the model never trained on
-  # {ratio}: how many times better than warnings + outlook, e.g. "4.7"
-  title: "Two hours ahead, the model ranks new outages {ratio}× better than official warnings alone."
+  # {ratio}: the model's score as a multiple of warnings + outlook, e.g. "4.7"
+  title: "Two hours ahead, the model scores {ratio}× the official warnings at ranking new outages."
   baseline: warnings + outlook alone = 1×
   baseline_narrow: official = 1×
   # {lo}, {hi}: 95% range of the ratio; {score}: the PR-AUC
@@ -144,8 +144,8 @@ ladder:
   note: >-
     Score: PR-AUC on new outages of ≥ 5% of customers in the 6 hours starting 2 hours after each decision, every county
     and hour of 2025: {decisions} decisions, {outages} new outages. One outage falls inside up to six decisions'
-    windows, so {positive} decisions are followed by one, and random guessing scores about {random}. Bars: how many
-    times better than NWS warnings + SPC outlook alone; whiskers: the 95% range when 2025's storm days are resampled,
+    windows, so {positive} decisions are followed by one, and random guessing scores about {random}. Bars: each version's score as a
+    multiple of NWS warnings + SPC outlook alone; whiskers: the 95% range when 2025's storm days are resampled,
     every version scored on the same days. Knowing the weather in advance would score {ceiling}× (p = {p_ceiling}
     against the real forecasts).
   # {vs_prev}, {vs_lo}, {vs_hi}: the model chosen on the whole country against the previous model; {better}: share
@@ -324,7 +324,7 @@ holds:
       key_without: Model, weather observed so far
       key_with: + last five HRRR forecasts
       note: >-
-        Times better than NWS warnings + SPC outlook at ranking new outages, 2 hours ahead. Forecasts are tested on 2024
+        Score as a multiple of NWS warnings + SPC outlook at ranking new outages, 2 hours ahead. Forecasts are tested on 2024
         and 2025 only. The outage-history inputs drift upward over the years, because the outage tracker covers more
         utilities each year.
     counties:
@@ -336,7 +336,7 @@ holds:
       seen: Counties it trained on
       unseen: Counties it never trained on
       note: >-
-        Times better than NWS warnings + SPC outlook at ranking new outages in 2025, 2 hours ahead, model without HRRR
+        Score as a multiple of NWS warnings + SPC outlook at ranking new outages in 2025, 2 hours ahead, model without HRRR
         forecasts in both.
     coverage:
       tab: Thin outage data
@@ -350,7 +350,7 @@ holds:
         without under 5%: "Without counties out in under 5% of hours"
         without under 8%: "Without counties out in under 8% of hours"
       note: >-
-        Times better than NWS warnings + SPC outlook, 2 hours ahead, scored on every county in 2025. Coverage: the share
+        Score as a multiple of NWS warnings + SPC outlook, 2 hours ahead, scored on every county in 2025. Coverage: the share
         of hours in which the tracker shows anyone out in the county.
 
 trees:
@@ -367,8 +367,7 @@ trees:
     to the model ({held} on counties it never trained on). Once it knows them, county-wide canopy adds nothing: from
     {canopy_lo} to {canopy_hi} by state, with no consistent direction. And it's regional. Counties with more
     tree-lined road have more outages than the weather predicts in {positive} of {tested} states ({clear} clearly),
-    mostly in the Northeast, the Mid-Atlantic, the Southeast and California, but not in the Plains or the Mountain
-    West.
+    with no clean regional pattern, and in none the other way round.
   # {all}: correlation of the selected map with the storm hit rate, every county
   note: >-
     Hit rate covers 2020–2025. Correlations compare all counties, with a log scale for housing density, customers and
